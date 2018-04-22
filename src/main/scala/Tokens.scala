@@ -7,12 +7,14 @@ object Tokens {
       LET, IF, ELSE,
 
       // Punctuation
-      VBAR, LPAREN, RPAREN, LBRACE, RBRACE,
+      VBAR, LPAREN, RPAREN, LBRACE, RBRACE, SEMICOLON,
 
       // Operators
       EQ, EQEQ, PLUS,
 
       UNEXPECTED_CHAR,
+      INVALID_OPERATOR,
+      EXPECTED,
       NEWLINE
     = Value
   }

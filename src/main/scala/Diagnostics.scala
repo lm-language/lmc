@@ -1,9 +1,13 @@
-import Loc._
 
 object Diagnostics {
   sealed trait Variant
   case class ExpectedToken(variant: Tokens.Variant) extends Variant
   case class DeclarationExpected() extends Variant
+  case class ExpressionExpected() extends Variant
+  case class PatternExpected() extends Variant
+  case class UnexpectedChar(c: String) extends Variant
+  case class InvalidOperator(c: String) extends Variant
+  case class TokenExpected(c: String) extends Variant
 
   object Severity extends Enumeration {
     type T = Value

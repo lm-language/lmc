@@ -35,12 +35,15 @@ object Syntax {
 
 
     object Pattern {
-      sealed trait Variant extends HasChildren {
-        type T = Variant
-        case class Var(ident: Ident) extends T
 
+      type T = Variant
+      case class Var(ident: Ident) extends T
+      case class Error() extends T
+
+      sealed trait Variant extends HasChildren {
         override def children: Iterable[Node] = this match {
           case Var(ident) => List(ident)
+          case Error() => List()
         }
       }
     }
@@ -58,22 +61,21 @@ object Syntax {
     }
 
     object Expr {
-      sealed trait LiteralVariant {
-        type T = LiteralVariant
-        case class LInt(value: Int) extends T
-      }
+      sealed trait LiteralVariant
+      case class LInt(value: Int) extends LiteralVariant
       sealed trait Variant extends HasChildren {
-        type T = Variant
-        case class Var(ident: Ident) extends T
-        case class Literal(variant: LiteralVariant) extends T
-
         override def children: Iterable[Node] = this match {
           case Var(ident) => List(ident)
           case Literal(_) => List()
+          case Error() => List()
         }
       }
+      type T = Variant
+      case class Var(ident: Ident) extends T
+      case class Literal(variant: LiteralVariant) extends T
+      case class Error() extends T
     }
-    final case class Expr(
+    case class Expr(
       meta: Meta,
       typ: _Type,
       variant: Expr.Variant
