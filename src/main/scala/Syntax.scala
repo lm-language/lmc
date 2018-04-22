@@ -7,7 +7,6 @@ object Syntax {
 
   sealed trait Syntax {
     type Name
-    type _Type
     type _Scope
 
 
@@ -50,7 +49,6 @@ object Syntax {
 
     case class Pattern(
       meta: Meta,
-      typ: _Type,
       variant: Pattern.Variant
     ) extends NodeOps(meta) with Node {
       override def children: Iterable[Node] = variant.children
@@ -77,7 +75,6 @@ object Syntax {
     }
     case class Expr(
       meta: Meta,
-      typ: _Type,
       variant: Expr.Variant
     ) extends NodeOps(meta) with Node {
       override def children: Iterable[Node] = variant.children
@@ -113,13 +110,11 @@ object Syntax {
 
   final object Parsed extends Syntax {
     type Name = String
-    type _Type = Unit
     type _Scope = Unit
   }
 
   final object Typed extends Syntax {
     type Name = Symbol
-    type _Type = Type
     type _Scope = Scope
   }
 }

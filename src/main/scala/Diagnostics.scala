@@ -8,6 +8,7 @@ object Diagnostics {
   case class UnexpectedChar(c: String) extends Variant
   case class InvalidOperator(c: String) extends Variant
   case class TokenExpected(c: String) extends Variant
+  case class DuplicateBinding(name: String) extends Variant
 
   object Severity extends Enumeration {
     type T = Value

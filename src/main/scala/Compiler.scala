@@ -13,6 +13,8 @@ final class Compiler(paths: Iterable[Path])(implicit ec: ExecutionContext) {
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
 
+  val IntType: Type = Constructor(this.makeSymbol("<lm>$Int"))
+
   def compile(): Future[Unit] = {
     Future.unit
   }
@@ -52,5 +54,12 @@ final class Compiler(paths: Iterable[Path])(implicit ec: ExecutionContext) {
 
   private def cacheCheckedSourceFile(path: Path, sourceFile: Typed.SourceFile) = {
     _typedSourceFiles.put(path, sourceFile)
+  }
+
+  private var _id = 0
+  def makeSymbol(text: String): Symbol = {
+    val id = _id
+    _id += 1
+    Symbol(id, text)
   }
 }

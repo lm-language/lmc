@@ -114,8 +114,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
         val value = tok.lexeme.replaceAll("_", "").toInt
         Expr(
           meta = Meta(loc = tok.loc),
-          variant = Expr.Literal(Expr.LInt(value)),
-          typ = ()
+          variant = Expr.Literal(Expr.LInt(value))
         )
       case _ =>
         val loc = currentToken.loc
@@ -133,7 +132,6 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
             loc = currentToken.loc,
             diagnostics ++ skippedDiagnostics
           ),
-          typ = (),
           variant = Expr.Error()
         )
     }
@@ -153,7 +151,6 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
         val meta = Meta(loc = tok.loc)
         Pattern(
           meta = meta,
-          typ = (),
           variant = Pattern.Var(Ident(meta, tok.lexeme))
         )
       case _ =>
@@ -172,7 +169,6 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
             loc = currentToken.loc,
             diagnostics ++ skippedDiagnostics
           ),
-          typ = (),
           variant = Pattern.Error()
         )
     }
