@@ -12,7 +12,7 @@ object IO {
     def next: T
   }
 
-  val EOF = -1.toChar
+  val EOF_CHAR: Char = (-1).toChar
   object File {
     def apply(path: Path) = new File(path)
   }
@@ -23,7 +23,7 @@ object IO {
     def readAllChars: String = {
       var str = ""
       var c = next
-      while (c != EOF) {
+      while (c != EOF_CHAR) {
         str += c
         c = next
       }
@@ -34,10 +34,10 @@ object IO {
 
     def next: Char = {
       if (eofReached) {
-        EOF
+        EOF_CHAR
       } else {
         val c = reader.read().toChar
-        if (c == EOF) {
+        if (c == EOF_CHAR) {
           eofReached = true
           reader.close()
         }

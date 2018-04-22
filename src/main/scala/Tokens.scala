@@ -1,8 +1,20 @@
-import Loc._
 object Tokens {
   object Variant extends Enumeration {
     type Variant = Value
-    val ID, INT, EOF = Value
+    val
+      ID, INT, EOF,
+      // keywords
+      LET, IF, ELSE,
+
+      // Punctuation
+      VBAR, LPAREN, RPAREN, LBRACE, RBRACE,
+
+      // Operators
+      EQ, EQEQ, PLUS,
+
+      UNEXPECTED_CHAR,
+      NEWLINE
+    = Value
   }
   type Variant = Variant.Variant
   final case class Token(
