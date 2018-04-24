@@ -13,12 +13,23 @@ case class Constructor(name: Symbol) extends Type
 case class UnInferred(id: Int) extends Type
 
 /**
-  * Represents a type that hasn't been bound yet.
-  * before type checking a module or source file,
-  * all bindings in its scope are added to the
-  * symbol table of the scope with this type.
-  * After inference and checking of each declaration
-  * in the module, this is replaced with a more specific
-  * type
+  * An as of yet unbound type. This is assigned to all
+  * bindings that will have been defined but not in current
+  * scope. Used for producing better error messages. This
+  * can distinguish between actually unbound values and
+  * use before assignment errors.
+  *
+  * For e.g.
+  * {
+  *   // x: UnInferred
+  *   // y: UnInferred
+  *   let x = y; // error: Use before assignment
+  *   let p = asdf; // error: Unbound variable asdf
+  *   ...
+  *   let y = 4
+  *   // y: Int
+  *   ...
+  * }
   */
-case class UnBound() extends Type
+case class UnAssigned() extends Type
+case class ErrorType() extends Type

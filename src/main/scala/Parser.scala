@@ -116,6 +116,13 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
           meta = Meta(loc = tok.loc),
           variant = Expr.Literal(Expr.LInt(value))
         )
+      case ID =>
+        val tok = advance()
+        val meta = Meta(loc = tok.loc)
+        Expr(
+          meta = meta,
+          variant = Expr.Var(Ident(meta, tok.lexeme))
+        )
       case _ =>
         val loc = currentToken.loc
 

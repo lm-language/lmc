@@ -9,6 +9,8 @@ object Diagnostics {
   case class InvalidOperator(c: String) extends Variant
   case class TokenExpected(c: String) extends Variant
   case class DuplicateBinding(name: String) extends Variant
+  case class UnBoundVar(name: String) extends Variant
+  case class UseBeforeAssignment(name: String) extends Variant
 
   object Severity extends Enumeration {
     type T = Value

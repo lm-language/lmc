@@ -39,12 +39,14 @@ class CompilerTest {
       val diagnostics = compiler.getSourceFileDiagnostics(filePath)
       val compiledDiagnosticsJSON = DiagnosticsJSON.fromDiagnostics(diagnostics)
       val outputDiagnosticFile = testOutPath.resolve(diagnosticsFileName)
-      files.File(outputDiagnosticFile).writeText(compiledDiagnosticsJSON.asJson.spaces2)
+      val compiledDiagnosticsJSONStr = compiledDiagnosticsJSON.asJson.spaces2
+      files.File(outputDiagnosticFile).writeText(compiledDiagnosticsJSONStr)
+
       try {
-        assertResult(diagnosticsJSON)(compiledDiagnosticsJSON)
+        assertResult(diagnosticsJSON)(Right(compiledDiagnosticsJSON))
       } catch {
         case _: org.scalatest.exceptions.TestFailedException =>
-          printf(s"""Errors don't match for $filePath""")
+          println(s"""Errors don't match for $filePath""")
           runCommand(s"""$diff $diagnosticsFilePath $outputDiagnosticFile""")
       }
 
@@ -58,16 +60,16 @@ class CompilerTest {
       val outputScopeFile = testOutPath.resolve(symbolFileName)
 
       files.File(outputScopeFile).writeText(compiledScopeJSON.asJson.spaces2)
+
       try {
-        assertResult(expectedScopeJSON)(compiledScopeJSON)
+        assertResult(expectedScopeJSON)(Right(compiledScopeJSON))
       } catch {
         case _: org.scalatest.exceptions.TestFailedException =>
-          printf(s"""Symbols don't match for $filePath""")
+          println(s"""Symbols don't match for $filePath""")
           runCommand(s"""$diff $symbolPath $outputScopeFile""")
       }
     }
   }
-
 
   case class PosJSON(
     line: Int,
@@ -93,20 +95,21 @@ class CompilerTest {
   case class ScopeJSON(
     loc: LocJSON,
     symbols: Map[String, SymbolEntryJSON],
-    children: Array[ScopeJSON]
+    children: List[ScopeJSON]
   )
   object ScopeJSON {
     def fromScope(scope: Scope): ScopeJSON = ScopeJSON(
       loc = LocJSON.fromLoc(scope.loc),
       symbols = scope.symbols.mapValues((t) => SymbolEntryJSON(t.typ.toString)),
-      children = scope.children.map(fromScope).toArray
+      children = scope.children.map(fromScope).toList
     )
   }
 
 
   case class DiagnosticsJSON(
-    diagnostics: Array[DiagnosticJSON]
+    diagnostics: List[DiagnosticJSON]
   )
+
   object DiagnosticsJSON {
     def fromDiagnostics(diagnostics: Iterable[Diagnostics.Diagnostic]): DiagnosticsJSON =
       DiagnosticsJSON(
@@ -114,8 +117,9 @@ class CompilerTest {
           loc = LocJSON.fromLoc(d.loc),
           severity = d.severity.toString,
           message = d.message
-        )).toArray
+        )).toList
       )
+
   }
   case class DiagnosticJSON(
     loc: LocJSON,
@@ -145,7 +149,7 @@ class CompilerTest {
       s = stdError.readLine()
       s != null
     }) {
-        System.out.println(s);
+        System.out.println(s)
     }
   }
 }

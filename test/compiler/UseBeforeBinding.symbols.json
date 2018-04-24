@@ -5,12 +5,15 @@
       "column" : 1
     },
     "end" : {
-      "line" : 2,
-      "column" : 1
+      "line" : 3,
+      "column" : 2
     }
   },
   "symbols" : {
-    "a" : {
+    "x" : {
+      "typ" : "Constructor(<lm>$Int)"
+    },
+    "someVar" : {
       "typ" : "Constructor(<lm>$Int)"
     }
   },

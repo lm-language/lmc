@@ -13,6 +13,8 @@ final class Compiler(paths: Iterable[Path])(implicit ec: ExecutionContext) {
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
 
+  private val _symbolTypes = mutable.Map.empty[Symbol, Type]
+
   val IntType: Type = Constructor(this.makeSymbol("<lm>$Int"))
 
   def compile(): Future[Unit] = {
@@ -24,7 +26,9 @@ final class Compiler(paths: Iterable[Path])(implicit ec: ExecutionContext) {
       case Some(sf) => sf
       case None =>
         val parsed = getParsedSourceFile(path)
-        val checker = Typechecker(this)
+        val checker = new Typechecker(this, (symbol, typ) => {
+          _symbolTypes.update(symbol, typ)
+        })
         val checkedSourceFile = checker.checkSourceFile(parsed)
         cacheCheckedSourceFile(path, checkedSourceFile)
         checkedSourceFile
@@ -54,6 +58,10 @@ final class Compiler(paths: Iterable[Path])(implicit ec: ExecutionContext) {
 
   private def cacheCheckedSourceFile(path: Path, sourceFile: Typed.SourceFile) = {
     _typedSourceFiles.put(path, sourceFile)
+  }
+
+  def getType(symbol: Symbol): Option[Type] = {
+    _symbolTypes.get(symbol)
   }
 
   private var _id = 0

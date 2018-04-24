@@ -55,6 +55,8 @@ final class Lexer(
   private var _line = 1
   private var _column = 1
   private var _currentChar = chars.next
+  private var _previousLine = 1
+  private var _previousCol  = 1
 
   private var eofToken: Option[Token] = None
 
@@ -134,13 +136,15 @@ final class Lexer(
   private def makeToken(f: () => (Variant, String)): Token = {
     val start = this.pos
     val (variant, lexeme) = f()
-    val stop = this.pos
+    val stop = Pos(_previousLine, _previousCol)
     Token(variant, Loc(path, start, stop), lexeme)
   }
 
 
   private def advance: Char = {
     val c = currentChar
+    _previousCol = _column
+    _previousLine = _line
     if (c == '\n') {
       _line += 1
       _column = 1

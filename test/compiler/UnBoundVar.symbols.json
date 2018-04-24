@@ -10,8 +10,8 @@
     }
   },
   "symbols" : {
-    "a" : {
-      "typ" : "Constructor(<lm>$Int)"
+    "x" : {
+      "typ" : "ErrorType()"
     }
   },
   "children" : [

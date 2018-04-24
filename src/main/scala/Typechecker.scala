@@ -3,11 +3,8 @@ import Syntax._
 import scala.collection.mutable
 import Diagnostics._
 
-object Typechecker {
-  def apply(compiler: Compiler): Typechecker = new Typechecker(compiler)
-}
 
-final class Typechecker(compiler: Compiler) {
+final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => Unit) {
   import Syntax.{ Parsed => P }
   import Syntax.{ Typed => T }
   case class MutableScope(
@@ -83,9 +80,11 @@ final class Typechecker(compiler: Compiler) {
     T.Pattern(meta = pattern.meta, variant = variant)
   }
 
+  var nextUnInferredId = 0
+
   private def nameBindingIdent(ident: Parsed.Ident): Typed.Ident = {
     val symbol = compiler.makeSymbol(ident.name)
-    val diagnostics = addBindingToEnclosingScope(ident.meta.loc, symbol, UnBound())
+    val diagnostics = addBindingToEnclosingScope(ident.meta.loc, symbol, UnAssigned())
     Typed.Ident(meta = ident.meta.copy(diagnostics = diagnostics), name = symbol)
   }
 
@@ -102,6 +101,7 @@ final class Typechecker(compiler: Compiler) {
           case None =>
             val entry = ScopeEntry(symbol = symbol, typ = typ, loc = loc)
             scope.symbols += symbol.text -> entry
+            setTypeOfSymbol(symbol, typ)
             List()
         }
       case Nil => throw new Error("CompilerBug: Can't add type to empty scope list")
@@ -113,9 +113,30 @@ final class Typechecker(compiler: Compiler) {
     val variant = expr.variant match {
       case P.Expr.Literal(P.Expr.LInt(v)) =>
         T.Expr.Literal(T.Expr.LInt(v))
+      case P.Expr.Var(ident) =>
+        val namedIdent = nameVarIdent(ident)
+        T.Expr.Var(namedIdent)
       case P.Expr.Error() => T.Expr.Error()
     }
     T.Expr(meta = expr.meta, variant)
+  }
+
+  private def nameVarIdent(ident: P.Ident): T.Ident = {
+    resolveName(ident.name) match {
+      case Some(entry) =>
+        T.Ident(ident.meta, entry.symbol)
+      case None =>
+        val symbol = compiler.makeSymbol(ident.name)
+        T.Ident(ident.meta.copy(
+          diagnostics = ident.meta.diagnostics ++ List(
+            Diagnostic(
+              loc = ident.meta.loc,
+              variant = Diagnostics.UnBoundVar(ident.name),
+              severity = Severity.Error
+            )
+          )
+        ), symbol)
+    }
   }
 
   private def checkDeclaration(declaration: Typed.Declaration): Typed.Declaration = {
@@ -137,7 +158,10 @@ final class Typechecker(compiler: Compiler) {
     val (variant, typ, diagnostics) = expr.variant match {
       case Literal(LInt(_)) =>
         (expr.variant, compiler.IntType, List())
-      case Error() => (expr.variant, UnBound(), List())
+      case Var(ident) =>
+        val (typ, diagnostics) = getType(ident.loc, ident.name)
+        (expr.variant, typ, diagnostics)
+      case Error() => (expr.variant, ErrorType(), List())
     }
     (expr.copy(
       meta = expr.meta.copy(
@@ -145,6 +169,25 @@ final class Typechecker(compiler: Compiler) {
       ),
       variant = variant
     ), typ)
+  }
+
+  def getType(loc: Loc, symbol: Symbol): (Type, Iterable[Diagnostic]) = {
+    compiler.getType(symbol) match {
+      case Some(UnAssigned()) =>
+        (ErrorType(), List(
+          Diagnostic(
+            variant = UseBeforeAssignment(symbol.text),
+            severity = Severity.Error,
+            loc = loc)))
+      case None =>
+        (ErrorType(), List(
+          Diagnostic(
+            variant = UnBoundVar(symbol.text),
+            severity = Severity.Error,
+            loc = loc)))
+      case Some(t) =>
+        (t, List())
+    }
   }
 
   private def bindTypeToBinder(binder: Typed.Binder, typ: Type): Typed.Binder = {
@@ -199,6 +242,23 @@ final class Typechecker(compiler: Compiler) {
         scope
 
     }
+  }
+
+  private def resolveName(name: String): Option[ScopeEntry] = {
+    var l = this.scopeMaps
+    while (true) {
+      l match {
+        case hd::tl =>
+          hd.symbols.get(name) match {
+            case Some(entry) => return Some(entry)
+            case None =>
+              l = tl
+          }
+        case _ =>
+          return None
+      }
+    }
+    None
   }
 
   private def withNewScope[T](loc: Loc)(f: () => T): (T, Scope) = {

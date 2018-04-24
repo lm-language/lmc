@@ -3,16 +3,16 @@
     {
       "loc" : {
         "start" : {
-          "line" : 2,
-          "column" : 5
+          "line" : 1,
+          "column" : 9
         },
         "end" : {
-          "line" : 2,
-          "column" : 5
+          "line" : 1,
+          "column" : 9
         }
       },
       "severity" : "Error",
-      "message" : "DuplicateBinding(x)"
+      "message" : "UnBoundVar(a)"
     }
   ]
 }
