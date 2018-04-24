@@ -1,14 +1,17 @@
-object Syntax {
+import scala.ref.WeakReference
 
-  case class Meta(
-    loc: Loc,
-    diagnostics: Iterable[Diagnostics.Diagnostic] = List()
-  ) extends HasLoc
+object Syntax {
 
   sealed trait Syntax {
     type Name
-    type _Scope
+    type _Scope <: Scope
+    type _Type
 
+    case class Meta(
+      loc: Loc,
+      scope: WeakReference[_Scope],
+      diagnostics: Iterable[Diagnostics.Diagnostic] = List()
+    ) extends HasLoc
 
     sealed trait HasMeta {
       def getMeta: Meta
@@ -49,6 +52,7 @@ object Syntax {
 
     case class Pattern(
       meta: Meta,
+      typ: _Type,
       variant: Pattern.Variant
     ) extends NodeOps(meta) with Node {
       override def children: Iterable[Node] = variant.children
@@ -73,8 +77,10 @@ object Syntax {
       case class Literal(variant: LiteralVariant) extends T
       case class Error() extends T
     }
+
     case class Expr(
       meta: Meta,
+      typ: _Type,
       variant: Expr.Variant
     ) extends NodeOps(meta) with Node {
       override def children: Iterable[Node] = variant.children
@@ -110,11 +116,19 @@ object Syntax {
 
   final object Parsed extends Syntax {
     type Name = String
-    type _Scope = Unit
+    type _Scope = ScopeBuilder
+    type _Type = Unit
+  }
+
+  final object Named extends Syntax {
+    type Name = Symbol
+    type _Scope = Scope
+    type _Type = Unit
   }
 
   final object Typed extends Syntax {
     type Name = Symbol
     type _Scope = Scope
+    type _Type = Type
   }
 }

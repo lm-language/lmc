@@ -7,20 +7,6 @@ import Diagnostics._
 final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => Unit) {
   import Syntax.{ Parsed => P }
   import Syntax.{ Typed => T }
-  case class MutableScope(
-    var loc: Loc,
-    var symbols: mutable.HashMap[String, ScopeEntry] = mutable.HashMap.empty,
-    children: mutable.ArrayBuffer[Scope] = mutable.ArrayBuffer.empty,
-  ) {
-    def toScope: Scope = {
-      Scope(
-        loc = loc,
-        symbols = symbols.toMap,
-        children = this.children
-      )
-    }
-  }
-  private var scopeMaps = List.empty[MutableScope]
 
   def checkSourceFile(parsed: Parsed.SourceFile): Typed.SourceFile = {
     val (declarations, scope) = checkModule(parsed.loc, parsed.declarations)
@@ -50,12 +36,46 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
     */
   private def checkModule(loc: Loc, declarations: Iterable[Parsed.Declaration]): (Iterable[Typed.Declaration], Scope) =
     withNewScope(loc)(() => {
+      for (decl <- declarations) {
+
+      }
       declarations
-        .map(nameDeclarations)
+        .map(preAddScopeDeclarations)
+        .map(nameDeclaration)
         .map(checkDeclaration)
     })
 
-  private def nameDeclarations(declaration: Parsed.Declaration): Typed.Declaration = {
+  private def addPreNameSymbolsToScope(binder: P.Binder): P.Binder = {
+    binder.pattern.variant match {
+      case P.Pattern.Var(ident) =>
+        val diagnostics = addBindingToEnclosingScope(
+          loc = binder.loc, symbol = compiler.makeSymbol(ident.name),
+          typ = UnAssigned()
+        )
+        val pattern = binder.pattern.copy(
+          meta = binder.pattern.meta.copy(
+            diagnostics = binder.meta.diagnostics ++ diagnostics
+          )
+        )
+        binder.copy(
+          pattern = pattern
+        )
+      case P.Pattern.Error() => binder
+    }
+  }
+
+  private def preAddScopeDeclarations(decl: P.Declaration): P.Declaration = {
+    decl.variant match {
+      case P.Declaration.Let(binder, rhs) =>
+        val newBinder = addPreNameSymbolsToScope(binder)
+        decl.copy(
+          variant = P.Declaration.Let(newBinder, rhs))
+      case P.Declaration.Error() =>
+        decl
+    }
+  }
+
+  private def nameDeclaration(declaration: Parsed.Declaration): Typed.Declaration = {
     val variant = declaration.variant match {
       case P.Declaration.Let(binder, expr) =>
         T.Declaration.Let(nameBinder(binder), nameExpr(expr))
@@ -83,30 +103,42 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
   var nextUnInferredId = 0
 
   private def nameBindingIdent(ident: Parsed.Ident): Typed.Ident = {
-    val symbol = compiler.makeSymbol(ident.name)
-    val diagnostics = addBindingToEnclosingScope(ident.meta.loc, symbol, UnAssigned())
-    Typed.Ident(meta = ident.meta.copy(diagnostics = diagnostics), name = symbol)
-  }
-
-  private def addBindingToEnclosingScope(loc: Loc, symbol: Symbol, typ: Type): Iterable[Diagnostic] = {
-    scopeMaps match {
-      case scope::_ =>
-        scope.symbols.get(symbol.text) match {
-          case Some(_) =>
-            List(Diagnostic(
-              loc = loc,
-              severity = Severity.Error,
-              variant = DuplicateBinding(symbol.text)
-            ))
-          case None =>
-            val entry = ScopeEntry(symbol = symbol, typ = typ, loc = loc)
-            scope.symbols += symbol.text -> entry
-            setTypeOfSymbol(symbol, typ)
-            List()
-        }
-      case Nil => throw new Error("CompilerBug: Can't add type to empty scope list")
+    val scope = enclosingScope
+    scope.symbols.get(ident.name) match {
+      case Some(ScopeEntry(symbol, _, _)) =>
+        Typed.Ident(meta = ident.meta, name = symbol)
+      case None =>
+        throw new Error("CompilerBug: Binding should've been added by pre-naming phase")
     }
   }
+
+  /**
+    * Add a declaration binding to scope, returning errors in case
+    * binding is already added.
+    * @param loc
+    * @param symbol
+    * @param typ
+    * @return
+    */
+  private def addBindingToEnclosingScope(loc: Loc, symbol: Symbol, typ: Type): Iterable[Diagnostic] = {
+    val scope = enclosingScope
+    scope.symbols.get(symbol.text) match {
+      case Some(_) =>
+        List(Diagnostic(
+          loc = loc,
+          severity = Severity.Error,
+          variant = DuplicateBinding(symbol.text)
+        ))
+      case None =>
+        val entry = ScopeEntry(symbol = symbol, typ = typ, loc = loc)
+        scope.symbols += symbol.text -> entry
+        setTypeOfSymbol(symbol, typ)
+        List()
+    }
+  }
+
+  private def enclosingScope: MutableScope =
+    scopeMaps.head
 
 
   private def nameExpr(expr: Parsed.Expr): Typed.Expr = {
@@ -122,9 +154,20 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
   }
 
   private def nameVarIdent(ident: P.Ident): T.Ident = {
+    println("namingVarIdent")
+    println(this.scopeMaps)
+    println(ident.name, resolveName(ident.name))
     resolveName(ident.name) match {
-      case Some(entry) =>
-        T.Ident(ident.meta, entry.symbol)
+      case Some(ScopeEntry(symbol, UnAssigned(), _)) =>
+        T.Ident(ident.meta.copy(
+          diagnostics = ident.meta.diagnostics ++ List(
+            Diagnostic(
+              loc = ident.meta.loc,
+              variant = Diagnostics.UseBeforeAssignment(ident.name),
+              severity = Severity.Error
+            )
+          )
+        ), symbol)
       case None =>
         val symbol = compiler.makeSymbol(ident.name)
         T.Ident(ident.meta.copy(
@@ -136,6 +179,8 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
             )
           )
         ), symbol)
+      case Some(entry) =>
+        T.Ident(ident.meta, entry.symbol)
     }
   }
 
@@ -173,12 +218,6 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
 
   def getType(loc: Loc, symbol: Symbol): (Type, Iterable[Diagnostic]) = {
     compiler.getType(symbol) match {
-      case Some(UnAssigned()) =>
-        (ErrorType(), List(
-          Diagnostic(
-            variant = UseBeforeAssignment(symbol.text),
-            severity = Severity.Error,
-            loc = loc)))
       case None =>
         (ErrorType(), List(
           Diagnostic(
@@ -210,18 +249,16 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
   }
 
   private def bindTypeToIdent(ident: Syntax.Typed.Ident, typ: Type): Typed.Ident = {
-    setBindingInEnclosingScope(ident.loc, ident.name, typ)
+    println("Setting type of binding ", ident.name)
+    setTypeOfSymbol(ident.name, typ)
     ident
   }
 
   private def setBindingInEnclosingScope(loc: Loc, symbol: Symbol, typ: Type): Iterable[Diagnostic] = {
-    scopeMaps match {
-      case scope::_ =>
-        val entry = ScopeEntry(symbol = symbol, typ = typ, loc = loc)
-        scope.symbols += symbol.text -> entry
-        List()
-      case Nil => throw new Error("CompilerBug: Can't add type to empty scope list")
-    }
+    val scope = enclosingScope
+    val entry = ScopeEntry(symbol = symbol, typ = typ, loc = loc)
+    scope.symbols += symbol.text -> entry
+    List()
   }
 
   private def pushScope(loc: Loc): Unit = {

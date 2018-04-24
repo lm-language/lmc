@@ -1,5 +1,4 @@
 import IO._
-import Syntax.Meta
 import Syntax.Parsed._
 import java.nio.file.Path
 import Diagnostics._
@@ -22,9 +21,12 @@ object Parser {
 
 final class Parser(val path: Path, val tokens: Stream[Token]) {
   import Tokens.Variant._
+  type Scope = Syntax.Parsed._Scope
   private var _currentToken: Token = tokens.next
+  private var _lastToken: Token = _currentToken
   private def currentToken = _currentToken
   private var _errors: List[WeakReference[Diagnostic]] = List()
+  private var _scopes = List.empty[WeakReference[Scope]]
 
   /**
    * advance the token stream by one character
@@ -37,6 +39,37 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
       _currentToken = tokens.next
     }
     tok
+  }
+
+  private def withNewScope[T](f: (ScopeBuilder) => T): T = {
+    val startToken = currentToken
+    val parent: WeakReference[Option[Scope]] = _scopes match {
+      case hd :: _ => WeakReference(hd.get)
+      case _ => WeakReference(None)
+    }
+
+    val scope = ScopeBuilder(parent)
+    _pushScope(scope)
+    val result = f(scope)
+    _popScope()
+    val loc = Loc.between(startToken, _lastToken)
+    scope.setLoc(loc)
+    result
+  }
+
+  private def _pushScope(scope: Scope): Unit = {
+    this._scopes = WeakReference(scope)::_scopes
+  }
+
+  private def _popScope(): Unit = {
+    _scopes = _scopes.tail
+  }
+
+  private def scope(): WeakReference[Scope] = {
+    // Unsafe get because scope should definitely be
+    // defined during parsing, otherwise, something
+    // is wrong and exception should be thrown
+    WeakReference(_scopes.head.get.get)
   }
 
   private def expect(variant: Tokens.Variant): (Token, Iterable[Diagnostic]) = {
@@ -57,19 +90,25 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     }
   }
 
-  def parseSourceFile(): SourceFile = {
+  def parseSourceFile(): SourceFile = withNewScope((scope) => {
     var declarations = Vector.empty[Declaration]
     val startToken = this.currentToken
     while (this.currentToken.variant != EOF) {
       declarations = declarations :+ parseDeclaration
     }
     val (endToken, diagnostics) = expect(EOF)
-    SourceFile(
-      Meta(Loc.between(startToken, endToken), diagnostics = diagnostics),
-      declarations,
-      scope = ()
+    val loc = Loc.between(startToken, endToken)
+    val meta = Meta(
+      loc,
+      WeakReference(scope),
+      diagnostics
     )
-  }
+    SourceFile(
+      meta,
+      declarations,
+      scope = scope
+    )
+  })
 
   def parseDeclaration: Declaration = {
     currentToken.variant match {
@@ -82,6 +121,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
         Declaration(
           meta = Meta(
             loc = Loc.between(startTok, stopTop),
+            scope = scope,
             diagnostics = diags1 ++ diags2
           ),
           variant = Declaration.Let(binder, expr)
@@ -100,6 +140,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
         Declaration(
           meta = Meta(
             loc = currentToken.loc,
+            scope(),
             diagnostics ++ skippedDiagnostics
           ),
           variant = Declaration.Error()
@@ -113,14 +154,16 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
         val tok = advance()
         val value = tok.lexeme.replaceAll("_", "").toInt
         Expr(
-          meta = Meta(loc = tok.loc),
+          meta = Meta(loc = tok.loc, scope()),
+          typ = (),
           variant = Expr.Literal(Expr.LInt(value))
         )
       case ID =>
         val tok = advance()
-        val meta = Meta(loc = tok.loc)
+        val meta = Meta(loc = tok.loc, scope())
         Expr(
           meta = meta,
+          typ = (),
           variant = Expr.Var(Ident(meta, tok.lexeme))
         )
       case _ =>
@@ -137,8 +180,10 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
         Expr(
           meta = Meta(
             loc = currentToken.loc,
+            scope(),
             diagnostics ++ skippedDiagnostics
           ),
+          typ = (),
           variant = Expr.Error()
         )
     }
@@ -147,7 +192,8 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
   private def parseBinder(): Binder = {
     val pattern = parsePattern()
     Binder(meta = Meta(
-      loc = pattern.loc
+      loc = pattern.loc,
+      scope()
     ), pattern = pattern)
   }
 
@@ -155,9 +201,10 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     currentToken.variant match {
       case ID =>
         val tok = advance()
-        val meta = Meta(loc = tok.loc)
+        val meta = Meta(loc = tok.loc, scope())
         Pattern(
           meta = meta,
+          typ = (),
           variant = Pattern.Var(Ident(meta, tok.lexeme))
         )
       case _ =>
@@ -174,8 +221,10 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
         Pattern(
           meta = Meta(
             loc = currentToken.loc,
+            scope(),
             diagnostics ++ skippedDiagnostics
           ),
+          typ = (),
           variant = Pattern.Error()
         )
     }
