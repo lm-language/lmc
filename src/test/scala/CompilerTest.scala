@@ -94,14 +94,18 @@ class CompilerTest {
   )
   case class ScopeJSON(
     loc: LocJSON,
-    symbols: Map[String, SymbolEntryJSON],
+    symbols: scala.collection.Map[String, SymbolEntryJSON],
     children: List[ScopeJSON]
   )
   object ScopeJSON {
     def fromScope(scope: Scope): ScopeJSON = ScopeJSON(
       loc = LocJSON.fromLoc(scope.loc),
-      symbols = scope.symbols.mapValues((t) => SymbolEntryJSON(t.typ.toString)),
-      children = scope.children.map(fromScope).toList
+      symbols = scope.symbols
+        .mapValues(_.typ.toString)
+        .mapValues(SymbolEntryJSON),
+      children = scope.children
+          .map(_.get)
+          .map(???).toList
     )
   }
 

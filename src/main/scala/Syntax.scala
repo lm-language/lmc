@@ -11,7 +11,9 @@ object Syntax {
       loc: Loc,
       scope: WeakReference[_Scope],
       diagnostics: Iterable[Diagnostics.Diagnostic] = List()
-    ) extends HasLoc
+    ) extends HasLoc {
+      def typed = this.asInstanceOf[Typed.Meta]
+    }
 
     sealed trait HasMeta {
       def getMeta: Meta
