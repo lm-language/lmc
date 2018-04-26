@@ -1,10 +1,10 @@
-import Syntax._
-
 import scala.collection.mutable
+
+import Syntax._
 import Diagnostics._
 
 
-final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => Unit) {
+final class TypeChecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => Unit) {
   import Syntax.{ Named => N }
   import Syntax.{ Typed => T }
 
@@ -15,12 +15,19 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
     UnInferred(id)
   }
 
-  private val types = mutable.Map.empty[Symbol, Type]
+  private val types = {
+    val types = mutable.Map.empty[Symbol, Type]
+    for ((_, ScopeEntry(_, symbol, typ)) <- compiler.PrimitivesScope.symbols) {
+      types += symbol -> typ
+    }
+    types
+  }
 
   def checkSourceFile(parsed: Parsed.SourceFile): Typed.SourceFile = {
     val named = new Renamer(
       compiler.makeSymbol,
-      makeUninferred
+      makeUninferred,
+      compiler.PrimitivesScope
     ).renameSourceFile(parsed)
     val declarations = checkModule(parsed.loc, named.declarations)
     Typed.SourceFile(
@@ -51,11 +58,11 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
     import Named.{Expr => NE}
     val (variant: T.Expr.Variant, typ, diagnostics) = expr.variant match {
       case NE.Literal(NE.LInt(l)) =>
-        (TE.Literal(TE.LInt(l)), compiler.IntType, List())
+        (TE.Literal(TE.LInt(l)), Primitive.Int, List())
       case NE.Var(ident) =>
         val (typ, diagnostics) = getSymbolType(ident.loc, ident.name)
         (expr.variant, typ, diagnostics)
-      case NE.Error() => (expr.variant, ErrorType(), List())
+      case NE.Error() => (expr.variant, ErrorType, List())
     }
     T.Expr(
       meta =
@@ -68,7 +75,7 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
   }
 
   private def getSymbolType(loc: Loc, symbol: Symbol): (Type, Iterable[Diagnostic]) = {
-    val typ = types.getOrElse(symbol, ErrorType())
+    val typ = types.getOrElse(symbol, ErrorType)
     (typ, List())
   }
 

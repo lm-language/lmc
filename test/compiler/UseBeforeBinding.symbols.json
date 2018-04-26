@@ -11,10 +11,10 @@
   },
   "symbols" : {
     "x" : {
-      "typ" : "ErrorType()"
+      "typ" : "ErrorType"
     },
     "someVar" : {
-      "typ" : "Constructor(<lm>$Int)"
+      "typ" : "Int"
     }
   },
   "children" : [

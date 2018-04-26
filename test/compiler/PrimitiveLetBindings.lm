@@ -1,0 +1,4 @@
+let a = 1;
+let u = unit;
+let t = true;
+let f = false;

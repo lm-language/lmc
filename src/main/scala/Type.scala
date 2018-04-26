@@ -1,10 +1,15 @@
 sealed trait Type
 
 /**
-  * A type constructor. E.g. `Int`, `Boolean`, `List`, etc
-  * @param name
+  * A primitive type. E.g. `Int`, `Boolean`, , etc
   */
-case class Constructor(name: Symbol) extends Type
+object Primitive {
+  case object Int extends Type
+  case object Unit extends Type
+  case object Bool extends Type
+}
+
+case class TypeConstructor(symbol: Symbol) extends Type
 /**
   * A placeholder for a type that hasn't been inferred
   * yet.
@@ -31,5 +36,8 @@ case class UnInferred(id: Int) extends Type
   *   ...
   * }
   */
-case class UnAssigned() extends Type
-case class ErrorType() extends Type
+case object UnAssigned extends Type
+case object ErrorType extends Type
+
+sealed trait Kind
+case object Star extends Kind

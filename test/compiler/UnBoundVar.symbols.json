@@ -11,7 +11,7 @@
   },
   "symbols" : {
     "x" : {
-      "typ" : "ErrorType()"
+      "typ" : "ErrorType"
     }
   },
   "children" : [

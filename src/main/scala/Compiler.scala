@@ -1,4 +1,4 @@
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 
 import Diagnostics.Diagnostic
 
@@ -9,14 +9,32 @@ import Syntax._
 import scala.collection._
 import IO._
 
+import scala.ref.WeakReference
+
 final class Compiler(paths: Iterable[Path])(implicit ec: ExecutionContext) {
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
 
   private val _symbolTypes = mutable.Map.empty[Symbol, Type]
 
-  val IntType: Type = Constructor(this.makeSymbol("<lm>$Int"))
-  val UnitType: Type = Constructor(this.makeSymbol("<lm>$Unit"))
+
+  val PrimitivesScope: Scope = {
+    val loc = Loc(
+      path = Paths.get("<builtin>"),
+      start = Pos(0, 0),
+      end = Pos(0, 0))
+    val entries = Map(
+      "unit" -> Primitive.Unit,
+      "true" -> Primitive.Bool,
+      "false" -> Primitive.Bool
+    )
+    val scopeBuilder = ScopeBuilder(parent = WeakReference(None))
+    scopeBuilder.setLoc(loc)
+    for ((name, typ) <- entries) {
+      scopeBuilder.setSymbol(name, ScopeEntry(loc, makeSymbol(name), typ))
+    }
+    scopeBuilder
+  }
 
   def compile(): Future[Unit] = {
     Future.unit
@@ -27,7 +45,7 @@ final class Compiler(paths: Iterable[Path])(implicit ec: ExecutionContext) {
       case Some(sf) => sf
       case None =>
         val parsed = getParsedSourceFile(path)
-        val checker = new Typechecker(this, (symbol, typ) => {
+        val checker = new TypeChecker(this, (symbol, typ) => {
           _symbolTypes.update(symbol, typ)
         })
         val checkedSourceFile = checker.checkSourceFile(parsed)

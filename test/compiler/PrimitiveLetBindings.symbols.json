@@ -5,13 +5,22 @@
       "column" : 1
     },
     "end" : {
-      "line" : 2,
+      "line" : 5,
       "column" : 1
     }
   },
   "symbols" : {
     "a" : {
-      "typ" : "Constructor(<lm>$Int)"
+      "typ" : "Int"
+    },
+    "u" : {
+      "typ" : "Unit"
+    },
+    "t" : {
+      "typ" : "Bool"
+    },
+    "f" : {
+      "typ" : "Bool"
     }
   },
   "children" : [

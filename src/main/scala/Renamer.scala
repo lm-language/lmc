@@ -3,7 +3,8 @@ import Diagnostics._
 
 class Renamer(
   makeSymbol: ((String) => Symbol),
-  makeUninferred: () => Type
+  makeUninferred: () => Type,
+  primitivesScope: Scope
 ) {
   var _scopes = List.empty[ScopeBuilder]
   def renameSourceFile(sourceFile: P.SourceFile): N.SourceFile = {
@@ -50,9 +51,9 @@ class Renamer(
   def renamePattern(pattern: P.Pattern): N.Pattern = {
     val (namedVariant, diagnostics: Iterable[Diagnostic]) = pattern.variant match {
       case P.Pattern.Var(ident) =>
-        currentScope.getEntry(ident.name) match {
-          case Some(entry@ScopeEntry(_, symbol, UnAssigned())) =>
-            currentScope.setSymbol(symbol.text, entry.copy(typ = makeUninferred()))
+        getEntry(ident.name) match {
+          case Some(entry@ScopeEntry(_, symbol, UnAssigned)) =>
+            scopeBuilder.setSymbol(symbol.text, entry.copy(typ = makeUninferred()))
             (N.Pattern.Var(makeNamedIdent(ident, symbol)), List.empty)
           case Some(e) =>
             (N.Pattern.Var(makeNamedIdent(ident, e.symbol)), List.empty)
@@ -81,8 +82,8 @@ class Renamer(
   def renameExpr(expr: P.Expr): N.Expr = {
     val (namedVariant: N.Expr.Variant, diagnostics) = expr.variant match {
       case P.Expr.Var(ident) =>
-          currentScope.getEntry(ident.name) match {
-            case Some(ScopeEntry(_, symbol, UnAssigned())) =>
+          getEntry(ident.name) match {
+            case Some(ScopeEntry(_, symbol, UnAssigned)) =>
               val namedIdent = makeNamedIdent(ident, symbol)
               (N.Expr.Var(namedIdent), List(
                 Diagnostic(
@@ -127,7 +128,19 @@ class Renamer(
     _scopes = _scopes.tail
   }
 
-  def currentScope: ScopeBuilder =
+  def getEntry(name: String, scopes: List[Scope] = _scopes): Option[ScopeEntry] = {
+    scopes match {
+      case sc :: tl =>
+        sc.getEntry(name) match {
+          case Some(n) => Some(n)
+          case None =>
+            getEntry(name, tl)
+        }
+      case _ => primitivesScope.getEntry(name)
+    }
+  }
+
+  def scopeBuilder: ScopeBuilder =
     _scopes.head
 
 
@@ -135,7 +148,7 @@ class Renamer(
     import P.Declaration._
     decl.variant match {
       case Let(pattern, expr) =>
-        val newPattern = addPatternBindingsToScope(UnAssigned())(pattern)
+        val newPattern = addPatternBindingsToScope(UnAssigned)(pattern)
         decl.copy(variant = Let(pattern = newPattern, expr))
       case Error() =>
         decl
@@ -146,7 +159,7 @@ class Renamer(
     import P.Pattern._
     pattern.variant match {
       case Var(ident) =>
-        currentScope.getSymbol(ident.name) match {
+        getEntry(ident.name) map (_.symbol) match {
           case Some(_) =>
             pattern.copy(meta = pattern.meta.copy(
               diagnostics = pattern.meta.diagnostics ++ List(
@@ -159,7 +172,7 @@ class Renamer(
             ))
           case None =>
             val symbol = makeSymbol(ident.name)
-            currentScope.setSymbol(ident.name, ScopeEntry(
+            scopeBuilder.setSymbol(ident.name, ScopeEntry(
               symbol = symbol,
               loc = ident.loc,
               typ = typ

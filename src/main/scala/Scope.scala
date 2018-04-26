@@ -3,19 +3,23 @@ import java.nio.file.{Path, Paths}
 import scala.collection._
 import scala.ref.WeakReference
 sealed trait Scope extends HasLoc {
+  type TypeEntry = (Symbol, Kind)
   def getSymbol(name: String): Option[Symbol]
   def symbols: scala.collection.Map[String, ScopeEntry]
+  def typeSymbols: scala.collection.Map[String, TypeEntry]
   def parent: WeakReference[Option[Scope]]
   def children: Iterable[WeakReference[Scope]]
   def getEntry(name: String): Option[ScopeEntry]
 }
 
 object Scope {
-  val empty = new Scope {override def parent: WeakReference[Option[Scope]] = WeakReference(None)
+  val empty: Scope = new Scope {override def parent: WeakReference[Option[Scope]] = WeakReference(None)
 
     override val symbols: Map[String, ScopeEntry] = Map()
 
     override val children: Iterable[WeakReference[Scope]] = List()
+
+    override val typeSymbols: collection.Map[String, TypeEntry] = Map.empty
 
     override def getEntry(name: String): Option[ScopeEntry] = None
 
@@ -31,6 +35,7 @@ case class ScopeBuilder(
   private val _symbols: mutable.HashMap[String, ScopeEntry] = mutable.HashMap.empty
   private var _children: List[WeakReference[Scope]] = List()
   private var _loc: Loc = _
+  private val _typeSymbols: mutable.HashMap[String, TypeEntry] = mutable.HashMap.empty
 
   override def loc: Loc = _loc
 
@@ -54,6 +59,8 @@ case class ScopeBuilder(
   def setSymbol(name: String, entry: ScopeEntry): Unit =
     _symbols += name -> entry
 
+
+  override def typeSymbols: Map[String, TypeEntry] = _typeSymbols
 }
 
 case class ScopeEntry(
