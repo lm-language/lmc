@@ -34,6 +34,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
    */
   private def advance(): Token = {
     val tok = currentToken
+    _lastToken = _currentToken
     _currentToken = tokens.next
     while (currentToken.variant == NEWLINE) {
       _currentToken = tokens.next
@@ -44,11 +45,22 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
   private def withNewScope[T](f: (ScopeBuilder) => T): T = {
     val startToken = currentToken
     val parent: WeakReference[Option[Scope]] = _scopes match {
-      case hd :: _ => WeakReference(hd.get)
+      case hd :: _ =>
+        WeakReference(hd.get)
       case _ => WeakReference(None)
     }
 
     val scope = ScopeBuilder(parent)
+    _scopes match {
+      case hd:: _ => {
+        hd.get match {
+          case Some(parentScope) =>
+              parentScope.addChild(scope)
+          case _ => ()
+        }
+      }
+      case _ => ()
+    }
     _pushScope(scope)
     val result = f(scope)
     _popScope()

@@ -105,7 +105,10 @@ class CompilerTest {
         .mapValues(SymbolEntryJSON),
       children = scope.children
           .map(_.get)
-          .map(???).toList
+          .map(_.orNull)
+          .filter(_ != null)
+          .map(fromScope)
+          .toList
     )
   }
 

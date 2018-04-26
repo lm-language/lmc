@@ -8,8 +8,18 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
   import Syntax.{ Named => N }
   import Syntax.{ Typed => T }
 
+  var _nextUninferredId = 0
+  private def makeUninferred(): Type = {
+    val id = _nextUninferredId
+    _nextUninferredId += 1
+    UnInferred(id)
+  }
+
   def checkSourceFile(parsed: Parsed.SourceFile): Typed.SourceFile = {
-    val named = new Renamer().renameSourceFile(parsed)
+    val named = new Renamer(
+      compiler.makeSymbol,
+      makeUninferred
+    ).renameSourceFile(parsed)
     val declarations = checkModule(parsed.loc, named.declarations)
     Typed.SourceFile(
       meta = named.meta.typed,
@@ -18,23 +28,6 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
     )
   }
 
-  /**
-    * Type checking a module involves the following steps
-    * 1. Push a new scope for the module
-    * 2. Walk over all declarations, adding all bindings
-    *    declared in the module, with the type UnBound
-    * 3. Walk over declarations again, this time inferring
-    *    the actual types of bindings, assigning UnInferred
-    *    for declarations that can't be inferred yet. As we
-    *    go along, we keep adding type constraints.
-    * 4. Solve all type constraints generated. Ensure that
-    *    no un-inferred type remains after solving the constraints.
-    *    If there are un-inferred types, add errors to their corresponding
-    *    declaration nodes.
-    * @param loc Loc of module/source file
-    * @param declarations List of declarations
-    * @return
-    */
   private def checkModule(loc: Loc, declarations: Iterable[N.Declaration]): Iterable[T.Declaration] = {
     declarations.map(checkDeclaration)
   }
@@ -105,7 +98,7 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
         pattern.meta.copy(
           diagnostics = pattern.meta.diagnostics ++ diagnostics
         ).typed,
-      typ = ???,
+      typ = typ,
       variant = variant
     )
   }

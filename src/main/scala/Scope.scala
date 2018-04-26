@@ -4,14 +4,14 @@ sealed trait Scope extends HasLoc {
   def getSymbol(name: String): Option[Symbol]
   def symbols: scala.collection.Map[String, ScopeEntry]
   def parent: WeakReference[Option[Scope]]
-  def children: Iterable[WeakReference[Option[Scope]]]
+  def children: Iterable[WeakReference[Scope]]
 }
 
 case class ScopeBuilder(
   parent: WeakReference[Option[Scope]],
 ) extends Scope {
   private val _symbols: mutable.HashMap[String, ScopeEntry] = mutable.HashMap.empty
-  private var _children: List[WeakReference[Option[Scope]]] = List()
+  private var _children: List[WeakReference[Scope]] = List()
   private var _loc: Loc = _
 
   override def loc: Loc = _loc
@@ -19,12 +19,12 @@ case class ScopeBuilder(
   def setLoc(loc: Loc): Unit =
     _loc = loc
 
-  override def children: Iterable[WeakReference[Option[Scope]]] = _children
+  override def children: Iterable[WeakReference[Scope]] = _children
 
   def symbols: Map[String, ScopeEntry] = _symbols
 
   def addChild(scope: Scope): Unit = {
-    _children = WeakReference(Some(scope))::_children
+    _children = WeakReference(scope)::_children
   }
 
   override def getSymbol(name: String): Option[Symbol] =

@@ -13,6 +13,7 @@ object Syntax {
       diagnostics: Iterable[Diagnostics.Diagnostic] = List()
     ) extends HasLoc {
       def typed = this.asInstanceOf[Typed.Meta]
+      def named = this.asInstanceOf[Named.Meta]
     }
 
     sealed trait HasMeta {
