@@ -21,6 +21,9 @@
     },
     "a" : {
       "typ" : "Int"
+    },
+    "b" : {
+      "typ" : "Var(SDF,Star)"
     }
   },
   "children" : [

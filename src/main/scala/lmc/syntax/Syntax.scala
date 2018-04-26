@@ -17,10 +17,16 @@ trait Syntax {
   ) extends HasLoc {
     def typed: lmc.syntax.Typed.Meta = this.asInstanceOf[Typed.Meta]
     def named: Named.Meta = this.asInstanceOf[Named.Meta]
+
+    override def toString: String = ""
   }
 
-  sealed trait HasMeta {
+  trait HasMeta {
     def getMeta: Meta
+  }
+
+  trait HasVariant[T] {
+    val variant: T
   }
 
   trait HasChildren {
@@ -70,14 +76,14 @@ trait Syntax {
     meta: Meta,
     typ: _Type,
     variant: Pattern.Variant
-  ) extends NodeOps(meta) with Node {
+  ) extends NodeOps(meta) with Node with HasVariant[Pattern.Variant] {
     override def children: Iterable[Node] = variant.children
   }
 
   case class TypeAnnotation(
     meta: Meta,
     variant: TypeAnnotation.Variant
-  ) extends NodeOps(meta) with Node {
+  ) extends NodeOps(meta) with Node with HasVariant[TypeAnnotation.Variant] { self =>
     override def children: Iterable[Node] = variant.children
   }
 
@@ -115,7 +121,7 @@ trait Syntax {
     meta: Meta,
     typ: _Type,
     variant: Expr.Variant
-  ) extends NodeOps(meta) with Node {
+  ) extends NodeOps(meta) with Node with HasVariant[Expr.Variant] {
     override def children: Iterable[Node] = variant.children
   }
 
@@ -134,7 +140,7 @@ trait Syntax {
   case class Declaration(
     meta: Meta,
     variant: Declaration.Variant
-  ) extends NodeOps(meta) with Node {
+  ) extends NodeOps(meta) with Node with HasVariant[Declaration.Variant] {
     override def children: Iterable[Node] = variant.children
   }
 

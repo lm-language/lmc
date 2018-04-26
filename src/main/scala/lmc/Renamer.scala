@@ -52,7 +52,7 @@ class Renamer(
     )
   }
 
-  def renamePattern(pattern: P.Pattern): N.Pattern = {
+  def renamePattern(pattern: P.Pattern, annotation: Option[P.TypeAnnotation] = None): N.Pattern = {
     val (namedVariant, diagnostics: Iterable[Diagnostic]) = pattern.variant match {
       case P.Pattern.Var(ident) =>
         getEntry(ident.name) match {
@@ -65,6 +65,13 @@ class Renamer(
             throw new Error("Compiler bug")
 
         }
+      case P.Pattern.Annotated(pat, annotation) =>
+        val newPattern = renamePattern(pat, Some(annotation))
+        (N.Pattern.Annotated(
+          newPattern,
+          renameAnnotation(annotation)
+        ), List.empty)
+
       case P.Pattern.Error =>
         (N.Pattern.Error, List.empty[Diagnostic])
     }
@@ -79,11 +86,42 @@ class Renamer(
     )
   }
 
+  private def renameAnnotation(annotation: P.TypeAnnotation): N.TypeAnnotation = {
+    val (variant: N.TypeAnnotation.Variant,
+         diagnostics: Iterable[Diagnostic]) = annotation.variant match {
+      case P.TypeAnnotation.Var(ident) =>
+        getTypeEntry(ident.name) match {
+          case Some((symbol, _, _)) =>
+            val namedIdent = makeNamedIdent(ident, symbol)
+            (N.TypeAnnotation.Var(namedIdent),  List.empty)
+          case None =>
+            val symbol = makeSymbol(ident.name)
+            (N.TypeAnnotation.Var(makeNamedIdent(ident, symbol)),
+              List(
+                Diagnostic(
+                  loc = ident.loc,
+                  severity = Severity.Error,
+                  variant = UnBoundTypeVar(ident.name)
+                )
+              )
+            )
+        }
+      case P.TypeAnnotation.Error =>
+        (N.TypeAnnotation.Error, List.empty)
+    }
+    N.TypeAnnotation(
+      meta = annotation.meta.copy(
+        diagnostics = annotation.meta.diagnostics ++ diagnostics
+      ).named,
+      variant = variant
+    )
+  }
+
   private def makeNamedIdent(ident: P.Ident, symbol: common.Symbol): N.Ident = {
     N.Ident(meta = ident.meta.named, name = symbol)
   }
 
-  def renameExpr(expr: P.Expr): N.Expr = {
+  private def renameExpr(expr: P.Expr): N.Expr = {
     val (namedVariant: N.Expr.Variant, diagnostics) = expr.variant match {
       case P.Expr.Var(ident) =>
           getEntry(ident.name) match {
@@ -144,6 +182,18 @@ class Renamer(
     }
   }
 
+  def getTypeEntry(name: String, scopes: List[Scope] = _scopes): Option[Scope.TypeEntry] = {
+    scopes match {
+      case sc :: tl =>
+        sc.typeSymbols.get(name) match {
+          case Some(n) => Some(n)
+          case None =>
+            getTypeEntry(name, tl)
+        }
+      case _ => primitivesScope.typeSymbols.get(name)
+    }
+  }
+
   def scopeBuilder: ScopeBuilder =
     _scopes.head
 
@@ -184,7 +234,10 @@ class Renamer(
             pattern
         }
       case P.Pattern.Annotated(pat, annotation) => {
-        ???
+        val newPattern = addPatternBindingsToScope(typ)(pat)
+        pattern.copy(
+          variant = P.Pattern.Annotated(newPattern, annotation)
+        )
       }
       case Error =>
         pattern

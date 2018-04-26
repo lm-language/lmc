@@ -8,7 +8,7 @@ import scala.ref.WeakReference
 
 
 sealed trait Scope extends HasLoc {
-  type TypeEntry = (Symbol, Kind)
+  type TypeEntry = Scope.TypeEntry
   def getSymbol(name: String): Option[Symbol]
   def symbols: scala.collection.Map[String, ScopeEntry]
   def typeSymbols: scala.collection.Map[String, TypeEntry]
@@ -19,6 +19,7 @@ sealed trait Scope extends HasLoc {
 }
 
 object Scope {
+  type TypeEntry = (Symbol, Type, Kind)
   val empty: Scope = new Scope {override def parent: WeakReference[Option[Scope]] = WeakReference(None)
 
     override val symbols: Map[String, ScopeEntry] = Map()
@@ -69,6 +70,10 @@ case class ScopeBuilder(
 
   override def typeSymbols: Map[String, TypeEntry] = _typeSymbols
 
+  def setTypeSymbol(name: String, entry: TypeEntry): Unit = {
+    _typeSymbols += name -> entry
+  }
+
   override def typed: Scope = this
 }
 
@@ -76,5 +81,8 @@ case class ScopeEntry(
   loc: Loc,
   symbol: Symbol,
   typ: Type,
-) extends HasLoc
+) extends HasLoc {
+  override def toString: String =
+    s"""<$symbol:${symbol.id}>: $typ"""
+}
 

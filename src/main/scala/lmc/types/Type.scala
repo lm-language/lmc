@@ -1,4 +1,5 @@
 package lmc.types
+import lmc.common.Symbol
 
 sealed trait Type
 
@@ -12,7 +13,7 @@ object Primitive {
 }
 
 case object ErrorType extends Type
-case class Var(symbol: Symbol) extends Type
+case class Var(symbol: Symbol, kind: Kind) extends Type
 /**
   * An as of yet unbound type. This is assigned to all
   * bindings that will have been defined but not in current

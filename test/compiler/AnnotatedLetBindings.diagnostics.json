@@ -12,7 +12,7 @@
         }
       },
       "severity" : "Error",
-      "message" : "TypeMismatch(Int, Bool)"
+      "message" : "TypeMismatch(Int,Bool)"
     },
     {
       "loc" : {
@@ -27,6 +27,20 @@
       },
       "severity" : "Error",
       "message" : "UnBoundTypeVar(SDF)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 5,
+          "column" : 14
+        },
+        "end" : {
+          "line" : 5,
+          "column" : 17
+        }
+      },
+      "severity" : "Error",
+      "message" : "TypeMismatch(Var(SDF,Star),Bool)"
     }
   ]
 }

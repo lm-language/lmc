@@ -17,6 +17,7 @@ object diagnostics {
   case class UnBoundVar(name: String) extends Variant
   case class UseBeforeAssignment(name: String) extends Variant
   case class TypeMismatch(expected: Type, found: Type) extends Variant
+  case class UnBoundTypeVar(name: String) extends Variant
 
   object Severity extends Enumeration {
     type T = Value

@@ -29,11 +29,11 @@ class CompilerTest {
     val suitePath = Paths.get(basePath.toString, "test", "compiler")
     val testOutPath = Paths.get(basePath.toString, "test", "compiler", "local")
 
-    val compiler = new Compiler(paths = List(suitePath))
     val suiteDir = new JFile(suitePath.toString)
+
+    val compiler = new Compiler(paths = List(suitePath))
     for (path <- suiteDir.listFiles() filter { _.getName endsWith ".lm" }) {
       val filePath = Paths.get(path.getAbsolutePath)
-
       val diagnosticsFileName = filePath.getFileName.toString dropRight 3 concat ".diagnostics.json"
       val diagnosticsFilePath = filePath.resolveSibling(diagnosticsFileName)
       val diagnosticsFile = File(diagnosticsFilePath)
@@ -68,7 +68,7 @@ class CompilerTest {
         assertResult(expectedScopeJSON)(Right(compiledScopeJSON))
       } catch {
         case _: org.scalatest.exceptions.TestFailedException =>
-          println(s"""Symbols don't match for $filePath""")
+          println(s"""Symbols don't match for $symbolPath and $outputScopeFile""")
           runCommand(s"""$diff $symbolPath $outputScopeFile""")
       }
     }
@@ -104,7 +104,13 @@ class CompilerTest {
     def fromScope(compiler: Compiler)(scope: Scope): ScopeJSON = ScopeJSON(
       loc = LocJSON.fromLoc(scope.loc),
       symbols = scope.symbols
-        .mapValues(e => compiler.getType(e.symbol).get.toString)
+        .mapValues(e => {
+          compiler.getType(e.symbol) match {
+            case Some(t) => t.toString
+            case None =>
+              throw new Error(s"""CompilerBug: No type for symbol ${e.symbol.text}""")
+          }
+        })
         .mapValues(SymbolEntryJSON),
       children = scope.children
           .map(_.get)

@@ -255,6 +255,17 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
 
   private def parseTypeAnnotation(): TypeAnnotation = {
      currentToken.variant match {
+       case ID =>
+         val tok = advance()
+         val meta = Meta(
+           loc = tok.loc,
+           scope = scope()
+         )
+         val ident = Ident(
+           meta = meta,
+           name = tok.lexeme
+         )
+         TypeAnnotation(meta, TypeAnnotation.Var(ident))
        case _ =>
          val loc = currentToken.loc
          val skippedDiagnostics = recover()
@@ -263,16 +274,16 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
             Severity.Error,
             loc
          ))
-        addDiagnostics(diagnostics)
-        addDiagnostics(skippedDiagnostics)
-        TypeAnnotation(
-          meta = Meta(
-            loc = currentToken.loc,
-            scope(),
-            diagnostics ++ skippedDiagnostics
-          ),
-          variant = TypeAnnotation.Error
-        )
+         addDiagnostics(diagnostics)
+         addDiagnostics(skippedDiagnostics)
+         TypeAnnotation(
+           meta = Meta(
+             loc = currentToken.loc,
+             scope(),
+             diagnostics ++ skippedDiagnostics
+           ),
+           variant = TypeAnnotation.Error
+         )
      }
   }
 
