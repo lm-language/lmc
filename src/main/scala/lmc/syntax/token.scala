@@ -1,4 +1,8 @@
-object Tokens {
+package lmc.syntax
+
+import lmc.common.{HasLoc, Loc}
+
+object token {
   object Variant extends Enumeration {
     type Variant = Value
     val
@@ -8,6 +12,7 @@ object Tokens {
 
       // Punctuation
       VBAR, LPAREN, RPAREN, LBRACE, RBRACE, SEMICOLON,
+      COLON,
 
       // Operators
       EQ, EQEQ, PLUS,

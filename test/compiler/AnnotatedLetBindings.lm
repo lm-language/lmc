@@ -1,0 +1,5 @@
+let x: Int = 34;
+let y: Unit = unit;
+let z: Bool = true;
+let a: Int = true;
+let b: SDF = true;

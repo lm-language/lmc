@@ -1,8 +1,12 @@
-import Syntax.{Named => N, Parsed => P}
-import Diagnostics._
+package lmc
+
+import lmc.syntax.{Named => N, Parsed => P}
+import lmc.common.{Scope, ScopeBuilder, ScopeEntry}
+import lmc.types._
+import lmc.diagnostics._
 
 class Renamer(
-  makeSymbol: ((String) => Symbol),
+  makeSymbol: ((String) => common.Symbol),
   makeUninferred: () => Type,
   primitivesScope: Scope
 ) {
@@ -61,8 +65,8 @@ class Renamer(
             throw new Error("Compiler bug")
 
         }
-      case P.Pattern.Error() =>
-        (N.Pattern.Error(), List.empty[Diagnostic])
+      case P.Pattern.Error =>
+        (N.Pattern.Error, List.empty[Diagnostic])
     }
     val parsedDiagnostics = pattern.meta.diagnostics
     val namedDiagnostics = parsedDiagnostics ++ diagnostics
@@ -75,7 +79,7 @@ class Renamer(
     )
   }
 
-  private def makeNamedIdent(ident: P.Ident, symbol: Symbol): N.Ident = {
+  private def makeNamedIdent(ident: P.Ident, symbol: common.Symbol): N.Ident = {
     N.Ident(meta = ident.meta.named, name = symbol)
   }
 
@@ -158,7 +162,7 @@ class Renamer(
   def addPatternBindingsToScope(typ: Type)(pattern: P.Pattern): P.Pattern = {
     import P.Pattern._
     pattern.variant match {
-      case Var(ident) =>
+      case P.Pattern.Var(ident) =>
         getEntry(ident.name) map (_.symbol) match {
           case Some(_) =>
             pattern.copy(meta = pattern.meta.copy(
@@ -172,14 +176,17 @@ class Renamer(
             ))
           case None =>
             val symbol = makeSymbol(ident.name)
-            scopeBuilder.setSymbol(ident.name, ScopeEntry(
+            scopeBuilder.setSymbol(ident.name, common.ScopeEntry(
               symbol = symbol,
               loc = ident.loc,
               typ = typ
             ))
             pattern
         }
-      case Error() =>
+      case P.Pattern.Annotated(pat, annotation) => {
+        ???
+      }
+      case Error =>
         pattern
     }
   }

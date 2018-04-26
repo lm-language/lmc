@@ -1,3 +1,5 @@
+package lmc.types
+
 sealed trait Type
 
 /**
@@ -9,14 +11,8 @@ object Primitive {
   case object Bool extends Type
 }
 
-case class TypeConstructor(symbol: Symbol) extends Type
-/**
-  * A placeholder for a type that hasn't been inferred
-  * yet.
-  * @param id
-  */
-case class UnInferred(id: Int) extends Type
-
+case object ErrorType extends Type
+case class Var(symbol: Symbol) extends Type
 /**
   * An as of yet unbound type. This is assigned to all
   * bindings that will have been defined but not in current
@@ -37,7 +33,11 @@ case class UnInferred(id: Int) extends Type
   * }
   */
 case object UnAssigned extends Type
-case object ErrorType extends Type
 
-sealed trait Kind
-case object Star extends Kind
+/**
+  * A placeholder for a type that hasn't been inferred
+  * yet.
+ *
+  * @param id
+  */
+case class UnInferred(id: Int) extends Type

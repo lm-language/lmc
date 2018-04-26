@@ -1,13 +1,7 @@
-import java.nio.file.{
-  Path, Files
-}
-import java.nio.file.StandardOpenOption._
-import java.io.{
-  FileInputStream, BufferedReader, FileReader,
-  BufferedInputStream, IOException
-}
+package lmc
+import java.nio.file.{ Path, Files }
 
-object IO {
+object io {
   trait Stream[T] {
     def next: T
   }

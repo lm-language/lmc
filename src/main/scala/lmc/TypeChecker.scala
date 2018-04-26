@@ -1,12 +1,15 @@
-import scala.collection.mutable
+package lmc
 
-import Syntax._
-import Diagnostics._
+import scala.collection.mutable
+import lmc.syntax._
+import lmc.common.{Loc, Symbol, ScopeEntry, Scope}
+import lmc.diagnostics.Diagnostic
+import lmc.types._
+
 
 
 final class TypeChecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => Unit) {
-  import Syntax.{ Named => N }
-  import Syntax.{ Typed => T }
+  import lmc.syntax.{Named => N, Typed => T}
 
   var _nextUninferredId = 0
   private def makeUninferred(): Type = {
@@ -23,14 +26,14 @@ final class TypeChecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
     types
   }
 
-  def checkSourceFile(parsed: Parsed.SourceFile): Typed.SourceFile = {
+  def checkSourceFile(parsed: Parsed.SourceFile): T.SourceFile = {
     val named = new Renamer(
       compiler.makeSymbol,
       makeUninferred,
       compiler.PrimitivesScope
     ).renameSourceFile(parsed)
     val declarations = checkModule(parsed.loc, named.declarations)
-    Typed.SourceFile(
+    T.SourceFile(
       meta = named.meta.typed,
       declarations = declarations,
       scope = named.scope
@@ -54,8 +57,8 @@ final class TypeChecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
   }
 
   private def inferExpr(expr: N.Expr): T.Expr = {
-    import Typed.{Expr => TE}
     import Named.{Expr => NE}
+    import Typed.{Expr => TE}
     val (variant: T.Expr.Variant, typ, diagnostics) = expr.variant match {
       case NE.Literal(NE.LInt(l)) =>
         (TE.Literal(TE.LInt(l)), Primitive.Int, List())
@@ -84,7 +87,7 @@ final class TypeChecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
       case N.Pattern.Var(ident) =>
         val newIdent = bindTypeToIdent(ident, typ)
         (T.Pattern.Var(newIdent), List())
-      case N.Pattern.Error() =>
+      case N.Pattern.Error =>
         (T.Pattern.Error, List())
     }
     T.Pattern(

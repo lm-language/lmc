@@ -2,15 +2,18 @@ import java.nio.file.Paths
 import java.io.{File => JFile}
 import java.io.{BufferedReader, InputStreamReader}
 
-import IO._
 import org.junit.Test
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import io.circe.parser._
 import io.circe.syntax._
 import io.circe.generic.auto._
 import org.scalatest.Assertions._
 import better.files
+
+import lmc.io._
+import lmc.common._
+import lmc._
+import lmc.diagnostics._
 
 class CompilerTest {
   @Test def compileTest = {
@@ -118,7 +121,7 @@ class CompilerTest {
   )
 
   object DiagnosticsJSON {
-    def fromDiagnostics(diagnostics: Iterable[Diagnostics.Diagnostic]): DiagnosticsJSON =
+    def fromDiagnostics(diagnostics: Iterable[lmc.diagnostics.Diagnostic]): DiagnosticsJSON =
       DiagnosticsJSON(
         diagnostics = diagnostics.map((d) => DiagnosticJSON(
           loc = LocJSON.fromLoc(d.loc),

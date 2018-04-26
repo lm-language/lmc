@@ -1,27 +1,32 @@
-import IO._
-import Syntax.Parsed._
+package lmc
+
 import java.nio.file.Path
-import Diagnostics._
-import Tokens._
-import Diagnostics.Diagnostic
+
+import syntax.token
+import lmc.syntax.Parsed._
+import token.Token
+import token.Variant._
+import diagnostics._
+import io.Stream
+import common.Loc
+import common.ScopeBuilder
+
 import scala.ref.WeakReference
 
 object Parser {
-  import Variant._
 
   def apply(path: Path, tokens: Stream[Token]) = new Parser(path, tokens)
   val RECOVERY_TOKENS = Set(
     NEWLINE, EOF, RPAREN, RBRACE
   )
 
-  def isRecoveryToken(variant: Variant): Boolean = {
+  def isRecoveryToken(variant: token.Variant): Boolean = {
     RECOVERY_TOKENS.contains(variant)
   }
 }
 
 final class Parser(val path: Path, val tokens: Stream[Token]) {
-  import Tokens.Variant._
-  type Scope = Syntax.Parsed._Scope
+  type Scope = syntax.Parsed._Scope
   private var _currentToken: Token = tokens.next
   private var _lastToken: Token = _currentToken
   private def currentToken = _currentToken
@@ -50,7 +55,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
       case _ => WeakReference(None)
     }
 
-    val scope = ScopeBuilder(parent)
+    val scope = common.ScopeBuilder(parent)
     _scopes match {
       case hd:: _ => {
         hd.get match {
@@ -84,7 +89,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     WeakReference(_scopes.head.get.get)
   }
 
-  private def expect(variant: Tokens.Variant): (Token, Iterable[Diagnostic]) = {
+  private def expect(variant: token.Variant): (Token, Iterable[Diagnostic]) = {
     currentToken.variant match {
       case v if v == variant =>
         (advance(), List.empty)
@@ -95,9 +100,9 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
           variant = EXPECTED,
           lexeme = ""
         ), List(Diagnostic(
-          severity = Diagnostics.Severity.Error,
+          severity = diagnostics.Severity.Error,
           loc = loc,
-          variant = Diagnostics.TokenExpected(variant.toString)))
+          variant = diagnostics.TokenExpected(variant.toString)))
         )
     }
   }
@@ -202,7 +207,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
   }
 
   private def parsePattern(): Pattern = {
-    currentToken.variant match {
+    val pattern = currentToken.variant match {
       case ID =>
         val tok = advance()
         val meta = Meta(loc = tok.loc, scope())
@@ -216,7 +221,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
 
         val skippedDiagnostics = recover()
         val diagnostics = List(Diagnostic(
-          ExpressionExpected(),
+          PatternExpected(),
           Severity.Error,
           loc
         ))
@@ -229,9 +234,46 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
             diagnostics ++ skippedDiagnostics
           ),
           typ = (),
-          variant = Pattern.Error()
+          variant = Pattern.Error
         )
     }
+    currentToken.variant match {
+      case COLON =>
+        advance()
+        val annotation = parseTypeAnnotation()
+        Pattern(
+          meta = Meta(
+            loc = Loc.between(pattern, annotation),
+            scope()
+          ),
+          typ = (),
+          variant = Pattern.Annotated(pattern, annotation)
+        )
+      case _ => pattern
+    }
+  }
+
+  private def parseTypeAnnotation(): TypeAnnotation = {
+     currentToken.variant match {
+       case _ =>
+         val loc = currentToken.loc
+         val skippedDiagnostics = recover()
+         val diagnostics = List(Diagnostic(
+            TypeExpected(),
+            Severity.Error,
+            loc
+         ))
+        addDiagnostics(diagnostics)
+        addDiagnostics(skippedDiagnostics)
+        TypeAnnotation(
+          meta = Meta(
+            loc = currentToken.loc,
+            scope(),
+            diagnostics ++ skippedDiagnostics
+          ),
+          variant = TypeAnnotation.Error
+        )
+     }
   }
 
   private def addDiagnostics(diagnostics: Iterable[Diagnostic]): Unit = {
@@ -253,14 +295,14 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
   private def consTokenDiagnostics(diagnostics: List[Diagnostic], tok: Token): List[Diagnostic] = {
     tok.variant match {
       case UNEXPECTED_CHAR =>
-        Diagnostics.Diagnostic(
-          severity = Diagnostics.Severity.Error,
+        Diagnostic(
+          severity = Severity.Error,
           loc = tok.loc,
           variant = UnexpectedChar(tok.lexeme)
         )::diagnostics
       case INVALID_OPERATOR =>
-          Diagnostics.Diagnostic(
-            severity = Diagnostics.Severity.Error,
+          Diagnostic(
+            severity = Severity.Error,
             loc = tok.loc,
             variant = InvalidOperator(tok.lexeme)
           )::diagnostics
