@@ -16,6 +16,7 @@ final class Compiler(paths: Iterable[Path])(implicit ec: ExecutionContext) {
   private val _symbolTypes = mutable.Map.empty[Symbol, Type]
 
   val IntType: Type = Constructor(this.makeSymbol("<lm>$Int"))
+  val UnitType: Type = Constructor(this.makeSymbol("<lm>$Unit"))
 
   def compile(): Future[Unit] = {
     Future.unit

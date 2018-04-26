@@ -56,7 +56,7 @@ class CompilerTest {
       val symbolJSONStr = symbolFile.readAllChars
       val expectedScopeJSON = decode[ScopeJSON](symbolJSONStr)
       val sourceFile = compiler.getCheckedSourceFile(filePath)
-      val compiledScopeJSON = ScopeJSON.fromScope(sourceFile.scope)
+      val compiledScopeJSON = ScopeJSON.fromScope(compiler)(sourceFile.scope)
       val outputScopeFile = testOutPath.resolve(symbolFileName)
 
       files.File(outputScopeFile).writeText(compiledScopeJSON.asJson.spaces2)
@@ -98,16 +98,16 @@ class CompilerTest {
     children: List[ScopeJSON]
   )
   object ScopeJSON {
-    def fromScope(scope: Scope): ScopeJSON = ScopeJSON(
+    def fromScope(compiler: Compiler)(scope: Scope): ScopeJSON = ScopeJSON(
       loc = LocJSON.fromLoc(scope.loc),
       symbols = scope.symbols
-        .mapValues(_.typ.toString)
+        .mapValues(e => compiler.getType(e.symbol).get.toString)
         .mapValues(SymbolEntryJSON),
       children = scope.children
           .map(_.get)
           .map(_.orNull)
           .filter(_ != null)
-          .map(fromScope)
+          .map(fromScope(compiler))
           .toList
     )
   }

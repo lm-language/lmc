@@ -18,7 +18,9 @@ class Renamer(
   }
 
   def renameModuleDecls(declarations: Iterable[P.Declaration]): Iterable[N.Declaration] = {
-    declarations.map(renameDecl)
+    declarations
+      .map(addDeclBindingsToScope)
+      .map(renameDecl)
   }
 
   def withScope[T](scope: ScopeBuilder)(f: () => T): T = {
@@ -53,24 +55,14 @@ class Renamer(
   def renamePattern(pattern: P.Pattern): N.Pattern = {
     val (namedVariant, diagnostics: Iterable[Diagnostic]) = pattern.variant match {
       case P.Pattern.Var(ident) =>
-        currentScope.getSymbol(ident.name) match {
-          case Some(symbol) =>
-            (N.Pattern.Var(makeNamedIdent(ident, symbol)), List(
-              Diagnostic(
-                loc = pattern.loc,
-                severity = Severity.Error,
-                variant =  DuplicateBinding(ident.name)
-              )
-            ))
+        currentScope.getEntry(ident.name) match {
+          case Some(entry@ScopeEntry(_, symbol, UnAssigned())) =>
+            currentScope.setSymbol(symbol.text, entry.copy(typ = makeUninferred()))
+            (N.Pattern.Var(makeNamedIdent(ident, symbol)), List.empty)
+          case Some(e) =>
+            (N.Pattern.Var(makeNamedIdent(ident, e.symbol)), List.empty)
           case None =>
-            val symbol = makeSymbol(ident.name)
-            val typ = makeUninferred()
-            currentScope.setSymbol(ident.name, ScopeEntry(
-              loc = pattern.loc,
-              typ = typ,
-              symbol = symbol)
-            )
-            (N.Pattern.Var(makeNamedIdent(ident, symbol)), List.empty[Diagnostic])
+            throw new Error("Compiler bug")
 
         }
       case P.Pattern.Error() =>
@@ -94,8 +86,18 @@ class Renamer(
   def renameExpr(expr: P.Expr): N.Expr = {
     val (namedVariant: N.Expr.Variant, diagnostics) = expr.variant match {
       case P.Expr.Var(ident) =>
-          currentScope.getSymbol(ident.name) match {
-            case Some(symbol) =>
+          currentScope.getEntry(ident.name) match {
+            case Some(ScopeEntry(_, symbol, UnAssigned())) =>
+              val namedIdent = makeNamedIdent(ident, symbol)
+              (N.Expr.Var(namedIdent), List(
+                Diagnostic(
+                  loc = expr.loc,
+                  severity = Severity.Error,
+                  variant = UseBeforeAssignment(ident.name)
+                )
+              ))
+            case Some(entry) =>
+              val symbol = entry.symbol
               (N.Expr.Var(makeNamedIdent(ident, symbol)), List.empty[Diagnostic])
             case None =>
               val symbol = makeSymbol(ident.name)
@@ -132,4 +134,50 @@ class Renamer(
 
   def currentScope: ScopeBuilder =
     _scopes.head
+
+
+  def addDeclBindingsToScope(decl: P.Declaration): P.Declaration = {
+    import P.Declaration._
+    decl.variant match {
+      case Let(binder, expr) =>
+        val newBinder = addBinderBindingsToScope(typ = UnAssigned())(binder)
+        decl.copy(variant = Let(binder = newBinder, expr))
+      case Error() =>
+        decl
+    }
+  }
+
+  def addBinderBindingsToScope(typ: Type)(binder: P.Binder): P.Binder = {
+    val pattern = addPatternBindingsToScope(typ)(binder.pattern)
+    binder.copy(pattern = pattern)
+  }
+
+  def addPatternBindingsToScope(typ: Type)(pattern: P.Pattern): P.Pattern = {
+    import P.Pattern._
+    pattern.variant match {
+      case Var(ident) =>
+        currentScope.getSymbol(ident.name) match {
+          case Some(_) =>
+            pattern.copy(meta = pattern.meta.copy(
+              diagnostics = pattern.meta.diagnostics ++ List(
+                Diagnostic(
+                  loc = pattern.loc,
+                  severity = Severity.Error,
+                  variant = DuplicateBinding(ident.name)
+                )
+              )
+            ))
+          case None =>
+            val symbol = makeSymbol(ident.name)
+            currentScope.setSymbol(ident.name, ScopeEntry(
+              symbol = symbol,
+              loc = ident.loc,
+              typ = typ
+            ))
+            pattern
+        }
+      case Error() =>
+        pattern
+    }
+  }
 }

@@ -23,9 +23,16 @@ object Syntax {
     trait HasChildren {
       def children: Iterable[Node]
     }
+
     sealed trait Node extends HasLoc with HasMeta with HasChildren {
       def errors: Iterable[Diagnostics.Diagnostic] = {
         this.getMeta.diagnostics ++ this.children.flatMap(_.errors)
+      }
+      def getScope: Scope = {
+        this.getMeta.scope.get match {
+          case None => Scope.empty
+          case Some(scope) => scope
+        }
       }
     }
 

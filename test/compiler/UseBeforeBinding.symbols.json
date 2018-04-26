@@ -11,7 +11,7 @@
   },
   "symbols" : {
     "x" : {
-      "typ" : "Constructor(<lm>$Int)"
+      "typ" : "ErrorType()"
     },
     "someVar" : {
       "typ" : "Constructor(<lm>$Int)"

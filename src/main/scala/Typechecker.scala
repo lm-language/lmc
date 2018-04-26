@@ -15,6 +15,8 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
     UnInferred(id)
   }
 
+  private val types = mutable.Map.empty[Symbol, Type]
+
   def checkSourceFile(parsed: Parsed.SourceFile): Typed.SourceFile = {
     val named = new Renamer(
       compiler.makeSymbol,
@@ -51,7 +53,7 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
       case NE.Literal(NE.LInt(l)) =>
         (TE.Literal(TE.LInt(l)), compiler.IntType, List())
       case NE.Var(ident) =>
-        val (typ, diagnostics) = getType(ident.loc, ident.name)
+        val (typ, diagnostics) = getSymbolType(ident.loc, ident.name)
         (expr.variant, typ, diagnostics)
       case NE.Error() => (expr.variant, ErrorType(), List())
     }
@@ -65,17 +67,9 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
     )
   }
 
-  def getType(loc: Loc, symbol: Symbol): (Type, Iterable[Diagnostic]) = {
-    compiler.getType(symbol) match {
-      case None =>
-        (ErrorType(), List(
-          Diagnostic(
-            variant = UnBoundVar(symbol.text),
-            severity = Severity.Error,
-            loc = loc)))
-      case Some(t) =>
-        (t, List())
-    }
+  private def getSymbolType(loc: Loc, symbol: Symbol): (Type, Iterable[Diagnostic]) = {
+    val typ = types.getOrElse(symbol, ErrorType())
+    (typ, List())
   }
 
   private def bindTypeToBinder(binder: N.Binder, typ: Type): T.Binder = {
@@ -104,7 +98,7 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
   }
 
   private def bindTypeToIdent(ident: N.Ident, typ: Type): T.Ident = {
-    println("Setting type of binding ", ident.name)
+    types += ident.name -> typ
     setTypeOfSymbol(ident.name, typ)
     T.Ident(ident.meta.typed, ident.name)
   }
