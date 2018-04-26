@@ -36,10 +36,10 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
 
   private def checkDeclaration(declaration: N.Declaration): T.Declaration = {
     val variant = declaration.variant match {
-      case N.Declaration.Let(binder, expr) =>
+      case N.Declaration.Let(pattern, expr) =>
         val inferredExpr = inferExpr(expr)
-        val boundBinder = bindTypeToBinder(binder, inferredExpr.typ)
-        T.Declaration.Let(binder = boundBinder, rhs = inferredExpr)
+        val checkedPattern = bindTypeToPattern(pattern, inferredExpr.typ)
+        T.Declaration.Let(pattern = checkedPattern, rhs = inferredExpr)
       case N.Declaration.Error() =>
         T.Declaration.Error()
     }
@@ -70,13 +70,6 @@ final class Typechecker(compiler: Compiler, setTypeOfSymbol: (Symbol, Type) => U
   private def getSymbolType(loc: Loc, symbol: Symbol): (Type, Iterable[Diagnostic]) = {
     val typ = types.getOrElse(symbol, ErrorType())
     (typ, List())
-  }
-
-  private def bindTypeToBinder(binder: N.Binder, typ: Type): T.Binder = {
-    T.Binder(
-      meta = binder.meta.typed,
-      pattern = bindTypeToPattern(binder.pattern, typ)
-    )
   }
 
   private def bindTypeToPattern(pattern: N.Pattern, typ: Type): T.Pattern = {

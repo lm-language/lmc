@@ -12,8 +12,8 @@ object Syntax {
       scope: WeakReference[_Scope],
       diagnostics: Iterable[Diagnostics.Diagnostic] = List()
     ) extends HasLoc {
-      def typed = this.asInstanceOf[Typed.Meta]
-      def named = this.asInstanceOf[Named.Meta]
+      def typed: Typed.Meta = this.asInstanceOf[Typed.Meta]
+      def named: Named.Meta = this.asInstanceOf[Named.Meta]
     }
 
     sealed trait HasMeta {
@@ -68,10 +68,6 @@ object Syntax {
       override def children: Iterable[Node] = variant.children
     }
 
-    case class Binder(meta: Meta, pattern: Pattern) extends NodeOps(meta) with Node {
-      override def children: Iterable[Node] = List(pattern)
-    }
-
     object Expr {
       sealed trait LiteralVariant
       case class LInt(value: Int) extends LiteralVariant
@@ -99,12 +95,12 @@ object Syntax {
     object Declaration {
       sealed trait Variant extends HasChildren {
         override def children: Iterable[Node] = this match {
-          case Let(binder, rhs) => List(binder, rhs)
+          case Let(pattern, rhs) => List(pattern, rhs)
           case Error() => List()
         }
       }
       type T = Variant
-      case class Let(binder: Binder, rhs: Expr) extends T
+      case class Let(pattern: Pattern, rhs: Expr) extends T
       case class Error() extends T
 
     }

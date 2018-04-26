@@ -32,10 +32,10 @@ class Renamer(
 
   def renameDecl(decl: P.Declaration): N.Declaration = {
     val (variant, diagnostics) = decl.variant match {
-      case P.Declaration.Let(binder, expr) =>
-        val namedBinder = renameBinder(binder)
+      case P.Declaration.Let(pattern, expr) =>
+        val namedPattern = renamePattern(pattern)
         val namedExpr = renameExpr(expr)
-        (N.Declaration.Let(namedBinder, namedExpr), List.empty)
+        (N.Declaration.Let(namedPattern, namedExpr), List.empty)
       case P.Declaration.Error() =>
         (N.Declaration.Error(), List.empty)
     }
@@ -45,11 +45,6 @@ class Renamer(
       ).named,
       variant = variant
     )
-  }
-
-  def renameBinder(binder: P.Binder): N.Binder = {
-    val pattern = renamePattern(binder.pattern)
-    N.Binder(binder.meta.named, pattern)
   }
 
   def renamePattern(pattern: P.Pattern): N.Pattern = {
@@ -139,17 +134,12 @@ class Renamer(
   def addDeclBindingsToScope(decl: P.Declaration): P.Declaration = {
     import P.Declaration._
     decl.variant match {
-      case Let(binder, expr) =>
-        val newBinder = addBinderBindingsToScope(typ = UnAssigned())(binder)
-        decl.copy(variant = Let(binder = newBinder, expr))
+      case Let(pattern, expr) =>
+        val newPattern = addPatternBindingsToScope(UnAssigned())(pattern)
+        decl.copy(variant = Let(pattern = newPattern, expr))
       case Error() =>
         decl
     }
-  }
-
-  def addBinderBindingsToScope(typ: Type)(binder: P.Binder): P.Binder = {
-    val pattern = addPatternBindingsToScope(typ)(binder.pattern)
-    binder.copy(pattern = pattern)
   }
 
   def addPatternBindingsToScope(typ: Type)(pattern: P.Pattern): P.Pattern = {

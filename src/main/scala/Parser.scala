@@ -126,7 +126,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     currentToken.variant match {
       case LET =>
         val startTok = advance()
-        val binder = parseBinder()
+        val pattern = parsePattern()
         val (_, diags1) = expect(EQ)
         val expr = parseExpr()
         val (stopTop, diags2) = expect(SEMICOLON)
@@ -136,7 +136,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
             scope = scope,
             diagnostics = diags1 ++ diags2
           ),
-          variant = Declaration.Let(binder, expr)
+          variant = Declaration.Let(pattern, expr)
         )
       case _ =>
         val loc = currentToken.loc
@@ -199,14 +199,6 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
           variant = Expr.Error()
         )
     }
-  }
-
-  private def parseBinder(): Binder = {
-    val pattern = parsePattern()
-    Binder(meta = Meta(
-      loc = pattern.loc,
-      scope()
-    ), pattern = pattern)
   }
 
   private def parsePattern(): Pattern = {
