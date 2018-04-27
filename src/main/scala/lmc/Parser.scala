@@ -11,6 +11,7 @@ import io.Stream
 import common.Loc
 import common.ScopeBuilder
 
+import scala.collection.mutable.ListBuffer
 import scala.ref.WeakReference
 
 object Parser {
@@ -57,13 +58,12 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
 
     val scope = common.ScopeBuilder(parent)
     _scopes match {
-      case hd:: _ => {
+      case hd:: _ =>
         hd.get match {
           case Some(parentScope) =>
               parentScope.addChild(scope)
           case _ => ()
         }
-      }
       case _ => ()
     }
     _pushScope(scope)
@@ -89,20 +89,22 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     WeakReference(_scopes.head.get.get)
   }
 
-  private def expect(variant: token.Variant): (Token, Iterable[Diagnostic]) = {
+  private def expect(errors: collection.mutable.ListBuffer[Diagnostic])
+      (variant: token.Variant): Token = {
     currentToken.variant match {
       case v if v == variant =>
-        (advance(), List.empty)
+        advance()
       case _ =>
         val loc = currentToken.loc.copy(end = currentToken.loc.start)
-        (Token(
+        errors.append(
+          Diagnostic(
+            severity = diagnostics.Severity.Error,
+            loc = loc,
+            variant = diagnostics.TokenExpected(variant.toString)))
+        Token(
           loc = loc,
           variant = EXPECTED,
           lexeme = ""
-        ), List(Diagnostic(
-          severity = diagnostics.Severity.Error,
-          loc = loc,
-          variant = diagnostics.TokenExpected(variant.toString)))
         )
     }
   }
@@ -113,12 +115,13 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     while (this.currentToken.variant != EOF) {
       declarations = declarations :+ parseDeclaration
     }
-    val (endToken, diagnostics) = expect(EOF)
+    val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+    val endToken = expect(errors)(EOF)
     val loc = Loc.between(startToken, endToken)
     val meta = Meta(
       loc,
       WeakReference(scope),
-      diagnostics
+      errors
     )
     SourceFile(
       meta,
@@ -132,14 +135,15 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
       case LET =>
         val startTok = advance()
         val pattern = parsePattern()
-        val (_, diags1) = expect(EQ)
+        val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+        expect(errors)(EQ)
         val expr = parseExpr()
-        val (stopTop, diags2) = expect(SEMICOLON)
+        val stopTok = expect(errors)(SEMICOLON)
         Declaration(
           meta = Meta(
-            loc = Loc.between(startTok, stopTop),
-            scope = scope,
-            diagnostics = diags1 ++ diags2
+            loc = Loc.between(startTok, stopTok),
+            scope = scope(),
+            diagnostics = errors
           ),
           variant = Declaration.Let(pattern, expr)
         )
@@ -175,6 +179,32 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
           typ = (),
           variant = Expr.Literal(Expr.LInt(value))
         )
+      case FN =>
+        val parentScope = scope()
+        withNewScope(fnScope => {
+          val startTok = advance()
+          val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+          expect(errors)(LPAREN)
+          expect(errors)(RPAREN)
+          val annotation = currentToken.variant match {
+            case COLON =>
+              advance()
+              Some(parseTypeAnnotation())
+            case _ => None
+          }
+          expect(errors)(FATARROW)
+          val body = parseExpr()
+          Expr(
+            meta = Meta(loc = Loc.between(startTok, body), scope = parentScope),
+            typ = (),
+            variant = Expr.Func(
+              fnScope,
+              List.empty,
+              annotation,
+              body
+            )
+          )
+        })
       case ID =>
         val tok = advance()
         val meta = Meta(loc = tok.loc, scope())
@@ -219,8 +249,9 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
       case LPAREN =>
         advance()
         val p = parsePattern()
-        expect(RPAREN)
-        p
+        val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+        expect(errors)(RPAREN)
+        p.copy(meta = p.meta.copy(diagnostics = p.meta.diagnostics ++ errors))
       case _ =>
         val loc = currentToken.loc
 

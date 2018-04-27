@@ -122,7 +122,7 @@ class Renamer(
   }
 
   private def renameExpr(expr: P.Expr): N.Expr = {
-    val (namedVariant: N.Expr.Variant, diagnostics) = expr.variant match {
+    val (namedVariant, diagnostics) = expr.variant match {
       case P.Expr.Var(ident) =>
           getEntry(ident.name) match {
             case Some(ScopeEntry(_, symbol, UnAssigned)) =>
@@ -150,6 +150,21 @@ class Renamer(
           }
       case P.Expr.Literal(literalVariant) =>
         (N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant]), List.empty)
+      case P.Expr.Func(scope, params, annotation, body) =>
+        val variant = withScope(scope)(() => {
+          val namedParams = params.map((param) => {
+            N.Expr.Param(renamePattern(param.pattern))
+          })
+          val namedAnnotation = annotation.map(renameAnnotation)
+          val namedBody = renameExpr(body)
+          N.Expr.Func(
+            scope,
+            namedParams,
+            namedAnnotation,
+            namedBody
+          )
+        })
+        (variant, List.empty)
       case P.Expr.Error() =>
         (N.Expr.Error(), List.empty[Diagnostic])
     }

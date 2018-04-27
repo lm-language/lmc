@@ -23,7 +23,7 @@
       "typ" : "Int"
     },
     "b" : {
-      "typ" : "Var(SDF,Star)"
+      "typ" : "Var(SDF)"
     },
     "c" : {
       "typ" : "Bool"

@@ -1,0 +1,2 @@
+let f = fn() => 0;
+let f1 = fn(): Int => true;

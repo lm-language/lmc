@@ -40,7 +40,7 @@
         }
       },
       "severity" : "Error",
-      "message" : "TypeMismatch(Var(SDF,Star),Bool)"
+      "message" : "TypeMismatch(Var(SDF),Bool)"
     },
     {
       "loc" : {

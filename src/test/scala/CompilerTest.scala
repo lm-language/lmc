@@ -118,6 +118,7 @@ class CompilerTest {
           .filter(_ != null)
           .map(fromScope(compiler))
           .toList
+          .reverse
     )
   }
 
@@ -150,7 +151,7 @@ class CompilerTest {
       InputStreamReader(proc.getInputStream))
 
     val stdError = new BufferedReader(new
-     InputStreamReader(proc.getErrorStream));
+     InputStreamReader(proc.getErrorStream))
 
     var s: String = null
     while ({

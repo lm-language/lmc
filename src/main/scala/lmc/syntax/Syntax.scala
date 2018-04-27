@@ -108,7 +108,6 @@ trait Syntax {
     }
   }
 
-
   object Expr {
     sealed trait LiteralVariant
     case class LInt(value: Int) extends LiteralVariant
@@ -116,12 +115,26 @@ trait Syntax {
       override def children: Iterable[Node] = this match {
         case Var(ident) => List(ident)
         case Literal(_) => List()
+        case Func(_, params, returnTypeAnnotation, body) =>
+          val patterns = params.map(_.pattern)
+          val ret = returnTypeAnnotation
+              .map(x => List(x)).getOrElse(List())
+          List(patterns, ret, List(body)).flatten
         case Error() => List()
       }
     }
+    case class Param(
+      pattern: Pattern
+    )
     type T = Variant
     case class Var(ident: Ident) extends T
     case class Literal(variant: LiteralVariant) extends T
+    case class Func(
+      scope: _Scope,
+      params: Iterable[Param],
+      returnTypeAnnotation: Option[TypeAnnotation],
+      body: Expr
+    ) extends T
     case class Error() extends T
   }
 

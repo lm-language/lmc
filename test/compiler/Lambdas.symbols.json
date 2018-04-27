@@ -1,0 +1,56 @@
+{
+  "loc" : {
+    "start" : {
+      "line" : 1,
+      "column" : 1
+    },
+    "end" : {
+      "line" : 3,
+      "column" : 1
+    }
+  },
+  "symbols" : {
+    "f" : {
+      "typ" : "Func(List(),Int)"
+    },
+    "f1" : {
+      "typ" : "Func(List(),Int)"
+    }
+  },
+  "children" : [
+    {
+      "loc" : {
+        "start" : {
+          "line" : 1,
+          "column" : 9
+        },
+        "end" : {
+          "line" : 1,
+          "column" : 17
+        }
+      },
+      "symbols" : {
+
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 2,
+          "column" : 10
+        },
+        "end" : {
+          "line" : 2,
+          "column" : 26
+        }
+      },
+      "symbols" : {
+
+      },
+      "children" : [
+      ]
+    }
+  ]
+}

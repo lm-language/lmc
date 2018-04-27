@@ -13,7 +13,11 @@ object Primitive {
 }
 
 case object ErrorType extends Type
-case class Var(symbol: Symbol, kind: Kind) extends Type
+case class Var(symbol: Symbol) extends Type
+case class Func(
+  from: List[(Option[Symbol], Type)],
+  to: Type
+) extends Type
 /**
   * An as of yet unbound type. This is assigned to all
   * bindings that will have been defined but not in current

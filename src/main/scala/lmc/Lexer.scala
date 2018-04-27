@@ -15,14 +15,20 @@ object Lexer {
       (c == '_')
   }
 
+  def isIdentifierChar(c: Char): Boolean = {
+    isIdentifierStarter(c) || isDigit(c)
+  }
+
   def isDigit(c: Char): Boolean =
     c >= '0' && c <= '9'
 
   val KEYWORD_TOKENS = Map(
     "let" -> LET,
+    "fn" -> FN
   )
   val OPERATOR_TOKENS = Map(
     "==" -> EQEQ,
+    "=>" -> FATARROW,
     "=" -> EQ,
     "+" -> PLUS
   )
@@ -125,7 +131,7 @@ final class Lexer(
 
   private def identOrKeyword: Token = makeToken(() => {
     var lexeme = advance.toString
-    while (Lexer.isIdentifierStarter(currentChar)) {
+    while (Lexer.isIdentifierChar(currentChar)) {
       lexeme += advance
     }
     val variant = Lexer.KEYWORD_TOKENS.get(lexeme) match {

@@ -8,14 +8,14 @@ object token {
     val
       ID, INT, EOF,
       // keywords
-      LET, IF, ELSE,
+      LET, IF, ELSE, FN,
 
       // Punctuation
       VBAR, LPAREN, RPAREN, LBRACE, RBRACE, SEMICOLON,
       COLON,
 
       // Operators
-      EQ, EQEQ, PLUS,
+      EQ, EQEQ, PLUS, FATARROW,
 
       UNEXPECTED_CHAR,
       INVALID_OPERATOR,

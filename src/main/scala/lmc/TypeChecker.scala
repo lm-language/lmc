@@ -2,12 +2,10 @@ package lmc
 
 import scala.collection.mutable
 import lmc.syntax._
-import lmc.common.{Loc, Scope, ScopeEntry, Symbol}
+import lmc.common.{Loc, ScopeEntry, Symbol}
 import lmc.diagnostics.{Diagnostic, Severity, TypeMismatch}
 import lmc.types.Kind.Star
 import lmc.types._
-
-
 
 final class TypeChecker(
   compiler: Compiler,
@@ -65,12 +63,28 @@ final class TypeChecker(
   private def inferExpr(expr: N.Expr): T.Expr = {
     import Named.{Expr => NE}
     import Typed.{Expr => TE}
-    val (variant: T.Expr.Variant, typ, diagnostics) = expr.variant match {
+    val (variant: TE.Variant, typ: lmc.types.Type, diagnostics) = expr.variant match {
       case NE.Literal(NE.LInt(l)) =>
         (TE.Literal(TE.LInt(l)), Primitive.Int, List())
       case NE.Var(ident) =>
         val typ = getSymbolType(ident.name)
         (expr.variant, typ, List.empty)
+      case func@(NE.Func(_, _, _, _)) =>
+        val body = func.body
+        val scope = func.scope
+        val typedBody = func.returnTypeAnnotation match {
+          case Some(annot) =>
+            val annotatedType = annotationToType(annot)
+            checkExpr(body, annotatedType)
+          case None => inferExpr(body)
+        }
+        val typedVariant: TE.Variant = TE.Func(scope, List.empty, None, typedBody)
+        val typ: Type = lmc.types.Func(from = List(), to = typedBody.typ)
+        (
+          typedVariant,
+          typ,
+          List.empty
+        )
       case NE.Error() => (expr.variant, ErrorType, List.empty)
     }
     T.Expr(
@@ -228,7 +242,7 @@ final class TypeChecker(
           case Some(typ) =>
             typ
           case None =>
-            lmc.types.Var(ident.name, Star)
+            lmc.types.Var(ident.name)
         }
       case N.TypeAnnotation.Error => ErrorType
     }
