@@ -216,6 +216,11 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
           typ = (),
           variant = Pattern.Var(Ident(meta, tok.lexeme))
         )
+      case LPAREN =>
+        advance()
+        val p = parsePattern()
+        expect(RPAREN)
+        p
       case _ =>
         val loc = currentToken.loc
 

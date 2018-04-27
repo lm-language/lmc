@@ -128,6 +128,27 @@ final class TypeChecker(
           T.Pattern.Var(T.Ident(ident.meta.typed, ident.name)),
           List.empty
         )
+      case N.Pattern.Annotated(p, annotation) =>
+        val checkedAnnotation = checkAnnotation(annotation)
+        val annotationType = annotationToType(annotation)
+        val diagnostics =
+          if (typeMoreGeneralThan(typ, annotationType)) {
+             List.empty
+          }
+          else {
+            List(
+              Diagnostic(
+                loc = pattern.loc,
+                severity = Severity.Error,
+                variant = TypeMismatch(typ, annotationType)
+              )
+            )
+          }
+        val innerPattern = checkPattern(p, annotationType)
+        (
+          T.Pattern.Annotated(innerPattern, checkedAnnotation),
+          diagnostics
+        )
       case N.Pattern.Error =>
         (T.Pattern.Error, List.empty)
     }

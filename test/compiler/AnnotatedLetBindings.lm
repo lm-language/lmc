@@ -3,3 +3,5 @@ let y: Unit = unit;
 let z: Bool = true;
 let a: Int = true;
 let b: SDF = true;
+let (c: Bool): Bool = true;
+let (d: Bool): Int = 4;

@@ -78,6 +78,14 @@ trait Syntax {
     variant: Pattern.Variant
   ) extends NodeOps(meta) with Node with HasVariant[Pattern.Variant] {
     override def children: Iterable[Node] = variant.children
+    override def toString: String =
+      variant match {
+        case Pattern.Var(ident) =>
+          ident.name.toString
+        case Pattern.Annotated(p, t) =>
+          s"""(${p.toString}: ${t.toString})"""
+        case Pattern.Error => "<ERROR>"
+      }
   }
 
   case class TypeAnnotation(

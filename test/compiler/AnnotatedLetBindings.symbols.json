@@ -5,7 +5,7 @@
       "column" : 1
     },
     "end" : {
-      "line" : 6,
+      "line" : 8,
       "column" : 1
     }
   },
@@ -24,6 +24,12 @@
     },
     "b" : {
       "typ" : "Var(SDF,Star)"
+    },
+    "c" : {
+      "typ" : "Bool"
+    },
+    "d" : {
+      "typ" : "Bool"
     }
   },
   "children" : [
