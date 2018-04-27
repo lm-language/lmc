@@ -24,9 +24,13 @@ object Parser {
   def isRecoveryToken(variant: token.Variant): Boolean = {
     RECOVERY_TOKENS.contains(variant)
   }
+
+  val PATTERN_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
+  val PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS
 }
 
 final class Parser(val path: Path, val tokens: Stream[Token]) {
+
   type Scope = syntax.Parsed._Scope
   private var _currentToken: Token = tokens.next
   private var _lastToken: Token = _currentToken
@@ -185,6 +189,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
           val startTok = advance()
           val errors = collection.mutable.ListBuffer.empty[Diagnostic]
           expect(errors)(LPAREN)
+          val params = parseCommaSeperatedList(parseParam)(Parser.PATTERN_PREDICTORS)
           expect(errors)(RPAREN)
           val annotation = currentToken.variant match {
             case COLON =>
@@ -199,7 +204,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
             typ = (),
             variant = Expr.Func(
               fnScope,
-              List.empty,
+              params,
               annotation,
               body
             )
@@ -321,6 +326,23 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
            variant = TypeAnnotation.Error
          )
      }
+  }
+
+  private def parseParam(): Expr.Param = {
+    val pattern = parsePattern()
+    Expr.Param(pattern)
+  }
+
+  private def parseCommaSeperatedList[T](f: (() => T))(predictors: Set[token.Variant]): List[T] = {
+    var lst = List.empty[T]
+    if (predictors.contains(currentToken.variant)) {
+      lst = f()::lst
+    }
+    while (currentToken.variant == COMMA) {
+      advance()
+      lst = f()::lst
+    }
+    lst.reverse
   }
 
   private def addDiagnostics(diagnostics: Iterable[Diagnostic]): Unit = {

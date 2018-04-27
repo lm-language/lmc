@@ -153,6 +153,7 @@ class Renamer(
       case P.Expr.Func(scope, params, annotation, body) =>
         val variant = withScope(scope)(() => {
           val namedParams = params.map((param) => {
+            addPatternBindingsToScope(makeUninferred)(param.pattern)
             N.Expr.Param(renamePattern(param.pattern))
           })
           val namedAnnotation = annotation.map(renameAnnotation)
@@ -217,14 +218,14 @@ class Renamer(
     import P.Declaration._
     decl.variant match {
       case Let(pattern, expr) =>
-        val newPattern = addPatternBindingsToScope(UnAssigned)(pattern)
+        val newPattern = addPatternBindingsToScope(() => UnAssigned)(pattern)
         decl.copy(variant = Let(pattern = newPattern, expr))
       case Error() =>
         decl
     }
   }
 
-  def addPatternBindingsToScope(typ: Type)(pattern: P.Pattern): P.Pattern = {
+  def addPatternBindingsToScope(getTyp: (() => Type))(pattern: P.Pattern): P.Pattern = {
     import P.Pattern._
     pattern.variant match {
       case P.Pattern.Var(ident) =>
@@ -244,16 +245,15 @@ class Renamer(
             scopeBuilder.setSymbol(ident.name, common.ScopeEntry(
               symbol = symbol,
               loc = ident.loc,
-              typ = typ
+              typ = getTyp()
             ))
             pattern
         }
-      case P.Pattern.Annotated(pat, annotation) => {
-        val newPattern = addPatternBindingsToScope(typ)(pat)
+      case P.Pattern.Annotated(pat, annotation) =>
+        val newPattern = addPatternBindingsToScope(getTyp)(pat)
         pattern.copy(
           variant = P.Pattern.Annotated(newPattern, annotation)
         )
-      }
       case Error =>
         pattern
     }

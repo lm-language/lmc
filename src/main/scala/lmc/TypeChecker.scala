@@ -69,10 +69,8 @@ final class TypeChecker(
       case NE.Var(ident) =>
         val typ = getSymbolType(ident.name)
         (expr.variant, typ, List.empty)
-      case func@(NE.Func(_, _, _, _)) =>
-        val body = func.body
-        val scope = func.scope
-        val typedBody = func.returnTypeAnnotation match {
+      case (NE.Func(scope, params, returnTypeAnnotation, body)) =>
+        val typedBody = returnTypeAnnotation match {
           case Some(annot) =>
             val annotatedType = annotationToType(annot)
             checkExpr(body, annotatedType)
