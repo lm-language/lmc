@@ -5,16 +5,22 @@
       "column" : 1
     },
     "end" : {
-      "line" : 3,
+      "line" : 5,
       "column" : 1
     }
   },
   "symbols" : {
     "f" : {
-      "typ" : "Func(List(),Int)"
+      "typ" : "fn():Int"
     },
     "f1" : {
-      "typ" : "Func(List(),Int)"
+      "typ" : "fn():Int"
+    },
+    "idInt" : {
+      "typ" : "fn(a:Int):Int"
+    },
+    "fstIntBool" : {
+      "typ" : "fn(a:Int,b:Bool):Int"
     }
   },
   "children" : [
@@ -48,6 +54,47 @@
       },
       "symbols" : {
 
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 3,
+          "column" : 13
+        },
+        "end" : {
+          "line" : 3,
+          "column" : 27
+        }
+      },
+      "symbols" : {
+        "a" : {
+          "typ" : "Int"
+        }
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 4,
+          "column" : 18
+        },
+        "end" : {
+          "line" : 4,
+          "column" : 41
+        }
+      },
+      "symbols" : {
+        "a" : {
+          "typ" : "Int"
+        },
+        "b" : {
+          "typ" : "Bool"
+        }
       },
       "children" : [
       ]

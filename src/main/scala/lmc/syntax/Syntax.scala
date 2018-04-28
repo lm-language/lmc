@@ -93,11 +93,16 @@ trait Syntax {
     variant: TypeAnnotation.Variant
   ) extends NodeOps(meta) with Node with HasVariant[TypeAnnotation.Variant] { self =>
     override def children: Iterable[Node] = variant.children
+
+    override def toString: String =
+      s"""$variant"""
   }
 
   object TypeAnnotation {
     type T = Variant
-    case class Var(ident: Ident) extends T
+    case class Var(ident: Ident) extends T {
+      override def toString: String = ident.name.toString
+    }
     case object Error extends T
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] =
@@ -125,16 +130,23 @@ trait Syntax {
     }
     case class Param(
       pattern: Pattern
-    )
+    ) {
+      override def toString: String = pattern.toString
+    }
     type T = Variant
-    case class Var(ident: Ident) extends T
+    case class Var(ident: Ident) extends T {
+      override def toString: String = s"""${ident.name}"""
+    }
     case class Literal(variant: LiteralVariant) extends T
     case class Func(
       scope: _Scope,
       params: Iterable[Param],
       returnTypeAnnotation: Option[TypeAnnotation],
       body: Expr
-    ) extends T
+    ) extends T {
+      override def toString: String =
+        s"""fn $params:$returnTypeAnnotation => $body"""
+    }
     case class Error() extends T
   }
 
@@ -144,6 +156,8 @@ trait Syntax {
     variant: Expr.Variant
   ) extends NodeOps(meta) with Node with HasVariant[Expr.Variant] {
     override def children: Iterable[Node] = variant.children
+
+    override def toString: String = variant.toString
   }
 
   object Declaration {

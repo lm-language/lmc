@@ -17,7 +17,27 @@ case class Var(symbol: Symbol) extends Type
 case class Func(
   from: List[(Option[Symbol], Type)],
   to: Type
-) extends Type
+) extends Type {
+  override def toString: String = {
+    s"""fn(${
+      from.foldLeft("")((prev, current) => {
+        val (symbolOpt, typ) = current
+        symbolOpt match {
+          case Some(symbol) =>
+            prev
+              .concat(",")
+              .concat(symbol.text)
+              .concat(":")
+              .concat(typ.toString)
+          case None =>
+            prev
+              .concat(",")
+              .concat(typ.toString)
+        }
+      }).drop(1)
+    }):$to"""
+  }
+}
 /**
   * An as of yet unbound type. This is assigned to all
   * bindings that will have been defined but not in current

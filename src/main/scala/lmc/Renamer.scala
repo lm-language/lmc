@@ -154,7 +154,8 @@ class Renamer(
         val variant = withScope(scope)(() => {
           val namedParams = params.map((param) => {
             addPatternBindingsToScope(makeUninferred)(param.pattern)
-            N.Expr.Param(renamePattern(param.pattern))
+            val result = N.Expr.Param(renamePattern(param.pattern))
+            result
           })
           val namedAnnotation = annotation.map(renameAnnotation)
           val namedBody = renameExpr(body)

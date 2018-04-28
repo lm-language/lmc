@@ -12,7 +12,7 @@ sealed trait Scope extends HasLoc {
   def getSymbol(name: String): Option[Symbol]
   def symbols: scala.collection.Map[String, ScopeEntry]
   def typeSymbols: scala.collection.Map[String, TypeEntry]
-  def parent: WeakReference[Option[Scope]]
+  def parent: Option[WeakReference[Scope]]
   def children: Iterable[WeakReference[Scope]]
   def getEntry(name: String): Option[ScopeEntry]
   def typed: Scope
@@ -20,7 +20,8 @@ sealed trait Scope extends HasLoc {
 
 object Scope {
   type TypeEntry = (Symbol, Type, Kind)
-  val empty: Scope = new Scope {override def parent: WeakReference[Option[Scope]] = WeakReference(None)
+  val empty: Scope = new Scope {
+    override def parent: Option[WeakReference[Scope]] = None
 
     override val symbols: Map[String, ScopeEntry] = Map()
 
@@ -38,7 +39,7 @@ object Scope {
 }
 
 case class ScopeBuilder(
-  parent: WeakReference[Option[Scope]],
+  parent: Option[WeakReference[Scope]],
 ) extends Scope {
   private val _symbols: mutable.HashMap[String, ScopeEntry] = mutable.HashMap.empty
   private var _children: List[WeakReference[Scope]] = List()

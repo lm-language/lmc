@@ -11,8 +11,6 @@ import diagnostics._
 import io.File
 import lmc.syntax.{ Parsed, Typed }
 
-import scala.ref.WeakReference
-
 class Compiler(paths: Iterable[Path]) {
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
@@ -39,7 +37,7 @@ class Compiler(paths: Iterable[Path]) {
       "true" -> Primitive.Bool,
       "false" -> Primitive.Bool
     )
-    val scopeBuilder = ScopeBuilder(parent = WeakReference(None))
+    val scopeBuilder = ScopeBuilder(parent = None)
     scopeBuilder.setLoc(loc)
     for ((name, typ) <- entries) {
       scopeBuilder.setSymbol(name, ScopeEntry(loc, makeSymbol(name), typ))
@@ -69,7 +67,7 @@ class Compiler(paths: Iterable[Path]) {
         val parsed = getParsedSourceFile(path)
         val checker = new TypeChecker(
           this,
-          (symbol, typ) => {
+          _setTypeOfSymbol = (symbol, typ) => {
             _symbolTypes.update(symbol, typ)
           },
           setKindOfSymbol,

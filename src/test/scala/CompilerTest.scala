@@ -104,6 +104,16 @@ class CompilerTest {
     def fromScope(compiler: Compiler)(scope: Scope): ScopeJSON = ScopeJSON(
       loc = LocJSON.fromLoc(scope.loc),
       symbols = scope.symbols
+        .toList
+        .sortWith((a, b) =>
+          if (a._2.loc.start.line == b._2.loc.start.line) {
+            a._2.loc.start.column < b._2.loc.start.column
+          } else {
+            a._2.loc.start.line < b._2.loc.start.line
+          }
+
+        )
+        .toMap
         .mapValues(e => {
           compiler.getType(e.symbol) match {
             case Some(t) => t.toString
