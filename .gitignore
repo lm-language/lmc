@@ -1,4 +1,3 @@
 .idea
 target
 project/target
-test/compiler/local/**
