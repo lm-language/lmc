@@ -35,7 +35,7 @@ case class Func(
               .concat(typ.toString)
         }
       }).drop(1)
-    }):$to"""
+    })=>$to"""
   }
 }
 /**

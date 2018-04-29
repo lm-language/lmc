@@ -87,8 +87,10 @@ class Renamer(
   }
 
   private def renameAnnotation(annotation: P.TypeAnnotation): N.TypeAnnotation = {
-    val (variant: N.TypeAnnotation.Variant,
-         diagnostics: Iterable[Diagnostic]) = annotation.variant match {
+    val (
+      variant: N.TypeAnnotation.Variant,
+      diagnostics: Iterable[Diagnostic]
+    ) = annotation.variant match {
       case P.TypeAnnotation.Var(ident) =>
         getTypeEntry(ident.name) match {
           case Some((symbol, _, _)) =>
@@ -106,6 +108,10 @@ class Renamer(
               )
             )
         }
+      case P.TypeAnnotation.Func(params, returnType) =>
+        val namedParams = params.map(renameAnnotationParam)
+        val namedReturnType = renameAnnotation(returnType)
+        (N.TypeAnnotation.Func(namedParams, namedReturnType), List.empty)
       case P.TypeAnnotation.Error =>
         (N.TypeAnnotation.Error, List.empty)
     }
@@ -115,6 +121,15 @@ class Renamer(
       ).named,
       variant = variant
     )
+  }
+
+  private def renameAnnotationParam(param: P.TypeAnnotation.Param): N.TypeAnnotation.Param = {
+    val (labelOpt, typ) = param
+    val renamedTyp = renameAnnotation(typ)
+    val label = labelOpt map ((ident) =>
+      makeNamedIdent(ident, makeSymbol(ident.name))
+    )
+    (label, renamedTyp)
   }
 
   private def makeNamedIdent(ident: P.Ident, symbol: common.Symbol): N.Ident = {
@@ -150,7 +165,7 @@ class Renamer(
           }
       case P.Expr.Literal(literalVariant) =>
         (N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant]), List.empty)
-      case P.Expr.Func(scope, params, annotation, body) =>
+      case P.Expr.Func(tok, scope, params, annotation, body) =>
         val variant = withScope(scope)(() => {
           val namedParams = params.map((param) => {
             addPatternBindingsToScope(makeUninferred)(param.pattern)
@@ -160,6 +175,7 @@ class Renamer(
           val namedAnnotation = annotation.map(renameAnnotation)
           val namedBody = renameExpr(body)
           N.Expr.Func(
+            tok,
             scope,
             namedParams,
             namedAnnotation,

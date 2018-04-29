@@ -27,6 +27,7 @@ object Parser {
 
   val PATTERN_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
   val PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS
+  val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
 }
 
 final class Parser(val path: Path, val tokens: Stream[Token]) {
@@ -34,6 +35,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
   type Scope = syntax.Parsed._Scope
   private var _currentToken: Token = tokens.next
   private var _lastToken: Token = _currentToken
+  private var _lookahead: Option[Token] = None
   private def currentToken = _currentToken
   private var _errors: List[WeakReference[Diagnostic]] = List()
   private var _scopes = List.empty[WeakReference[Scope]]
@@ -43,13 +45,32 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
    * and return the currentToken before advancing
    */
   private def advance(): Token = {
-    val tok = currentToken
-    _lastToken = _currentToken
-    _currentToken = tokens.next
-    while (currentToken.variant == NEWLINE) {
-      _currentToken = tokens.next
+    _lookahead match {
+      case Some(tok) =>
+        val result = _currentToken
+        _currentToken = tok
+        _lookahead = None
+        result
+      case None =>
+        val tok = currentToken
+        _lastToken = _currentToken
+        _currentToken = tokens.next
+        while (currentToken.variant == NEWLINE) {
+          _currentToken = tokens.next
+        }
+        tok
     }
-    tok
+  }
+
+  private def peek: Token = {
+    _lookahead match {
+      case Some(tok) =>
+        tok
+      case None =>
+        val tok = tokens.next
+        _lookahead = Some(tok)
+        tok
+    }
   }
 
   private def withNewScope[T](f: (ScopeBuilder) => T): T = {
@@ -200,6 +221,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
             meta = Meta(loc = Loc.between(startTok, body), scope = parentScope),
             typ = (),
             variant = Expr.Func(
+              startTok,
               fnScope,
               params,
               annotation,
@@ -293,6 +315,16 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
 
   private def parseTypeAnnotation(): TypeAnnotation = {
      currentToken.variant match {
+       case LPAREN =>
+         advance()
+         val result = this.parseTypeAnnotation()
+         val errors = ListBuffer.empty[Diagnostic]
+         expect(errors)(RPAREN)
+         result.copy(
+           meta = result.meta.copy(
+             diagnostics = result.meta.diagnostics ++ errors
+           )
+         )
        case ID =>
          val tok = advance()
          val meta = Meta(
@@ -304,6 +336,39 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
            name = tok.lexeme
          )
          TypeAnnotation(meta, TypeAnnotation.Var(ident))
+       case FN =>
+         val startTok = advance()
+         val errors = ListBuffer.empty[Diagnostic]
+         expect(errors)(LPAREN)
+         val params = parseCommaSeperatedList(() => {
+           val label = peek.variant match {
+             case COLON =>
+               val labelErrs = ListBuffer.empty[Diagnostic]
+               val labelTok = expect(labelErrs)(ID)
+               advance() // consume colon
+               val meta = Meta(
+                 loc = labelTok.loc,
+                 diagnostics = labelErrs,
+                 scope = scope()
+               )
+               Some(Ident(
+                 meta = meta,
+                 labelTok.lexeme
+               ))
+             case _ =>
+               None
+           }
+           val typ = parseTypeAnnotation()
+           (label, typ)
+         })(Parser.TYPE_PREDICTORS)
+         expect(errors)(RPAREN)
+         expect(errors)(FATARROW)
+         val returnType = parseTypeAnnotation()
+         val meta = Meta(
+           loc = Loc.between(startTok, returnType),
+           scope = scope()
+         )
+         TypeAnnotation(meta, TypeAnnotation.Func(params, returnType))
        case _ =>
          val loc = currentToken.loc
          val skippedDiagnostics = recover()

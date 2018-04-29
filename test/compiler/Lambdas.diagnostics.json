@@ -13,6 +13,20 @@
       },
       "severity" : "Error",
       "message" : "TypeMismatch(Int,Bool)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 5,
+          "column" : 49
+        },
+        "end" : {
+          "line" : 5,
+          "column" : 51
+        }
+      },
+      "severity" : "Error",
+      "message" : "TypeMismatch(Bool,Int)"
     }
   ]
 }

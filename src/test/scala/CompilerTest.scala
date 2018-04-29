@@ -3,17 +3,17 @@ import java.io.{File => JFile}
 import java.io.{BufferedReader, InputStreamReader}
 
 import org.junit.Test
-
 import io.circe.parser._
 import io.circe.syntax._
 import io.circe.generic.auto._
 import org.scalatest.Assertions._
 import better.files
-
 import lmc.io._
 import lmc.common._
 import lmc._
 import lmc.diagnostics._
+
+import scala.collection.SortedMap
 
 class CompilerTest {
   @Test def compileTest = {
@@ -101,35 +101,28 @@ class CompilerTest {
     children: List[ScopeJSON]
   )
   object ScopeJSON {
-    def fromScope(compiler: Compiler)(scope: Scope): ScopeJSON = ScopeJSON(
-      loc = LocJSON.fromLoc(scope.loc),
-      symbols = scope.symbols
-        .toList
-        .sortWith((a, b) =>
-          if (a._2.loc.start.line == b._2.loc.start.line) {
-            a._2.loc.start.column < b._2.loc.start.column
-          } else {
-            a._2.loc.start.line < b._2.loc.start.line
-          }
-
-        )
-        .toMap
-        .mapValues(e => {
-          compiler.getType(e.symbol) match {
-            case Some(t) => t.toString
-            case None =>
-              throw new Error(s"""CompilerBug: No type for symbol ${e.symbol.text}""")
-          }
-        })
-        .mapValues(SymbolEntryJSON),
-      children = scope.children
+    def fromScope(compiler: Compiler)(scope: Scope): ScopeJSON = {
+      val symbols = scope.symbols
+      ScopeJSON(
+        loc = LocJSON.fromLoc(scope.loc),
+        symbols = symbols
+          .mapValues(e => {
+            compiler.getType(e.symbol) match {
+              case Some(t) => t.toString
+              case None =>
+                throw new Error(s"""CompilerBug: No type for symbol ${e.symbol.text}""")
+            }
+          })
+          .mapValues(SymbolEntryJSON),
+        children = scope.children
           .map(_.get)
           .map(_.orNull)
           .filter(_ != null)
           .map(fromScope(compiler))
           .toList
           .reverse
-    )
+      )
+    }
   }
 
 

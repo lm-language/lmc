@@ -1,4 +1,4 @@
 .idea
 target
-project
+project/target
 test/compiler/local/**

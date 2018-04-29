@@ -52,6 +52,8 @@ trait Syntax {
 
   case class Ident(meta: Meta, name: Name) extends NodeOps(meta) with Node {
     override def children: Iterable[Node] = List()
+
+    override def toString: String = name.toString
   }
 
 
@@ -66,7 +68,7 @@ trait Syntax {
       override def children: Iterable[Node] = this match {
         case Var(ident) => List(ident)
         case Annotated(pattern, annotation) =>
-            List(pattern, annotation)
+          List(pattern, annotation)
         case Error => List()
       }
     }
@@ -103,14 +105,28 @@ trait Syntax {
     case class Var(ident: Ident) extends T {
       override def toString: String = ident.name.toString
     }
+    case class Func(
+      params: Iterable[Param],
+      returnType: TypeAnnotation
+    ) extends T
     case object Error extends T
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] =
         this match {
           case Var(ident) => List(ident)
+          case Func(params, returnType) =>
+            params.flatMap((param) => {
+              param match {
+                case (Some(ident), annotation) =>
+                  List(ident, annotation)
+                case (None, annotation) =>
+                  List(annotation)
+              }
+            }) ++ List(returnType)
           case Error => List.empty
         }
     }
+    type Param = (Option[Ident], TypeAnnotation)
   }
 
   object Expr {
@@ -120,7 +136,7 @@ trait Syntax {
       override def children: Iterable[Node] = this match {
         case Var(ident) => List(ident)
         case Literal(_) => List()
-        case Func(_, params, returnTypeAnnotation, body) =>
+        case Func(_, _, params, returnTypeAnnotation, body) =>
           val patterns = params.map(_.pattern)
           val ret = returnTypeAnnotation
               .map(x => List(x)).getOrElse(List())
@@ -139,6 +155,7 @@ trait Syntax {
     }
     case class Literal(variant: LiteralVariant) extends T
     case class Func(
+      fnTok: lmc.syntax.token.Token,
       scope: _Scope,
       params: Iterable[Param],
       returnTypeAnnotation: Option[TypeAnnotation],
