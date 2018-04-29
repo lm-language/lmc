@@ -133,11 +133,14 @@ class CompilerTest {
   object DiagnosticsJSON {
     def fromDiagnostics(diagnostics: Iterable[lmc.diagnostics.Diagnostic]): DiagnosticsJSON =
       DiagnosticsJSON(
-        diagnostics = diagnostics.map((d) => DiagnosticJSON(
-          loc = LocJSON.fromLoc(d.loc),
-          severity = d.severity.toString,
-          message = d.message
-        )).toList
+        diagnostics = diagnostics
+          .toList
+          .sortWith((a, b) => a.loc.start.lt(b.loc.start))
+          .map((d) => DiagnosticJSON(
+            loc = LocJSON.fromLoc(d.loc),
+            severity = d.severity.toString,
+            message = d.message
+          )).toList
       )
 
   }

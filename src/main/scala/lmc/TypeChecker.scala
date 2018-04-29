@@ -6,6 +6,8 @@ import lmc.common.{Loc, ScopeEntry, Symbol}
 import lmc.diagnostics.{Diagnostic, Severity, TypeMismatch}
 import lmc.types._
 
+import scala.collection.mutable.ListBuffer
+
 final class TypeChecker(
   private val compiler: Compiler,
   private val _setTypeOfSymbol: (Symbol, Type) => Unit,
@@ -125,7 +127,6 @@ final class TypeChecker(
           val variant = T.Pattern.Var(checkedIdent)
           this.resolveSymbolType(checkedIdent.name) match {
             case Some(typ) =>
-              println(("HERE", typ))
               this.bindTypeToIdent(ident, typ)
               (variant, typ, List.empty)
             case None =>
@@ -250,7 +251,7 @@ final class TypeChecker(
         typ match {
           case Func(expectedParamTypesWithLabels, expectedRetTyp) =>
             val errors = mutable.ListBuffer.empty[Diagnostic]
-            val checkedParams = checkParamLists(errors)(
+            val checkedParams = checkParamLists(tok.loc, errors)(
               expectedParamTypesWithLabels.map(_._2),
               namedParams)
             var checkedRetTyp: Option[Type] = None
@@ -319,9 +320,39 @@ final class TypeChecker(
     )
   }
 
-  private def checkParamLists(errors: mutable.ListBuffer[Diagnostic])
+  private def checkParamLists(fnTokenLoc: Loc, errors: mutable.ListBuffer[Diagnostic])
     (expected: List[Type], namedParams: Iterable[N.Expr.Param]): List[T.Expr.Param] = {
-    List()
+    val expectedTypes = expected.toArray
+    val namedParamsArray = namedParams.toArray
+    val typedParams = ListBuffer.empty[T.Expr.Param]
+    var i = 0
+    while (i < expectedTypes.length) {
+      if (i < namedParamsArray.length) {
+        val expectedType = expectedTypes(i)
+        val namedParam = namedParamsArray(i)
+        val typedPattern = checkPattern(namedParam.pattern, expectedType)
+        val typedParam = T.Expr.Param(pattern = typedPattern)
+        typedParams.append(typedParam)
+      }
+      i += 1
+    }
+    while (i < namedParamsArray.length) {
+      val namedParam = namedParamsArray(i)
+      val typedPattern =
+        inferPatternAndAddToScope(namedParam.pattern)
+      val typedParam = T.Expr.Param(typedPattern.copy(meta = typedPattern.meta.withDiagnostic(
+        Diagnostic(
+          loc = typedPattern.loc,
+          severity = Severity.Error,
+          variant = diagnostics.ExtraParam
+        )
+      )))
+
+      typedParams.append(typedParam)
+
+      i += 1
+    }
+    typedParams.toList
   }
 
   private def inferParam(param: N.Expr.Param): T.Expr.Param = {

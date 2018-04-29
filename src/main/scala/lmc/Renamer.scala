@@ -245,8 +245,8 @@ class Renamer(
   def addPatternBindingsToScope(getTyp: (() => Type))(pattern: P.Pattern): P.Pattern = {
     import P.Pattern._
     pattern.variant match {
-      case P.Pattern.Var(ident) =>
-        getEntry(ident.name) map (_.symbol) match {
+      case P.Pattern.Var(ident) => {
+        scopeBuilder.getSymbol(ident.name) match {
           case Some(_) =>
             pattern.copy(meta = pattern.meta.copy(
               diagnostics = pattern.meta.diagnostics ++ List(
@@ -257,7 +257,7 @@ class Renamer(
                 )
               )
             ))
-          case None =>
+          case None => {
             val symbol = makeSymbol(ident.name)
             scopeBuilder.setSymbol(ident.name, common.ScopeEntry(
               symbol = symbol,
@@ -265,7 +265,9 @@ class Renamer(
               typ = getTyp()
             ))
             pattern
+          }
         }
+      }
       case P.Pattern.Annotated(pat, annotation) =>
         val newPattern = addPatternBindingsToScope(getTyp)(pat)
         pattern.copy(

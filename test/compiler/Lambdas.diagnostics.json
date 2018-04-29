@@ -27,6 +27,34 @@
       },
       "severity" : "Error",
       "message" : "TypeMismatch(Bool,Int)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 7,
+          "column" : 6
+        },
+        "end" : {
+          "line" : 7,
+          "column" : 12
+        }
+      },
+      "severity" : "Error",
+      "message" : "TypeMismatch(Int,Bool)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 7,
+          "column" : 15
+        },
+        "end" : {
+          "line" : 7,
+          "column" : 20
+        }
+      },
+      "severity" : "Error",
+      "message" : "ExtraParam"
     }
   ]
 }

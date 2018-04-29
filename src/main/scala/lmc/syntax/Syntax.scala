@@ -19,6 +19,9 @@ trait Syntax {
     def named: Named.Meta = this.asInstanceOf[Named.Meta]
 
     override def toString: String = ""
+    def withDiagnostic(diagnostic: Diagnostic): Meta = {
+      this.copy(diagnostics = this.diagnostics ++ List(diagnostic))
+    }
   }
 
   trait HasMeta {
