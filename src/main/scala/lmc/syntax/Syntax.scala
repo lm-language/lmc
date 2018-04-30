@@ -212,11 +212,14 @@ trait Syntax {
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] = this match {
         case Let(pattern, rhs) => List(pattern, rhs)
+        case Extern(name, annotation) =>
+          List(name, annotation)
         case Error() => List()
       }
     }
     type T = Variant
     case class Let(pattern: Pattern, rhs: Expr) extends T
+    case class Extern(name: Ident, typeAnnotation: TypeAnnotation) extends T
     case class Error() extends T
 
   }

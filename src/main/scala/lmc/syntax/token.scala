@@ -8,7 +8,7 @@ object token {
     val
       ID, INT, EOF,
       // keywords
-      LET, IF, ELSE, FN,
+      LET, IF, ELSE, FN, EXTERN,
 
       // Punctuation
       VBAR, LPAREN, RPAREN, LBRACE, RBRACE, SEMICOLON,

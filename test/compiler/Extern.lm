@@ -1,0 +1,2 @@
+extern a: Int;
+let b = a;

@@ -55,6 +55,11 @@ final class TypeChecker(
       case N.Declaration.Let(pattern, expr) =>
         val (checkedPattern, checkedExpr) = bindExprToPattern(pattern, expr)
         T.Declaration.Let(pattern = checkedPattern, rhs = checkedExpr)
+      case N.Declaration.Extern(ident, annotation) =>
+        val checkedAnnotation = checkAnnotation(annotation)
+        val checkedIdent = this.identToTypedIdent(ident)
+        bindTypeToIdent(ident, annotationToType(checkedAnnotation))
+        T.Declaration.Extern(checkedIdent, checkedAnnotation)
       case N.Declaration.Error() =>
         T.Declaration.Error()
     }

@@ -139,7 +139,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     var declarations = Vector.empty[Declaration]
     val startToken = this.currentToken
     while (this.currentToken.variant != EOF) {
-      declarations = declarations :+ parseDeclaration
+      declarations = declarations :+ this.parseDeclaration
     }
     val errors = collection.mutable.ListBuffer.empty[Diagnostic]
     val endToken = expect(errors)(EOF)
@@ -164,14 +164,38 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
         val errors = collection.mutable.ListBuffer.empty[Diagnostic]
         expect(errors)(EQ)
         val expr = parseExpr()
-        val stopTok = expect(errors)(SEMICOLON)
+        expect(errors)(SEMICOLON)
         Declaration(
           meta = Meta(
-            loc = Loc.between(startTok, stopTok),
+            loc = Loc.between(startTok, expr),
             scope = scope(),
             diagnostics = errors
           ),
           variant = Declaration.Let(pattern, expr)
+        )
+      case EXTERN =>
+        val startTok = advance()
+        val errors = ListBuffer.empty[Diagnostic]
+        val identTokErrors = ListBuffer.empty[Diagnostic]
+        val identTok = expect(identTokErrors)(ID)
+        val ident = Ident(
+          meta = Meta(
+            loc = identTok.loc,
+            diagnostics = identTokErrors.toList,
+            scope = scope()
+          ),
+          name = identTok.lexeme
+        )
+        expect(errors)(COLON)
+        val annotation = parseTypeAnnotation()
+        expect(errors)(SEMICOLON)
+        Declaration(
+          meta = Meta(
+            loc = Loc.between(startTok, identTok),
+            diagnostics = List.empty,
+            scope = scope()
+          ),
+          variant = Declaration.Extern(ident, annotation)
         )
       case _ =>
         val loc = currentToken.loc

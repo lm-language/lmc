@@ -24,7 +24,8 @@ object Lexer {
 
   val KEYWORD_TOKENS = Map(
     "let" -> LET,
-    "fn" -> FN
+    "fn" -> FN,
+    "extern" -> EXTERN
   )
   val OPERATOR_TOKENS = Map(
     "==" -> EQEQ,

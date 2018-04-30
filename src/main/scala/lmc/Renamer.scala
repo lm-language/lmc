@@ -41,6 +41,11 @@ class Renamer(
         val namedPattern = renamePattern(pattern)
         val namedExpr = renameExpr(expr)
         (N.Declaration.Let(namedPattern, namedExpr), List.empty)
+      case P.Declaration.Extern(ident, annotation) =>
+        val symbol = scopeBuilder.getSymbol(ident.name)
+        val namedIdent = makeNamedIdent(ident, symbol.get)
+        val namedExpr = renameAnnotation(annotation)
+        (N.Declaration.Extern(namedIdent, namedExpr), List.empty)
       case P.Declaration.Error() =>
         (N.Declaration.Error(), List.empty)
     }
@@ -177,8 +182,8 @@ class Renamer(
       case P.Expr.Func(tok, scope, params, annotation, body) =>
         val variant = withScope(scope)(() => {
           val namedParams = params.map((param) => {
-            addPatternBindingsToScope(makeUninferred)(param.pattern)
-            val result = N.Expr.Param(renamePattern(param.pattern))
+            val newPattern = addPatternBindingsToScope(makeUninferred)(param.pattern)
+            val result = N.Expr.Param(renamePattern(newPattern))
             result
           })
           val namedAnnotation = annotation.map(renameAnnotation)
@@ -252,37 +257,46 @@ class Renamer(
       case Let(pattern, expr) =>
         val newPattern = addPatternBindingsToScope(() => UnAssigned)(pattern)
         decl.copy(variant = Let(pattern = newPattern, expr))
+      case Extern(ident, _) =>
+        val errors = addIdentBindingToScope(ident, makeUninferred, ident.loc)
+        decl.copy(
+          meta = decl.meta.copy(
+            diagnostics = decl.meta.diagnostics ++ errors
+          )
+        )
       case Error() =>
         decl
+    }
+  }
+
+  def addIdentBindingToScope(ident: P.Ident, getTyp: (() => Type), loc: common.Loc): Iterable[Diagnostic] = {
+    val symbol = makeSymbol(ident.name)
+    scopeBuilder.getSymbol(ident.name) match {
+      case Some(_) =>
+        List(Diagnostic(
+          loc = loc,
+          severity = Severity.Error,
+          variant = DuplicateBinding(ident.name)
+        ))
+      case None =>
+        scopeBuilder.setSymbol(ident.name, common.ScopeEntry(
+          symbol = symbol,
+          loc = ident.loc,
+          typ = getTyp()
+        ))
+        List()
+
     }
   }
 
   def addPatternBindingsToScope(getTyp: (() => Type))(pattern: P.Pattern): P.Pattern = {
     import P.Pattern._
     pattern.variant match {
-      case P.Pattern.Var(ident) => {
-        scopeBuilder.getSymbol(ident.name) match {
-          case Some(_) =>
-            pattern.copy(meta = pattern.meta.copy(
-              diagnostics = pattern.meta.diagnostics ++ List(
-                Diagnostic(
-                  loc = pattern.loc,
-                  severity = Severity.Error,
-                  variant = DuplicateBinding(ident.name)
-                )
-              )
-            ))
-          case None => {
-            val symbol = makeSymbol(ident.name)
-            scopeBuilder.setSymbol(ident.name, common.ScopeEntry(
-              symbol = symbol,
-              loc = ident.loc,
-              typ = getTyp()
-            ))
-            pattern
-          }
-        }
-      }
+      case P.Pattern.Var(ident) =>
+        val diagnostics = addIdentBindingToScope(ident, getTyp, pattern.loc)
+        pattern.copy(meta = pattern.meta.copy(
+          diagnostics = pattern.meta.diagnostics ++ diagnostics
+        ))
       case P.Pattern.Annotated(pat, annotation) =>
         val newPattern = addPatternBindingsToScope(getTyp)(pat)
         pattern.copy(
