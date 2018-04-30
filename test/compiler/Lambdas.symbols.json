@@ -5,7 +5,7 @@
       "column" : 1
     },
     "end" : {
-      "line" : 9,
+      "line" : 10,
       "column" : 1
     }
   },
@@ -19,17 +19,20 @@
     "idInt" : {
       "typ" : "fn(a:Int)=>Int"
     },
+    "withoutError" : {
+      "typ" : "fn(a:Int,b:Bool)=>Bool"
+    },
     "withWrongRetTyp" : {
       "typ" : "fn(a:Int)=>Bool"
+    },
+    "uninferred" : {
+      "typ" : "fn(a:ErrorType)=>ErrorType"
     },
     "fstIntBool" : {
       "typ" : "fn(a:Int,b:Bool)=>Int"
     },
     "withWrongParamType" : {
       "typ" : "fn(a:Int)=>Bool"
-    },
-    "withoutError": {
-      "typ" : "fn(a:Int,b:Bool)=>Bool"
     }
   },
   "children" : [
@@ -45,7 +48,7 @@
         }
       },
       "symbols" : {
-
+        
       },
       "children" : [
       ]
@@ -62,7 +65,7 @@
         }
       },
       "symbols" : {
-
+        
       },
       "children" : [
       ]
@@ -120,7 +123,7 @@
         }
       },
       "symbols" : {
-
+        
       },
       "children" : [
       ]
@@ -164,6 +167,25 @@
         },
         "x" : {
           "typ" : "Int"
+        }
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 9,
+          "column" : 18
+        },
+        "end" : {
+          "line" : 9,
+          "column" : 27
+        }
+      },
+      "symbols" : {
+        "a" : {
+          "typ" : "ErrorType"
         }
       },
       "children" : [

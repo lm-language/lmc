@@ -313,7 +313,11 @@ final class TypeChecker(
               val typ = lmc.types.ErrorType
               this.bindTypeToIdent(ident, typ)
               (variant, typ, List(
-
+                Diagnostic(
+                  loc = ident.loc,
+                  severity = Severity.Error,
+                  variant = MissingTypeAnnotation
+                )
               ))
           }
         case N.Pattern.Annotated(innerPattern, annotation) =>
