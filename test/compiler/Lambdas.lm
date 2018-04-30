@@ -6,3 +6,4 @@ let withWrongRetTyp: fn(a: Int) => Bool = fn(): Int => 3;
 let withWrongParamType: fn(a: Int) => Bool =
   fn(f: Bool, b: Int): Bool => true;
 let withoutError: fn(a: Int, b: Bool) => Bool = fn(x, y) => y;
+let uninferred = fn(a) => a;
