@@ -137,7 +137,7 @@ class Renamer(
   }
 
   private def renameExpr(expr: P.Expr): N.Expr = {
-    val (namedVariant, diagnostics) = expr.variant match {
+    val (namedVariant, diagnostics): (N.Expr.Variant, Iterable[Diagnostic]) = expr.variant match {
       case P.Expr.Var(ident) =>
           getEntry(ident.name) match {
             case Some(ScopeEntry(_, symbol, UnAssigned)) =>
@@ -151,20 +151,29 @@ class Renamer(
               ))
             case Some(entry) =>
               val symbol = entry.symbol
-              (N.Expr.Var(makeNamedIdent(ident, symbol)), List.empty[Diagnostic])
+              (
+                N.Expr.Var(makeNamedIdent(ident, symbol)),
+                List.empty[Diagnostic]
+              )
             case None =>
               val symbol = makeSymbol(ident.name)
               val namedIdent = makeNamedIdent(ident, symbol)
-              (N.Expr.Var(namedIdent), List(
-                Diagnostic(
-                  loc = expr.loc,
-                  severity = Severity.Error,
-                  variant = UnBoundVar(ident.name)
+              (
+                N.Expr.Var(namedIdent),
+                List(
+                  Diagnostic(
+                    loc = expr.loc,
+                    severity = Severity.Error,
+                    variant = UnBoundVar(ident.name)
+                  )
                 )
-              ))
+              )
           }
       case P.Expr.Literal(literalVariant) =>
-        (N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant]), List.empty)
+        (
+          N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant]),
+          List.empty
+        )
       case P.Expr.Func(tok, scope, params, annotation, body) =>
         val variant = withScope(scope)(() => {
           val namedParams = params.map((param) => {
@@ -183,6 +192,12 @@ class Renamer(
           )
         })
         (variant, List.empty)
+      case P.Expr.Call(loc, func, args) =>
+        val namedFunc = renameExpr(func)
+        val namedArgs = args.map((arg) => {
+          N.Expr.Arg(arg.label, renameExpr(arg.value))
+        })
+        (N.Expr.Call(loc, namedFunc, namedArgs), List.empty[Diagnostic])
       case P.Expr.Error() =>
         (N.Expr.Error(), List.empty[Diagnostic])
     }

@@ -15,7 +15,7 @@ object Primitive {
 case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
 case class Func(
-  from: List[(Option[Symbol], Type)],
+  from: Vector[Func.Param],
   to: Type
 ) extends Type {
   override def toString: String = {
@@ -37,6 +37,9 @@ case class Func(
       }).drop(1)
     })=>$to"""
   }
+}
+object Func {
+  type Param = (Option[Symbol], Type)
 }
 /**
   * An as of yet unbound type. This is assigned to all

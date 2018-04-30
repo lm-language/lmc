@@ -19,7 +19,26 @@ object diagnostics {
   case class TypeMismatch(expected: Type, found: Type) extends Variant
   case class UnBoundTypeVar(name: String) extends Variant
   case class FnParamMismatch(expected: List[Type], found: List[Type]) extends Variant
+  case class NotAFunction(foundTyp: Type) extends Variant
   case object ExtraParam extends Variant
+  case object PositionalArgAfterLabelled extends Variant
+  case object PositionalParamAfterLabelled extends Variant
+  case class NoSuchParamLabel(label: String) extends Variant
+  case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
+    override def toString: String = {
+      val paramsStr = params.foldLeft("")(
+        (prev, current) => s"$prev,${
+          current match {
+            case (Some(label), typ) =>
+              s"$label:$typ"
+            case (None, typ) => typ
+          }
+        }"
+      )
+        .drop(1)
+      s"MissingArguments($paramsStr)"
+    }
+  }
 
   object Severity extends Enumeration {
     type T = Value

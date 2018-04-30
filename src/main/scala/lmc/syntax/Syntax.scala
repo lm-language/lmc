@@ -144,6 +144,8 @@ trait Syntax {
           val ret = returnTypeAnnotation
               .map(x => List(x)).getOrElse(List())
           List(patterns, ret, List(body)).flatten
+        case Call(_, func, args) =>
+          List(func) ++ args.map(_.value)
         case Error() => List()
       }
     }
@@ -167,8 +169,34 @@ trait Syntax {
       override def toString: String =
         s"""fn $params:$returnTypeAnnotation => $body"""
     }
+    case class Call(
+      argsLoc: Loc,
+      func: Expr,
+      args: Vector[Arg]
+    ) extends T
     case class Error() extends T
+
+    case class Params(
+      labeled: Vector[Symbol]
+    )
+    case class Arg(
+      // label isn't a Name because the renamer
+      // will have to know about the type of the function
+      // that is being called to find the symbol for that label.
+      // This would make the renamer intertwined with the type checker
+      // so this is just a string. The type checker will resolve the
+      // symbol using the type of the function.
+      label: Option[(token.Token, String)],
+      value: Expr
+    ) {
+      override def toString: String = label match {
+        case Some((_, name)) =>
+          s"$name = $value"
+        case None => value.toString
+      }
+    }
   }
+
 
   case class Expr(
     meta: Meta,

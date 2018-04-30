@@ -1,0 +1,102 @@
+{
+  "diagnostics" : [
+    {
+      "loc" : {
+        "start" : {
+          "line" : 3,
+          "column" : 25
+        },
+        "end" : {
+          "line" : 3,
+          "column" : 28
+        }
+      },
+      "severity" : "Error",
+      "message" : "TypeMismatch(Int,Bool)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 3,
+          "column" : 31
+        },
+        "end" : {
+          "line" : 3,
+          "column" : 31
+        }
+      },
+      "severity" : "Error",
+      "message" : "TypeMismatch(Bool,Int)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 7,
+          "column" : 16
+        },
+        "end" : {
+          "line" : 7,
+          "column" : 16
+        }
+      },
+      "severity" : "Error",
+      "message" : "NotAFunction(Int)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 9,
+          "column" : 28
+        },
+        "end" : {
+          "line" : 9,
+          "column" : 29
+        }
+      },
+      "severity" : "Error",
+      "message" : "MissingArguments(b:Bool,a:Int)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 10,
+          "column" : 48
+        },
+        "end" : {
+          "line" : 10,
+          "column" : 52
+        }
+      },
+      "severity" : "Error",
+      "message" : "PositionalArgAfterLabelled"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 11,
+          "column" : 29
+        },
+        "end" : {
+          "line" : 11,
+          "column" : 45
+        }
+      },
+      "severity" : "Error",
+      "message" : "MissingArguments(b:Bool)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 11,
+          "column" : 37
+        },
+        "end" : {
+          "line" : 11,
+          "column" : 37
+        }
+      },
+      "severity" : "Error",
+      "message" : "NoSuchParamLabel(x)"
+    }
+  ]
+}

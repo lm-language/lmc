@@ -28,6 +28,10 @@ object Parser {
   val PATTERN_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
   val PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS
   val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
+  val EXPR_PREDICTORS: Set[token.Variant] = Set(
+    ID, LPAREN, FN, LBRACE, INT
+  )
+  val ARG_PREDICTORS: Set[token.Variant] = EXPR_PREDICTORS
 }
 
 final class Parser(val path: Path, val tokens: Stream[Token]) {
@@ -192,7 +196,7 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
   }
 
   private def parseExpr(): Expr = {
-    currentToken.variant match {
+    val head = currentToken.variant match {
       case INT =>
         val tok = advance()
         val value = tok.lexeme.replaceAll("_", "").toInt
@@ -257,6 +261,45 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
           typ = (),
           variant = Expr.Error()
         )
+    }
+    parseExprTail(head)
+  }
+
+  private def parseParams(): Expr.Params = {
+    ???
+  }
+
+  private def parseExprTail(head: Expr): Expr = {
+    currentToken.variant match {
+      case LPAREN =>
+        val errors = ListBuffer.empty[Diagnostic]
+        val lparen = advance()
+        val args = parseCommaSeperatedList(parseArg)(Parser.ARG_PREDICTORS).toVector
+        val rparen = expect(errors)(RPAREN)
+        Expr(
+          meta = Meta(
+            scope = head.meta.scope,
+            loc = Loc.between(head, rparen),
+            diagnostics = errors
+          ),
+          typ = (),
+          variant = Expr.Call(Loc.between(lparen, rparen), head, args)
+        )
+      case _ => head
+    }
+  }
+
+  private def parseArg(): Expr.Arg = {
+    peek.variant match {
+      case EQ =>
+        val errors = ListBuffer.empty[Diagnostic]
+        val labelTok = expect(errors)(ID)
+        advance() // eat EQ
+        val expr = parseExpr()
+        Expr.Arg(Some(labelTok, labelTok.lexeme), expr)
+      case _ =>
+        val e = parseExpr()
+        Expr.Arg(None, e)
     }
   }
 

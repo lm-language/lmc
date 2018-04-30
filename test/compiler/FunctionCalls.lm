@@ -1,0 +1,11 @@
+let intBoolFst = fn(a: Int, b: Bool) => a;
+let intBoolSnd = fn(a: Int, b: Bool) => b;
+let typErr = intBoolFst(true, 1);
+let intVal = intBoolFst(1, true);
+let boolVal = intBoolSnd(1, true);
+let intVal1 = intBoolFst(b = true, a = 1);
+let notAFunc = 1();
+let extraArg = intBoolFst(1, true, 4);
+let missingArg = intBoolFst();
+let positionalAfterLabeled = intBoolFst(a = 1, false);
+let noSuchLabel = intBoolFst(a = 1, x = true);

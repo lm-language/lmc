@@ -3,7 +3,7 @@ package lmc
 import scala.collection.mutable
 import lmc.syntax._
 import lmc.common.{Loc, ScopeEntry, Symbol}
-import lmc.diagnostics.{Diagnostic, Severity, TypeMismatch}
+import lmc.diagnostics._
 import lmc.types._
 
 import scala.collection.mutable.ListBuffer
@@ -64,35 +64,62 @@ final class TypeChecker(
   private def inferExpr(expr: N.Expr): T.Expr = {
     import Named.{Expr => NE}
     import Typed.{Expr => TE}
-    val (variant: TE.Variant, typ: lmc.types.Type, diagnostics) = expr.variant match {
-     case NE.Literal(NE.LInt(l)) =>
+    val (variant: T.Expr.Variant, typ, diagnostics):
+        (T.Expr.Variant, Type, Iterable[Diagnostic]) = expr.variant match {
+      case NE.Literal(NE.LInt(l)) =>
        (TE.Literal(TE.LInt(l)), Primitive.Int, List())
-     case NE.Var(ident) =>
-       val typ = getSymbolType(ident.name)
-       (TE.Var(T.Ident(ident.meta.typed, ident.name)), typ, List.empty)
-     case (NE.Func(tok, scope, params, returnTypeAnnotation, body)) =>
-       val checkedParams = params.map((param) => {
-         val namedPattern = inferPatternAndAddToScope(param.pattern)
-         TE.Param(namedPattern)
-       })
-       val typedBody = returnTypeAnnotation match {
-         case Some(annot) =>
-           val annotatedType = annotationToType(checkAnnotation(annot))
-           checkExpr(body, annotatedType)
-         case None =>
-           inferExpr(body)
-       }
-       val typedVariant: TE.Variant = TE.Func(tok, scope, checkedParams, None, typedBody)
-       val typeFrom =
-         checkedParams.map(
-           (param) => (getParamLabel(param), param.pattern.typ)
-         ).toList
-       val typ: Type = lmc.types.Func(from = typeFrom, to = typedBody.typ)
-       (
-         typedVariant,
-         typ,
-         List.empty
-       )
+      case NE.Var(ident) =>
+        val typ = getSymbolType(ident.name)
+        (TE.Var(T.Ident(ident.meta.typed, ident.name)), typ, List.empty)
+      case (NE.Func(tok, scope, params, returnTypeAnnotation, body)) =>
+        var positionalArgTypes = Vector.empty[Func.Param]
+        var labeledArgTypes = Vector.empty[Func.Param]
+
+        var positionalDone = false
+        val checkedParams = params.map((param) => {
+          val checkedPattern = inferPatternAndAddToScope(param.pattern)
+          var checkedParam = TE.Param(checkedPattern)
+          getParamLabel(checkedParam) match {
+            case Some(symbol) =>
+              positionalDone = true
+              labeledArgTypes = labeledArgTypes :+ (Some(symbol), checkedParam.pattern.typ)
+            case None =>
+              if (positionalDone) {
+                checkedParam = checkedParam.copy(
+                  pattern = checkedParam.pattern.copy(
+                    meta = checkedParam.pattern.meta.withDiagnostic(
+                      Diagnostic(
+                        loc = checkedParam.pattern.loc,
+                        severity = Severity.Error,
+                        variant = PositionalParamAfterLabelled
+                      )
+                    )
+                  )
+                )
+              }
+              positionalArgTypes = positionalArgTypes :+ (None, checkedParam.pattern.typ)
+          }
+          checkedParam
+        })
+
+        val typedBody = returnTypeAnnotation match {
+          case Some(annot) =>
+            val annotatedType = annotationToType(checkAnnotation(annot))
+            checkExpr(body, annotatedType)
+          case None =>
+            inferExpr(body)
+        }
+        val typedVariant: TE.Variant = TE.Func(tok, scope, checkedParams, None, typedBody)
+
+        val typeFrom = positionalArgTypes ++ labeledArgTypes
+        val typ: Type = lmc.types.Func(from = typeFrom, to = typedBody.typ)
+        (
+          typedVariant,
+          typ,
+          List.empty
+        )
+      case call@N.Expr.Call(_, _, _) =>
+       inferCall(call)
       case NE.Error() => (TE.Error(), ErrorType, List.empty)
     }
     T.Expr(
@@ -105,7 +132,155 @@ final class TypeChecker(
     )
   }
 
-  def getParamLabel(param: Typed.Expr.Param): Option[Symbol] = {
+  private def inferCall(call: Named.Expr.Call): (T.Expr.Call, Type, Iterable[Diagnostic]) = {
+    var inferredFunc = inferExpr(call.func)
+    val errors = ListBuffer.empty[Diagnostic]
+    val (args, retTyp) = inferredFunc.typ match {
+      case Func(from, to) =>
+        val args = checkArgs(call.argsLoc, errors)(call.args, from)
+        (args, to)
+      case typ =>
+        inferredFunc = inferredFunc.copy(
+          meta = inferredFunc.meta.withDiagnostic(
+            Diagnostic(
+              loc = inferredFunc.loc,
+              severity = Severity.Error,
+              variant = diagnostics.NotAFunction(typ)
+            )
+          )
+        )
+        (call.args.map(inferArg(errors)), ErrorType)
+    }
+    (T.Expr.Call(call.argsLoc, inferredFunc, args), retTyp, errors)
+  }
+
+  private def inferArg(errors: ListBuffer[Diagnostic])(arg: N.Expr.Arg): T.Expr.Arg = {
+    T.Expr.Arg(arg.label, inferExpr(arg.value))
+  }
+
+  private def checkArgs(argsLoc: Loc, errors: ListBuffer[Diagnostic])
+    (namedArgs: Vector[N.Expr.Arg], paramTypes: Vector[Func.Param])
+    : Vector[T.Expr.Arg] = {
+    var result = Vector.empty[T.Expr.Arg]
+    var i = 0
+    val missingArgs = ListBuffer.empty[(Option[String], Type)]
+
+    val labeledParams = mutable.Map.empty[String, Type]
+    val labeledArgs = mutable.Map.empty[String, (token.Token, N.Expr)]
+    var labeledArgEncountered = false
+    while (i < paramTypes.length) {
+      val (paramLabel, paramType) = paramTypes(i)
+
+      paramLabel match {
+        case Some(symbol) =>
+          labeledParams += symbol.text -> paramType
+        case None =>
+          ()
+      }
+      if (i >= namedArgs.length) {
+        paramLabel match {
+          case Some(symbol) =>
+            // ignore labelled params for later because
+            // they can appear later in the arg list
+            ()
+          case None =>
+            // non labelled param which doesn't occur
+            // in arg list. Add error
+            missingArgs.append(
+              (paramLabel.map(_.text), paramType)
+            )
+        }
+
+      } else {
+        val arg = namedArgs(i)
+        arg.label match {
+          case Some((tok, name)) =>
+            labeledArgEncountered = true
+            // labeled arg; Can appear out of order so we can
+            // add it to labeled args map for later checking
+            labeledArgs += name -> (tok, arg.value)
+          case None =>
+            // non labelled argument should appear at exactly same
+            // position as param; This can be checked with param type
+            val typedArgValue = checkExpr(arg.value, paramType)
+
+            // because this argument has been handled in a positional
+            // way, we should remove it from the labelledParams map
+            // so that it isn't checked during checking of labeled params
+            paramLabel match {
+              case Some(symbol) =>
+                labeledParams -= symbol.text
+              case None => ()
+            }
+
+            // also, this is a positional arg so it should appear
+            // before any labeled args; check for that
+            val typedArg = if (labeledArgEncountered) {
+              T.Expr.Arg(None, typedArgValue.copy(
+                meta = typedArgValue.meta.withDiagnostic(
+                  Diagnostic(
+                    loc = typedArgValue.loc,
+                    severity = Severity.Error,
+                    variant = PositionalArgAfterLabelled
+                  )
+                )
+              ))
+            } else {
+              T.Expr.Arg(None, typedArgValue)
+            }
+            result = result :+ typedArg
+        }
+      }
+      i += 1
+    }
+
+    for ((name, typ) <- labeledParams) {
+      labeledArgs.get(name) match {
+        case Some((tok, arg)) =>
+          result = result :+
+            T.Expr.Arg(
+              Some(tok, name),
+              checkExpr(arg, typ))
+        case None =>
+          missingArgs.append((Some(name), typ))
+      }
+    }
+
+    for ((name, (tok, expr)) <- labeledArgs) {
+      labeledParams.get(name) match {
+        case Some(_) =>
+          // this case should have already checked by
+          // the previous loop which iterates over all labeled
+          // params; Do nothing
+          ()
+        case None =>
+          val inferredExpr = inferExpr(expr)
+          errors.append(
+            Diagnostic(
+              loc = tok.loc,
+              severity = Severity.Error,
+              variant = NoSuchParamLabel(name)
+            )
+          )
+          result = result :+
+            T.Expr.Arg(
+              Some(tok, name),
+              inferredExpr
+            )
+      }
+    }
+
+    if (missingArgs.nonEmpty) {
+      errors.append(Diagnostic(
+        loc = argsLoc,
+        severity = Severity.Error,
+        variant = MissingArguments(missingArgs)
+      ))
+    }
+    result
+  }
+
+  private def getParamLabel(param: Typed.Expr.Param): Option[Symbol] = {
     getPatternLabel(param.pattern)
   }
 
@@ -251,9 +426,11 @@ final class TypeChecker(
         typ match {
           case Func(expectedParamTypesWithLabels, expectedRetTyp) =>
             val errors = mutable.ListBuffer.empty[Diagnostic]
-            val checkedParams = checkParamLists(tok.loc, errors)(
+
+            val checkedParams = checkParamList(tok.loc, errors)(
               expectedParamTypesWithLabels.map(_._2),
-              namedParams)
+              namedParams
+            )
             var checkedRetTyp: Option[Type] = None
             val checkedRetTypeAnnotation = retTyp.map((annot) => {
               val checkedAnnot: T.TypeAnnotation = this.checkAnnotation(annot)
@@ -285,26 +462,14 @@ final class TypeChecker(
               checkedRetTypeAnnotation,
               checkedBody
             ), errors)
-          case _ =>
-            val typedParams = namedParams.map(inferParam)
-            val typedParamTypes = typedParams.map((param) => {
-              param.pattern.typ
-            })
-            val typedParamTypesWithLabels = typedParams.zip(typedParamTypes)
-              .map((tuple) => {
-                val (param, typ) = tuple
-                (getParamLabel(param), typ)
-              }).toList
-            val checkedAnnotation =
-              retTyp
-              .map(checkAnnotation)
-            val checkedBody = inferExpr(body)
+          case expectedTyp =>
+            val inferredExpr = inferExpr(expr)
             (
-              T.Expr.Func(tok, sc, typedParams, checkedAnnotation, checkedBody),
+              inferredExpr.variant,
               List(Diagnostic(
-                loc = checkedBody.loc,
+                loc = expr.loc,
                 severity = Severity.Error,
-                variant = TypeMismatch(typ, Func(typedParamTypesWithLabels, checkedBody.typ))
+                variant = TypeMismatch(expectedTyp, inferredExpr.typ)
               ))
             )
         }
@@ -320,9 +485,8 @@ final class TypeChecker(
     )
   }
 
-  private def checkParamLists(fnTokenLoc: Loc, errors: mutable.ListBuffer[Diagnostic])
-    (expected: List[Type], namedParams: Iterable[N.Expr.Param]): List[T.Expr.Param] = {
-    val expectedTypes = expected.toArray
+  private def checkParamList(fnTokenLoc: Loc, errors: mutable.ListBuffer[Diagnostic])
+    (expectedTypes: Vector[Type], namedParams: Iterable[N.Expr.Param]): Vector[T.Expr.Param] = {
     val namedParamsArray = namedParams.toArray
     val typedParams = ListBuffer.empty[T.Expr.Param]
     var i = 0
@@ -352,8 +516,10 @@ final class TypeChecker(
 
       i += 1
     }
-    typedParams.toList
+    typedParams.toVector
   }
+
+
 
   private def inferParam(param: N.Expr.Param): T.Expr.Param = {
     val typedPattern = inferPatternAndAddToScope(param.pattern)
@@ -427,7 +593,7 @@ final class TypeChecker(
           (label.map(_.name), annotationToType(annot))
         })
         val retTyp = annotationToType(ret)
-        lmc.types.Func(paramTypes.toList, retTyp)
+        lmc.types.Func(paramTypes.toVector, retTyp)
       }
       case T.TypeAnnotation.Error => ErrorType
     }
