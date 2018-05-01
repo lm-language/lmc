@@ -11,7 +11,7 @@ import diagnostics._
 import io.File
 import lmc.syntax.{ Parsed, Typed }
 
-class Compiler(paths: Iterable[Path]) {
+class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
 
@@ -19,6 +19,7 @@ class Compiler(paths: Iterable[Path]) {
   var _nextUninferredId = 0
   val _symbolTypes = mutable.Map.empty[Symbol, Type]
   private val _symbolKinds = mutable.Map.empty[Symbol, Kind]
+  private val _typeVariables = mutable.Map.empty[Symbol, Type]
 
 
   private def makeUninferred(): Type = {
@@ -27,7 +28,7 @@ class Compiler(paths: Iterable[Path]) {
     types.UnInferred(id)
   }
 
-  val PrimitivesScope: Scope = {
+  override val PrimitiveScope: Scope = {
     val loc = Loc(
       path = Paths.get("<builtin>"),
       start = Pos(0, 0),
@@ -37,20 +38,25 @@ class Compiler(paths: Iterable[Path]) {
       "true" -> Primitive.Bool,
       "false" -> Primitive.Bool
     )
-    val scopeBuilder = ScopeBuilder(parent = None)
-    scopeBuilder.setLoc(loc)
-    for ((name, typ) <- entries) {
-      scopeBuilder.setSymbol(name, ScopeEntry(loc, makeSymbol(name), typ))
-    }
     val primitiveTypes = Map(
       "Unit" -> (Primitive.Unit, Kind.Star),
       "Int" -> (Primitive.Int, Kind.Star),
       "Bool" -> (Primitive.Bool, Kind.Star)
     )
+
+    val scopeBuilder = ScopeBuilder(parent = None)
+    scopeBuilder.setLoc(loc)
+    for ((name, typ) <- entries) {
+      val symbol = makeSymbol(name)
+      scopeBuilder.setSymbol(name, ScopeEntry(symbol, None))
+      setTypeOfSymbol(symbol, typ)
+    }
     for ((name, (t, kind)) <- primitiveTypes) {
       val symbol = makeSymbol(name)
-      scopeBuilder.setTypeSymbol(name, (symbol, t, kind))
+      _typeVariables += symbol -> t
+      scopeBuilder.setTypeVar(name, TypeEntry(symbol))
       setKindOfSymbol(symbol, kind)
+      setTypeVar(symbol, t)
     }
     scopeBuilder
   }
@@ -65,14 +71,7 @@ class Compiler(paths: Iterable[Path]) {
         sf
       case None =>
         val parsed = getParsedSourceFile(path)
-        val checker = new TypeChecker(
-          this,
-          _setTypeOfSymbol = (symbol, typ) => {
-            _symbolTypes.update(symbol, typ)
-          },
-          setKindOfSymbol,
-          makeUninferred
-        )
+        val checker = new TypeChecker(this)
         val checkedSourceFile = checker.checkSourceFile(parsed)
         cacheCheckedSourceFile(path, checkedSourceFile)
         checkedSourceFile
@@ -81,6 +80,25 @@ class Compiler(paths: Iterable[Path]) {
 
   private def setKindOfSymbol(symbol: Symbol, kind: Kind): Unit = {
     _symbolKinds.update(symbol, kind)
+  }
+
+  def getKindOfSymbol(symbol: Symbol): Unit = {
+    _symbolKinds.get(symbol)
+  }
+
+  def setTypeVar(symbol: Symbol, typ: Type): Unit = {
+    _typeVariables.update(symbol, typ)
+  }
+
+  override def getTypeVar(symbol: Symbol): Option[Type] =
+    _typeVariables.get(symbol)
+
+  override def setTypeOfSymbol(symbol: Symbol, typ: Type): Unit = {
+    _symbolTypes.update(symbol, typ)
+  }
+
+  def getTypeOfSymbol(symbol: Symbol): Option[Type] = {
+    _symbolTypes.get(symbol)
   }
 
   def getSourceFileScope(path: Path): Scope = {
@@ -94,7 +112,7 @@ class Compiler(paths: Iterable[Path]) {
   def getParsedSourceFile(path: Path): Parsed.SourceFile = {
     val chars = File(path)
     val tokens = Lexer(path, chars)
-    val parser = Parser(path, tokens)
+    val parser = new Parser(this, path, tokens)
     val sourceFile = parser.parseSourceFile()
     cacheParsedSourceFile(path, sourceFile)
     sourceFile
@@ -116,7 +134,7 @@ class Compiler(paths: Iterable[Path]) {
     _symbolKinds.get(symbol)
   }
 
-  def makeSymbol(text: String): Symbol = {
+  override def makeSymbol(text: String): Symbol = {
     val id = _id
     _id += 1
 

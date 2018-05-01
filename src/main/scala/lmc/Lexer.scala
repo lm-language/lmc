@@ -25,13 +25,15 @@ object Lexer {
   val KEYWORD_TOKENS = Map(
     "let" -> LET,
     "fn" -> FN,
-    "extern" -> EXTERN
+    "extern" -> EXTERN,
+    "forall" -> FORALL
   )
   val OPERATOR_TOKENS = Map(
     "==" -> EQEQ,
     "=>" -> FATARROW,
     "=" -> EQ,
-    "+" -> PLUS
+    "+" -> PLUS,
+    "*" -> STAR
   )
   val PUNCTUATION_TOKENS = Map(
     '\n' -> NEWLINE,
@@ -41,7 +43,9 @@ object Lexer {
     '}' -> RBRACE,
     ';' -> SEMICOLON,
     ':' -> COLON,
-    ',' -> COMMA
+    ',' -> COMMA,
+    '[' -> LSQB,
+    ']' -> RSQB
   )
 
   val PUNCTUATION_CHARS: Set[Char] =

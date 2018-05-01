@@ -16,7 +16,8 @@ import scala.ref.WeakReference
 
 object Parser {
 
-  def apply(path: Path, tokens: Stream[Token]) = new Parser(path, tokens)
+  def apply(ctx: Context, path: Path, tokens: Stream[Token]) =
+    new Parser(ctx, path, tokens)
   val RECOVERY_TOKENS = Set(
     NEWLINE, EOF, RPAREN, RBRACE
   )
@@ -34,7 +35,7 @@ object Parser {
   val ARG_PREDICTORS: Set[token.Variant] = EXPR_PREDICTORS
 }
 
-final class Parser(val path: Path, val tokens: Stream[Token]) {
+final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
 
   type Scope = syntax.Parsed._Scope
   private var _currentToken: Token = tokens.next
@@ -82,15 +83,19 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     val parent: Option[ScopeBuilder] = _scopes match {
       case hd :: _ =>
         hd.get
-      case _ => None
+      case _ =>
+        None
     }
 
-    val parentRef: Option[WeakReference[Scope]] = parent.map(WeakReference.apply)
-    val scope = common.ScopeBuilder(parentRef)
+    val scope = common.ScopeBuilder(parent match {
+      case Some(p) => Some(WeakReference(p))
+      case None => Some(WeakReference(ctx.PrimitiveScope))
+    })
     parent match {
       case Some(parentScope) =>
         parentScope.addChild(scope)
-      case _ => ()
+      case None =>
+        ()
     }
     _pushScope(scope)
     val result = f(scope)
@@ -392,6 +397,26 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
              diagnostics = result.meta.diagnostics ++ errors
            )
          )
+//       case FORALL =>
+//         withNewScope((scope) => {
+//           val errors = ListBuffer.empty[Diagnostic]
+//           val firstTok = advance()
+//           expect(errors)(LSQB)
+//           val genericParams = parseGenericParamsList()
+//           expect(errors)(RSQB)
+//           val annotation = parseTypeAnnotation()
+//           val meta = Meta(
+//             loc = Loc.between(firstTok, annotation),
+//             diagnostics = errors,
+//             scope = this.scope()
+//           )
+//           TypeAnnotation(
+//             meta = meta,
+//             variant = TypeAnnotation.Forall(
+//               scope, genericParams, annotation
+//             )
+//           )
+//         })
        case ID =>
          val tok = advance()
          val meta = Meta(
@@ -462,16 +487,54 @@ final class Parser(val path: Path, val tokens: Stream[Token]) {
     Expr.Param(pattern)
   }
 
+  private def parseGenericParamsList(): Iterable[GenericParam] = {
+    val hd = parseGenericParam()
+    val tl = parseCommaSeperatedListTail(parseGenericParam)
+    hd::tl
+  }
+
+  private def parseGenericParam(): GenericParam = {
+    val ident = parseIdent()
+
+    val meta = Meta(
+      loc = ident.loc,
+      diagnostics = List.empty,
+      scope = scope()
+    )
+    GenericParam(meta, ident, None)
+  }
+
+  private def parseIdent(): Ident = {
+    val errors = ListBuffer.empty[Diagnostic]
+    val tok = expect(errors)(ID)
+    Ident(
+      Meta(
+        loc = tok.loc,
+        scope = scope(),
+        diagnostics = errors
+      ),
+      tok.lexeme
+    )
+  }
+
   private def parseCommaSeperatedList[T](f: (() => T))(predictors: Set[token.Variant]): List[T] = {
-    var lst = List.empty[T]
     if (predictors.contains(currentToken.variant)) {
-      lst = f()::lst
+      val hd = f()
+      val tl = parseCommaSeperatedListTail(f)
+      hd::tl
+    } else {
+      List.empty
     }
+
+  }
+
+  private def parseCommaSeperatedListTail[T](f: (() => T)): List[T] = {
+    val lst = ListBuffer.empty[T]
     while (currentToken.variant == COMMA) {
       advance()
-      lst = f()::lst
+      lst.append(f())
     }
-    lst.reverse
+    lst.toList
   }
 
   private def addDiagnostics(diagnostics: Iterable[Diagnostic]): Unit = {

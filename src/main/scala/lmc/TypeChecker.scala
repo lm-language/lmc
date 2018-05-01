@@ -2,42 +2,19 @@ package lmc
 
 import scala.collection.mutable
 import lmc.syntax._
-import lmc.common.{Loc, ScopeEntry, Symbol}
+import lmc.common.{Loc, Symbol}
 import lmc.diagnostics._
 import lmc.types._
 
 import scala.collection.mutable.ListBuffer
 
 final class TypeChecker(
-  private val compiler: Compiler,
-  private val _setTypeOfSymbol: (Symbol, Type) => Unit,
-  private val setKindOfSymbol: (Symbol, Kind) => Unit,
-  private val makeUninferred: (() => Type)
+  private val ctx: Context.TC
 ) {
   import lmc.syntax.{Named => N, Typed => T}
 
-  private val types = {
-    val t = mutable.HashMap.empty[Symbol, Type]
-    for ((_, ScopeEntry(_, symbol, typ)) <- compiler.PrimitivesScope.symbols) {
-      t.put(symbol, typ)
-    }
-    t
-  }
-
-  private val typeVars = {
-    val t = mutable.HashMap.empty[Symbol, Type]
-    for ((_, (sym, typ, _)) <- compiler.PrimitivesScope.typeSymbols) {
-      t.put(sym, typ)
-    }
-    t
-  }
-
   def checkSourceFile(parsed: Parsed.SourceFile): T.SourceFile = {
-    val named = new Renamer(
-      (text) => compiler.makeSymbol(text),
-      () => this.makeUninferred(),
-      compiler.PrimitivesScope
-    ).renameSourceFile(parsed)
+    val named = new Renamer(ctx).renameSourceFile(parsed)
     val declarations = checkModule(parsed.loc, named.declarations)
     T.SourceFile(
       meta = named.meta.typed,
@@ -47,10 +24,10 @@ final class TypeChecker(
   }
 
   private def checkModule(loc: Loc, declarations: Iterable[N.Declaration]): Iterable[T.Declaration] = {
-    declarations.map(checkDeclaration)
+    declarations.map(inferDeclaration)
   }
 
-  private def checkDeclaration(declaration: N.Declaration): T.Declaration = {
+  private def inferDeclaration(declaration: N.Declaration): T.Declaration = {
     val variant = declaration.variant match {
       case N.Declaration.Let(pattern, expr) =>
         val (checkedPattern, checkedExpr) = bindExprToPattern(pattern, expr)
@@ -74,7 +51,12 @@ final class TypeChecker(
       case NE.Literal(NE.LInt(l)) =>
        (TE.Literal(TE.LInt(l)), Primitive.Int, List())
       case NE.Var(ident) =>
-        val typ = getSymbolType(ident.name)
+        val typ = ctx.getTypeOfSymbol(ident.name) match {
+          case Some(t) => t
+          case None =>
+            ctx.setTypeOfSymbol(ident.name, ErrorType)
+            ErrorType
+        }
         (TE.Var(T.Ident(ident.meta.typed, ident.name)), typ, List.empty)
       case (NE.Func(tok, scope, params, returnTypeAnnotation, body)) =>
         var positionalArgTypes = Vector.empty[Func.Param]
@@ -82,7 +64,7 @@ final class TypeChecker(
 
         var positionalDone = false
         val checkedParams = params.map((param) => {
-          val checkedPattern = inferPatternAndAddToScope(param.pattern)
+          val checkedPattern = inferPattern(param.pattern)
           var checkedParam = TE.Param(checkedPattern)
           getParamLabel(checkedParam) match {
             case Some(symbol) =>
@@ -299,13 +281,13 @@ final class TypeChecker(
     }
   }
 
-  private def inferPatternAndAddToScope(pattern: N.Pattern): T.Pattern = {
+  private def inferPattern(pattern: N.Pattern): T.Pattern = {
     val (variant: T.Pattern.Variant, typ: Type, diagnostics: Iterable[Diagnostic]) =
       pattern.variant match {
         case N.Pattern.Var(ident) =>
           val checkedIdent = this.identToTypedIdent(ident)
           val variant = T.Pattern.Var(checkedIdent)
-          this.resolveSymbolType(checkedIdent.name) match {
+          ctx.getTypeOfSymbol(checkedIdent.name) match {
             case Some(typ) =>
               this.bindTypeToIdent(ident, typ)
               (variant, typ, List.empty)
@@ -338,14 +320,6 @@ final class TypeChecker(
       typ = typ,
       variant = variant
     )
-  }
-
-  private def getSymbolType(symbol: Symbol): Type = {
-    resolveSymbolType(symbol).getOrElse(ErrorType)
-  }
-
-  private def resolveSymbolType(symbol: Symbol): Option[Type] = {
-    types.get(symbol)
   }
 
   private def bindExprToPattern(pattern: N.Pattern, expr: N.Expr): (T.Pattern, T.Expr) = {
@@ -428,7 +402,10 @@ final class TypeChecker(
         val diagnostics = assertTypeMoreGeneralThan(expr.loc)(typ, exprTyp)
         (T.Expr.Literal(T.Expr.LInt(x)), diagnostics)
       case N.Expr.Var(ident) =>
-        val varTyp = getSymbolType(ident.name)
+        val varTyp = ctx.getTypeOfSymbol(ident.name) match {
+          case Some(t) => t
+          case None => ErrorType
+        }
         val diagnostics = assertTypeMoreGeneralThan(loc = ident.loc)(typ, varTyp)
         (T.Expr.Var(ident = T.Ident(meta = ident.meta.typed, ident.name)), diagnostics)
       case N.Expr.Call(_, _, _) =>
@@ -527,7 +504,7 @@ final class TypeChecker(
     while (i < namedParamsArray.length) {
       val namedParam = namedParamsArray(i)
       val typedPattern =
-        inferPatternAndAddToScope(namedParam.pattern)
+        inferPattern(namedParam.pattern)
       val typedParam = T.Expr.Param(typedPattern.copy(meta = typedPattern.meta.withDiagnostic(
         Diagnostic(
           loc = typedPattern.loc,
@@ -546,7 +523,7 @@ final class TypeChecker(
 
 
   private def inferParam(param: N.Expr.Param): T.Expr.Param = {
-    val typedPattern = inferPatternAndAddToScope(param.pattern)
+    val typedPattern = inferPattern(param.pattern)
     T.Expr.Param(typedPattern)
   }
 
@@ -605,11 +582,10 @@ final class TypeChecker(
   private def annotationToType(annotation: T.TypeAnnotation): Type = {
     annotation.variant match {
       case T.TypeAnnotation.Var(ident) =>
-        typeVars.get(ident.name) match {
-          case Some(typ) =>
-            typ
+        ctx.getTypeVar(ident.name) match {
+          case Some(t) => t
           case None =>
-            lmc.types.Var(ident.name)
+            Var(ident.name)
         }
       case T.TypeAnnotation.Func(params, ret) => {
         val paramTypes = params.map((param) => {
@@ -624,8 +600,7 @@ final class TypeChecker(
   }
 
   private def bindTypeToIdent(ident: N.Ident, typ: Type): T.Ident = {
-    types += ident.name -> typ
-    _setTypeOfSymbol(ident.name, typ)
+    ctx.setTypeOfSymbol(ident.name, typ)
     T.Ident(ident.meta.typed, ident.name)
   }
 }

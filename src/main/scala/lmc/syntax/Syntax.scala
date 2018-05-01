@@ -22,6 +22,9 @@ trait Syntax {
     def withDiagnostic(diagnostic: Diagnostic): Meta = {
       this.copy(diagnostics = this.diagnostics ++ List(diagnostic))
     }
+    def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta = {
+      this.copy(diagnostics = this.diagnostics ++ diagnostics)
+    }
   }
 
   trait HasMeta {
@@ -58,7 +61,6 @@ trait Syntax {
 
     override def toString: String = name.toString
   }
-
 
   object Pattern {
 
@@ -112,6 +114,11 @@ trait Syntax {
       params: Iterable[Param],
       returnType: TypeAnnotation
     ) extends T
+    case class Forall(
+      scope: _Scope,
+      params: Iterable[GenericParam],
+      annotation: TypeAnnotation
+    ) extends T
     case object Error extends T
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] =
@@ -126,6 +133,8 @@ trait Syntax {
                   List(annotation)
               }
             }) ++ List(returnType)
+          case Forall(_, params, annotation) =>
+            params ++ List(annotation)
           case Error => List.empty
         }
     }
@@ -223,6 +232,37 @@ trait Syntax {
     case class Error() extends T
 
   }
+
+  case class GenericParam(
+    meta: Meta,
+    ident: Ident,
+    kindAnnotation: Option[KindAnnotation]
+  ) extends NodeOps(meta) with HasMeta with Node {
+    override def children: Iterable[Node] =
+      kindAnnotation match {
+        case Some(k) =>
+          List(ident, k)
+        case None =>
+          List(ident)
+      }
+  }
+  case class KindAnnotation(
+    meta: Meta,
+    variant: KindAnnotation.Variant
+  ) extends NodeOps(meta) with HasMeta with Node {
+    override def children: Iterable[Node] = variant.children
+  }
+  object KindAnnotation {
+    type Variant = T
+    sealed trait T extends HasChildren {
+      override def children: Iterable[Node] =
+        this match {
+          case Star => List.empty
+        }
+    }
+    case object Star extends T
+  }
+
   case class Declaration(
     meta: Meta,
     variant: Declaration.Variant

@@ -1,22 +1,21 @@
 package lmc
 
 import lmc.syntax.{Named => N, Parsed => P}
-import lmc.common.{Scope, ScopeBuilder, ScopeEntry}
-import lmc.types._
+import lmc.common.{ScopeBuilder, ScopeEntry, Symbol}
 import lmc.diagnostics._
 
 class Renamer(
-  makeSymbol: ((String) => common.Symbol),
-  makeUninferred: () => Type,
-  primitivesScope: Scope
+  ctx: Context
 ) {
   var _scopes = List.empty[ScopeBuilder]
-  def renameSourceFile(sourceFile: P.SourceFile): N.SourceFile = {
-    withScope(sourceFile.scope)(() => {
-      val decls = renameModuleDecls(sourceFile.declarations)
+  def renameSourceFile(_sourceFile: P.SourceFile): N.SourceFile = {
+    val boundSourceFile =
+      new Binder(ctx).bindSourceFile(_sourceFile)
+    withScope(boundSourceFile.scope)(() => {
+      val decls = renameModuleDecls(boundSourceFile.declarations)
       N.SourceFile(
-        meta = sourceFile.meta.named,
-        scope = sourceFile.scope,
+        meta = boundSourceFile.meta.named,
+        scope = boundSourceFile.scope,
         declarations = decls
       )
     })
@@ -24,7 +23,6 @@ class Renamer(
 
   def renameModuleDecls(declarations: Iterable[P.Declaration]): Iterable[N.Declaration] = {
     declarations
-      .map(addDeclBindingsToScope)
       .map(renameDecl)
   }
 
@@ -42,8 +40,7 @@ class Renamer(
         val namedExpr = renameExpr(expr)
         (N.Declaration.Let(namedPattern, namedExpr), List.empty)
       case P.Declaration.Extern(ident, annotation) =>
-        val symbol = scopeBuilder.getSymbol(ident.name)
-        val namedIdent = makeNamedIdent(ident, symbol.get)
+        val namedIdent = bindNewIdent(ident)
         val namedExpr = renameAnnotation(annotation)
         (N.Declaration.Extern(namedIdent, namedExpr), List.empty)
       case P.Declaration.Error() =>
@@ -60,16 +57,8 @@ class Renamer(
   def renamePattern(pattern: P.Pattern, annotation: Option[P.TypeAnnotation] = None): N.Pattern = {
     val (namedVariant, diagnostics: Iterable[Diagnostic]) = pattern.variant match {
       case P.Pattern.Var(ident) =>
-        getEntry(ident.name) match {
-          case Some(entry@ScopeEntry(_, symbol, UnAssigned)) =>
-            scopeBuilder.setSymbol(symbol.text, entry.copy(typ = makeUninferred()))
-            (N.Pattern.Var(makeNamedIdent(ident, symbol)), List.empty)
-          case Some(e) =>
-            (N.Pattern.Var(makeNamedIdent(ident, e.symbol)), List.empty)
-          case None =>
-            throw new Error("Compiler bug")
-
-        }
+        val namedIdent = bindNewIdent(ident)
+        (N.Pattern.Var(namedIdent), List.empty)
       case P.Pattern.Annotated(pat, annotation) =>
         val newPattern = renamePattern(pat, Some(annotation))
         (N.Pattern.Annotated(
@@ -97,13 +86,14 @@ class Renamer(
       diagnostics: Iterable[Diagnostic]
     ) = annotation.variant match {
       case P.TypeAnnotation.Var(ident) =>
-        getTypeEntry(ident.name) match {
-          case Some((symbol, _, _)) =>
-            val namedIdent = makeNamedIdent(ident, symbol)
+        resolveTypeVar(ident.name) match {
+          case Some(tVar) =>
+            val namedIdent = N.Ident(meta = ident.meta.named, tVar)
             (N.TypeAnnotation.Var(namedIdent),  List.empty)
           case None =>
-            val symbol = makeSymbol(ident.name)
-            (N.TypeAnnotation.Var(makeNamedIdent(ident, symbol)),
+            (N.TypeAnnotation.Var(
+              N.Ident(meta = ident.meta.named, ctx.makeSymbol(ident.name))
+            ),
               List(
                 Diagnostic(
                   loc = ident.loc,
@@ -128,52 +118,64 @@ class Renamer(
     )
   }
 
+  private def renameVarIdent(ident: P.Ident): N.Ident = {
+    val entryOpt = for {
+      scope <- ident.meta.scope.get
+      entry <- scope.resolveEntry(ident.name)
+    } yield entry
+    val (symbol, errors) = entryOpt match {
+      case Some(entry) =>
+        val errors: List[Diagnostic] = entry.validAfter match {
+          case Some(pos) =>
+            if (!pos.lt(ident.loc.start)) {
+              List(
+                Diagnostic(
+                  loc = ident.loc,
+                  severity = Severity.Error,
+                  variant = UseBeforeAssignment(ident.name)
+                )
+              )
+            } else {
+              List.empty
+            }
+          case None =>
+            List.empty
+        }
+        (entry.symbol, errors)
+      case None =>
+        (ctx.makeSymbol(ident.name), List(
+          Diagnostic(
+            loc = ident.loc,
+            severity = Severity.Error,
+            variant = UnBoundVar(ident.name)
+          )
+        ))
+    }
+    N.Ident(
+      ident
+        .meta
+        .withDiagnostics(errors)
+        .named,
+      symbol
+    )
+  }
+
   private def renameAnnotationParam(param: P.TypeAnnotation.Param): N.TypeAnnotation.Param = {
     val (labelOpt, typ) = param
     val renamedTyp = renameAnnotation(typ)
-    val label = labelOpt map ((ident) =>
-      makeNamedIdent(ident, makeSymbol(ident.name))
-    )
+    val label = labelOpt map (label =>
+      N.Ident(label.meta.named, ctx.makeSymbol(label.name)))
     (label, renamedTyp)
-  }
-
-  private def makeNamedIdent(ident: P.Ident, symbol: common.Symbol): N.Ident = {
-    N.Ident(meta = ident.meta.named, name = symbol)
   }
 
   private def renameExpr(expr: P.Expr): N.Expr = {
     val (namedVariant, diagnostics): (N.Expr.Variant, Iterable[Diagnostic]) = expr.variant match {
       case P.Expr.Var(ident) =>
-          getEntry(ident.name) match {
-            case Some(ScopeEntry(_, symbol, UnAssigned)) =>
-              val namedIdent = makeNamedIdent(ident, symbol)
-              (N.Expr.Var(namedIdent), List(
-                Diagnostic(
-                  loc = expr.loc,
-                  severity = Severity.Error,
-                  variant = UseBeforeAssignment(ident.name)
-                )
-              ))
-            case Some(entry) =>
-              val symbol = entry.symbol
-              (
-                N.Expr.Var(makeNamedIdent(ident, symbol)),
-                List.empty[Diagnostic]
-              )
-            case None =>
-              val symbol = makeSymbol(ident.name)
-              val namedIdent = makeNamedIdent(ident, symbol)
-              (
-                N.Expr.Var(namedIdent),
-                List(
-                  Diagnostic(
-                    loc = expr.loc,
-                    severity = Severity.Error,
-                    variant = UnBoundVar(ident.name)
-                  )
-                )
-              )
-          }
+        val namedIdent = renameVarIdent(ident)
+        (
+          N.Expr.Var(namedIdent),
+          List.empty
+        )
       case P.Expr.Literal(literalVariant) =>
         (
           N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant]),
@@ -182,9 +184,8 @@ class Renamer(
       case P.Expr.Func(tok, scope, params, annotation, body) =>
         val variant = withScope(scope)(() => {
           val namedParams = params.map((param) => {
-            val newPattern = addPatternBindingsToScope(makeUninferred)(param.pattern)
-            val result = N.Expr.Param(renamePattern(newPattern))
-            result
+            val newPattern = renamePattern(param.pattern)
+            N.Expr.Param(newPattern)
           })
           val namedAnnotation = annotation.map(renameAnnotation)
           val namedBody = renameExpr(body)
@@ -223,87 +224,32 @@ class Renamer(
     _scopes = _scopes.tail
   }
 
-  def getEntry(name: String, scopes: List[Scope] = _scopes): Option[ScopeEntry] = {
-    scopes match {
-      case sc :: tl =>
-        sc.getEntry(name) match {
-          case Some(n) => Some(n)
-          case None =>
-            getEntry(name, tl)
-        }
-      case _ => primitivesScope.getEntry(name)
+  def resolveEntry(name: String): Option[ScopeEntry] = {
+    _scopes match {
+      case sc :: _ =>
+        sc.resolveEntry(name)
+      case Nil =>
+        ctx.PrimitiveScope.getEntry(name)
     }
   }
 
-  def getTypeEntry(name: String, scopes: List[Scope] = _scopes): Option[Scope.TypeEntry] = {
-    scopes match {
-      case sc :: tl =>
-        sc.typeSymbols.get(name) match {
-          case Some(n) => Some(n)
-          case None =>
-            getTypeEntry(name, tl)
-        }
-      case _ => primitivesScope.typeSymbols.get(name)
-    }
+  def bindNewIdent(ident: P.Ident): N.Ident = {
+    val symbol = ctx.makeSymbol(ident.name)
+    _scopes.head.setSymbol(
+      ident.name,
+      ScopeEntry(symbol)
+    )
+    N.Ident(meta = ident.meta.named, symbol)
   }
 
-  def scopeBuilder: ScopeBuilder =
-    _scopes.head
-
-
-  def addDeclBindingsToScope(decl: P.Declaration): P.Declaration = {
-    import P.Declaration._
-    decl.variant match {
-      case Let(pattern, expr) =>
-        val newPattern = addPatternBindingsToScope(() => UnAssigned)(pattern)
-        decl.copy(variant = Let(pattern = newPattern, expr))
-      case Extern(ident, _) =>
-        val errors = addIdentBindingToScope(ident, makeUninferred, ident.loc)
-        decl.copy(
-          meta = decl.meta.copy(
-            diagnostics = decl.meta.diagnostics ++ errors
-          )
-        )
-      case Error() =>
-        decl
+  def resolveTypeVar(name: String): Option[Symbol] = {
+    _scopes match {
+      case sc::_ =>
+        sc.resolveTypeEntry(name).map(_.symbol)
+      case Nil =>
+        ctx.PrimitiveScope.resolveTypeEntry(name).map(_.symbol)
     }
-  }
 
-  def addIdentBindingToScope(ident: P.Ident, getTyp: (() => Type), loc: common.Loc): Iterable[Diagnostic] = {
-    val symbol = makeSymbol(ident.name)
-    scopeBuilder.getSymbol(ident.name) match {
-      case Some(_) =>
-        List(Diagnostic(
-          loc = loc,
-          severity = Severity.Error,
-          variant = DuplicateBinding(ident.name)
-        ))
-      case None =>
-        scopeBuilder.setSymbol(ident.name, common.ScopeEntry(
-          symbol = symbol,
-          loc = ident.loc,
-          typ = getTyp()
-        ))
-        List()
 
-    }
-  }
-
-  def addPatternBindingsToScope(getTyp: (() => Type))(pattern: P.Pattern): P.Pattern = {
-    import P.Pattern._
-    pattern.variant match {
-      case P.Pattern.Var(ident) =>
-        val diagnostics = addIdentBindingToScope(ident, getTyp, pattern.loc)
-        pattern.copy(meta = pattern.meta.copy(
-          diagnostics = pattern.meta.diagnostics ++ diagnostics
-        ))
-      case P.Pattern.Annotated(pat, annotation) =>
-        val newPattern = addPatternBindingsToScope(getTyp)(pat)
-        pattern.copy(
-          variant = P.Pattern.Annotated(newPattern, annotation)
-        )
-      case Error =>
-        pattern
-    }
   }
 }

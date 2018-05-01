@@ -11,9 +11,6 @@ import better.files
 import lmc.io._
 import lmc.common._
 import lmc._
-import lmc.diagnostics._
-
-import scala.collection.SortedMap
 
 class CompilerTest {
   @Test def compileTest = {
@@ -32,7 +29,9 @@ class CompilerTest {
     val suiteDir = new JFile(suitePath.toString)
 
     val compiler = new Compiler(paths = List(suitePath))
-    for (path <- suiteDir.listFiles() filter { _.getName endsWith ".lm" }) {
+    for (path <- suiteDir.listFiles()
+      filter { _.getName endsWith ".lm" }
+    ) {
       val filePath = Paths.get(path.getAbsolutePath)
       val diagnosticsFileName = filePath.getFileName.toString dropRight 3 concat ".diagnostics.json"
       val diagnosticsFilePath = filePath.resolveSibling(diagnosticsFileName)
