@@ -431,6 +431,21 @@ final class TypeChecker(
         val varTyp = getSymbolType(ident.name)
         val diagnostics = assertTypeMoreGeneralThan(loc = ident.loc)(typ, varTyp)
         (T.Expr.Var(ident = T.Ident(meta = ident.meta.typed, ident.name)), diagnostics)
+      case N.Expr.Call(_, _, _) =>
+        val inferredExpr = inferExpr(expr)
+        if (typeMoreGeneralThan(typ, inferredExpr.typ)) {
+          (inferredExpr.variant, List())
+        } else {
+          (inferredExpr.variant, List(
+            Diagnostic(
+              loc = inferredExpr.loc,
+              severity = Severity.Error,
+              variant = TypeMismatch(
+                typ, inferredExpr.typ
+              )
+            )
+          ))
+        }
       case N.Expr.Func(tok, sc, namedParams, retTyp, body) =>
         typ match {
           case Func(expectedParamTypesWithLabels, expectedRetTyp) =>
