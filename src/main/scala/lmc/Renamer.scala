@@ -40,7 +40,7 @@ class Renamer(
         val namedExpr = renameExpr(expr)
         (N.Declaration.Let(namedPattern, namedExpr), List.empty)
       case P.Declaration.Extern(ident, annotation) =>
-        val namedIdent = bindNewIdent(ident)
+        val namedIdent = renameVariableIdent(ident)
         val namedExpr = renameAnnotation(annotation)
         (N.Declaration.Extern(namedIdent, namedExpr), List.empty)
       case P.Declaration.Error() =>
@@ -57,7 +57,7 @@ class Renamer(
   def renamePattern(pattern: P.Pattern, annotation: Option[P.TypeAnnotation] = None): N.Pattern = {
     val (namedVariant, diagnostics: Iterable[Diagnostic]) = pattern.variant match {
       case P.Pattern.Var(ident) =>
-        val namedIdent = bindNewIdent(ident)
+        val namedIdent = renameVariableIdent(ident)
         (N.Pattern.Var(namedIdent), List.empty)
       case P.Pattern.Annotated(pat, annotation) =>
         val newPattern = renamePattern(pat, Some(annotation))
@@ -107,6 +107,16 @@ class Renamer(
         val namedParams = params.map(renameAnnotationParam)
         val namedReturnType = renameAnnotation(returnType)
         (N.TypeAnnotation.Func(namedParams, namedReturnType), List.empty)
+      case P.TypeAnnotation.Forall(scope, params, typeAnnotation) =>
+        withScope(scope)(() => {
+          val namedParams = renameGenericParams(params)
+          val namedAnnotation = renameAnnotation(typeAnnotation)
+          (
+            N.TypeAnnotation.Forall(scope, namedParams, namedAnnotation),
+            List.empty
+          )
+        })
+
       case P.TypeAnnotation.Error =>
         (N.TypeAnnotation.Error, List.empty)
     }
@@ -116,6 +126,27 @@ class Renamer(
       ).named,
       variant = variant
     )
+  }
+
+  private def renameGenericParams(params: Iterable[P.GenericParam]): Iterable[N.GenericParam] = {
+    params.map(renameGenericParam)
+  }
+
+  private def renameGenericParam(param: P.GenericParam): N.GenericParam = {
+    val renamedIdent = renameTypeIdent(param.ident)
+    val renamedKindAnnotation = param.kindAnnotation.map(renameKindAnnotation)
+    N.GenericParam(
+      meta = param.meta.named,
+      ident = renamedIdent,
+      kindAnnotation =  renamedKindAnnotation
+    )
+  }
+
+  private def renameKindAnnotation(annotation: P.KindAnnotation): N.KindAnnotation = {
+    annotation.variant match {
+      case P.KindAnnotation.Star =>
+        N.KindAnnotation(annotation.meta.named, N.KindAnnotation.Star)
+    }
   }
 
   private def renameVarIdent(ident: P.Ident): N.Ident = {
@@ -181,8 +212,9 @@ class Renamer(
           N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant]),
           List.empty
         )
-      case P.Expr.Func(tok, scope, params, annotation, body) =>
+      case P.Expr.Func(tok, scope, genericParams, params, annotation, body) =>
         val variant = withScope(scope)(() => {
+          val namedGenericParams = genericParams.map(renameGenericParam)
           val namedParams = params.map((param) => {
             val newPattern = renamePattern(param.pattern)
             N.Expr.Param(newPattern)
@@ -192,6 +224,7 @@ class Renamer(
           N.Expr.Func(
             tok,
             scope,
+            namedGenericParams,
             namedParams,
             namedAnnotation,
             namedBody
@@ -233,13 +266,23 @@ class Renamer(
     }
   }
 
-  def bindNewIdent(ident: P.Ident): N.Ident = {
-    val symbol = ctx.makeSymbol(ident.name)
-    _scopes.head.setSymbol(
-      ident.name,
-      ScopeEntry(symbol)
-    )
-    N.Ident(meta = ident.meta.named, symbol)
+
+  private def renameTypeIdent(ident: P.Ident): N.Ident = {
+    _scopes.head.typeSymbols.get(ident.name) match {
+      case Some(entry) =>
+        N.Ident(ident.meta.named, entry.symbol)
+      case None =>
+        throw new Error(s"Compiler bug: No typeVar symbol for $ident; Check binder")
+    }
+  }
+
+  def renameVariableIdent(ident: P.Ident): N.Ident = {
+    _scopes.head.symbols.get(ident.name) match {
+      case Some(entry) =>
+        N.Ident(ident.meta.named, entry.symbol)
+      case None =>
+        throw new Error(s"Compiler bug: No var symbol for $ident; Check binder")
+    }
   }
 
   def resolveTypeVar(name: String): Option[Symbol] = {

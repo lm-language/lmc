@@ -33,6 +33,7 @@ class CompilerTest {
       filter { _.getName endsWith ".lm" }
     ) {
       val filePath = Paths.get(path.getAbsolutePath)
+      println(s"Checking $filePath")
       val diagnosticsFileName = filePath.getFileName.toString dropRight 3 concat ".diagnostics.json"
       val diagnosticsFilePath = filePath.resolveSibling(diagnosticsFileName)
       val diagnosticsFile = File(diagnosticsFilePath)

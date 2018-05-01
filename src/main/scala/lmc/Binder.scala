@@ -1,6 +1,6 @@
 package lmc
 
-import lmc.common.{ScopeBuilder, ScopeEntry, Symbol, Pos}
+import lmc.common.{Pos, ScopeBuilder, ScopeEntry, Scope, TypeEntry}
 import lmc.syntax.Parsed._
 import lmc.diagnostics._
 
@@ -33,18 +33,7 @@ class Binder(
         annotation.copy(variant = TypeAnnotation.Func(from1, to1))
       case A.Forall(scope, params, typ) =>
         withScope(scope)(() => {
-          val params1 = params.map((param) => {
-            scope.getSymbol(param.ident.name) match {
-              case Some(_) =>
-                throw new Error(s"Duplicate param ${param.ident.name}")
-                param.copy(
-                  meta = param.meta.copy()
-                )
-              case None =>
-                bindName(param.ident.name)
-                param
-            }
-          })
+          val params1 = params.map(bindGenericParam(scope))
           val typ1 = bindAnnotation(typ)
           annotation.copy(variant = A.Forall(scope, params1, typ1))
         })
@@ -55,6 +44,24 @@ class Binder(
     }
   }
 
+  private def bindGenericParam(scope: Scope)(param: GenericParam): GenericParam = {
+    scope.getSymbol(param.ident.name) match {
+      case Some(_) =>
+        param.copy(
+          meta = param.meta.withDiagnostic(
+            Diagnostic(
+              loc = param.loc,
+              severity = Severity.Error,
+              variant = DuplicateBinding(param.ident.name)
+            )
+          )
+        )
+      case None =>
+        bindTypeVar(param.ident.name)
+        param
+    }
+  }
+
   private def withScope[T](scope: ScopeBuilder)(f: (() => T)): T = {
     _scopes = scope::_scopes
     val result = f()
@@ -62,17 +69,9 @@ class Binder(
     result
   }
 
-  private def bindName(name: String): Symbol = {
+  private def bindTypeVar(name: String): Unit = {
     val symbol = ctx.makeSymbol(name)
-    currentScope.setSymbol(name, ScopeEntry(symbol))
-    symbol
-  }
-
-  private def resolveSymbol(name: String): Option[Symbol] = {
-    currentScope.resolveSymbol(name) match {
-      case Some(s) => Some(s)
-      case None => ctx.PrimitiveScope.resolveSymbol(name)
-    }
+    currentScope.setTypeVar(name, TypeEntry(symbol))
   }
 
   def bindDeclaration(decl: Declaration): Declaration = {
@@ -80,16 +79,57 @@ class Binder(
     decl.variant match {
       case Let(pattern, expr) =>
         val newPattern = bindPattern(pattern)
-        decl.copy(variant = Let(pattern = newPattern, expr))
+        val boundExpr = bindExpr(expr)
+        decl.copy(
+          variant = Let(
+            pattern = newPattern,
+            boundExpr
+          )
+        )
       case Extern(ident, annotation) =>
         val newAnnotation = bindAnnotation(annotation)
+        val boundIdent = bindIdent(ident)
         decl.copy(
           meta = decl.meta,
-          variant = Extern(ident, newAnnotation)
+          variant = Extern(boundIdent, newAnnotation)
         )
       case Error() =>
         decl
     }
+  }
+
+  private def bindExpr(expr: Expr): Expr = {
+    val boundVariant = expr.variant match {
+      case Expr.Func(tok, scope, genericParams, params, returnTypeAnnotation, body) =>
+        withScope(scope)(() => {
+          val boundGenericParams = genericParams.map(bindGenericParam(scope))
+          val boundParams = params.map(bindFuncParam)
+          val boundAnnotation = returnTypeAnnotation.map(bindAnnotation)
+          val boundBody = bindExpr(body)
+          Expr.Func(tok, scope, boundGenericParams, boundParams, boundAnnotation, boundBody)
+        })
+      case Expr.Call(tok, func, args) =>
+        Expr.Call(
+          tok,
+          bindExpr(func),
+          args.map(bindArg)
+        )
+      case Expr.Literal(_) => expr.variant
+      case Expr.Var(_) => expr.variant
+      case Expr.Error() => expr.variant
+    }
+    expr.copy(variant = boundVariant)
+  }
+
+  private def bindArg(arg: Expr.Arg): Expr.Arg = {
+    Expr.Arg(
+      label = arg.label,
+      value = bindExpr(arg.value)
+    )
+  }
+
+  private def bindFuncParam(param: Expr.Param): Expr.Param = {
+    Expr.Param(bindPattern(param.pattern))
   }
 
   def bindIdent(ident: Ident, validAfter: Option[Pos] = None): Ident = {
@@ -123,8 +163,9 @@ class Binder(
         pattern.copy(variant = Pattern.Var(boundIdent))
       case Pattern.Annotated(pat, annotation) =>
         val newPattern = bindPattern(pat)
+        val boundAnnotation = bindAnnotation(annotation)
         pattern.copy(
-          variant = Pattern.Annotated(newPattern, annotation)
+          variant = Pattern.Annotated(newPattern, boundAnnotation)
         )
       case Error =>
         pattern

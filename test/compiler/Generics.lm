@@ -1,0 +1,3 @@
+extern duplicateParam: forall [A, A] A;
+extern fail: forall [A] A;
+let idErr: forall [X] (fn (x: X) => X) = fn(a) => true;

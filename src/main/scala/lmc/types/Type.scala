@@ -14,6 +14,22 @@ object Primitive {
 
 case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
+
+/**
+  * This type represents an instance of a generic
+  * type parameter that is never assignable to
+  * anything other than itself.
+  * @param symbol
+  * e.g. fn[A, B](a: A, b: B): A => A
+  * Here, during type checking, A will be assigned
+  * to Generic(n) and B to Generic(n + 1)
+  * Every A in this scope would refer to Generic(n)
+  * and that of B to Generic(n + 1).
+  * Because A and B are different generic params,
+  * Generic(n) is not assignable to Generic(n + 1)
+  * and vice-versa.
+  */
+case class Generic(symbol: Symbol) extends Type
 case class Func(
   from: Vector[Func.Param],
   to: Type
@@ -69,3 +85,4 @@ case object UnAssigned extends Type
   * @param id
   */
 case class UnInferred(id: Int) extends Type
+case class Forall(params: Iterable[Symbol], typ: Type) extends Type

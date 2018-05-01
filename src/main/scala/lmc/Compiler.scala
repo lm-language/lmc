@@ -78,15 +78,16 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
     }
   }
 
-  private def setKindOfSymbol(symbol: Symbol, kind: Kind): Unit = {
+  override def setKindOfSymbol(symbol: Symbol, kind: Kind): Unit = {
     _symbolKinds.update(symbol, kind)
   }
 
-  def getKindOfSymbol(symbol: Symbol): Unit = {
+  def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
     _symbolKinds.get(symbol)
   }
 
-  def setTypeVar(symbol: Symbol, typ: Type): Unit = {
+
+  override def setTypeVar(symbol: Symbol, typ: Type): Unit = {
     _typeVariables.update(symbol, typ)
   }
 

@@ -239,6 +239,14 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         withNewScope(fnScope => {
           val startTok = advance()
           val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+          val genericParams = currentToken.variant match {
+            case LSQB =>
+              advance()
+              val params = parseGenericParamsList()
+              expect(errors)(RSQB)
+              params
+            case _ => List()
+          }
           expect(errors)(LPAREN)
           val params = parseCommaSeperatedList(parseParam)(Parser.PATTERN_PREDICTORS)
           expect(errors)(RPAREN)
@@ -256,6 +264,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             variant = Expr.Func(
               startTok,
               fnScope,
+              genericParams,
               params,
               annotation,
               body
@@ -292,10 +301,6 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         )
     }
     parseExprTail(head)
-  }
-
-  private def parseParams(): Expr.Params = {
-    ???
   }
 
   private def parseExprTail(head: Expr): Expr = {
@@ -397,26 +402,26 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
              diagnostics = result.meta.diagnostics ++ errors
            )
          )
-//       case FORALL =>
-//         withNewScope((scope) => {
-//           val errors = ListBuffer.empty[Diagnostic]
-//           val firstTok = advance()
-//           expect(errors)(LSQB)
-//           val genericParams = parseGenericParamsList()
-//           expect(errors)(RSQB)
-//           val annotation = parseTypeAnnotation()
-//           val meta = Meta(
-//             loc = Loc.between(firstTok, annotation),
-//             diagnostics = errors,
-//             scope = this.scope()
-//           )
-//           TypeAnnotation(
-//             meta = meta,
-//             variant = TypeAnnotation.Forall(
-//               scope, genericParams, annotation
-//             )
-//           )
-//         })
+       case FORALL =>
+         withNewScope((scope) => {
+           val errors = ListBuffer.empty[Diagnostic]
+           val firstTok = advance()
+           expect(errors)(LSQB)
+           val genericParams = parseGenericParamsList()
+           expect(errors)(RSQB)
+           val annotation = parseTypeAnnotation()
+           val meta = Meta(
+             loc = Loc.between(firstTok, annotation),
+             diagnostics = errors,
+             scope = this.scope()
+           )
+           TypeAnnotation(
+             meta = meta,
+             variant = TypeAnnotation.Forall(
+               scope, genericParams, annotation
+             )
+           )
+         })
        case ID =>
          val tok = advance()
          val meta = Meta(

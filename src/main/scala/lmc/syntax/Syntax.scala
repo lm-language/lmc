@@ -148,11 +148,11 @@ trait Syntax {
       override def children: Iterable[Node] = this match {
         case Var(ident) => List(ident)
         case Literal(_) => List()
-        case Func(_, _, params, returnTypeAnnotation, body) =>
+        case Func(_, _, genericParams, params, returnTypeAnnotation, body) =>
           val patterns = params.map(_.pattern)
           val ret = returnTypeAnnotation
               .map(x => List(x)).getOrElse(List())
-          List(patterns, ret, List(body)).flatten
+          List(genericParams, patterns, ret, List(body)).flatten
         case Call(_, func, args) =>
           List(func) ++ args.map(_.value)
         case Error() => List()
@@ -171,6 +171,7 @@ trait Syntax {
     case class Func(
       fnTok: lmc.syntax.token.Token,
       scope: _Scope,
+      genericParams: Iterable[GenericParam],
       params: Iterable[Param],
       returnTypeAnnotation: Option[TypeAnnotation],
       body: Expr

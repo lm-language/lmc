@@ -58,11 +58,12 @@ final class TypeChecker(
             ErrorType
         }
         (TE.Var(T.Ident(ident.meta.typed, ident.name)), typ, List.empty)
-      case (NE.Func(tok, scope, params, returnTypeAnnotation, body)) =>
+      case (NE.Func(tok, scope, genericParams, params, returnTypeAnnotation, body)) =>
         var positionalArgTypes = Vector.empty[Func.Param]
         var labeledArgTypes = Vector.empty[Func.Param]
 
         var positionalDone = false
+        val checkedGenericParams = genericParams.map(inferGenericParam)
         val checkedParams = params.map((param) => {
           val checkedPattern = inferPattern(param.pattern)
           var checkedParam = TE.Param(checkedPattern)
@@ -96,7 +97,10 @@ final class TypeChecker(
           case None =>
             inferExpr(body)
         }
-        val typedVariant: TE.Variant = TE.Func(tok, scope, checkedParams, None, typedBody)
+        val typedVariant: TE.Variant = TE.Func(
+          tok, scope,
+          checkedGenericParams,
+          checkedParams, None, typedBody)
 
         val typeFrom = positionalArgTypes ++ labeledArgTypes
         val typ: Type = lmc.types.Func(from = typeFrom, to = typedBody.typ)
@@ -423,10 +427,27 @@ final class TypeChecker(
             )
           ))
         }
-      case N.Expr.Func(tok, sc, namedParams, retTyp, body) =>
+      case N.Expr.Func(tok, sc, genericParams, namedParams, retTyp, body) =>
         typ match {
+          case Forall(expectedGenericParams, expectedTyp) =>
+            val checkedGenericParams = checkGenericParams(
+              genericParams,
+              expectedGenericParams
+            )
+            val checkedInnerExpr = checkExpr(
+              expr.copy(
+                variant = N.Expr.Func(
+                  tok, sc,
+                  List(),
+                  namedParams, retTyp, body
+                )
+              ),
+              expectedTyp
+            )
+            ???
           case Func(expectedParamTypesWithLabels, expectedRetTyp) =>
             val errors = mutable.ListBuffer.empty[Diagnostic]
+            val checkedGenericParams = checkGenericParams(genericParams, List())
 
             val checkedParams = checkParamList(tok.loc, errors)(
               expectedParamTypesWithLabels.map(_._2),
@@ -459,6 +480,7 @@ final class TypeChecker(
             (T.Expr.Func(
               tok,
               sc,
+              checkedGenericParams,
               checkedParams,
               checkedRetTypeAnnotation,
               checkedBody
@@ -484,6 +506,21 @@ final class TypeChecker(
       variant = variant,
       typ = typ
     )
+  }
+
+  private def checkGenericParams(params: Iterable[N.GenericParam],
+    expectedParams: Iterable[Symbol]): Iterable[T.GenericParam] = {
+    val paramsVect = params.toVector
+    val expectedParamsVect = expectedParams.toVector
+    val checkedParams = ListBuffer.empty[T.GenericParam]
+    var i = 0
+    while (i < expectedParamsVect.length) {
+      i += 1
+    }
+    while (i < paramsVect.length) {
+      i += 1
+    }
+    checkedParams
   }
 
   private def checkParamList(fnTokenLoc: Loc, errors: mutable.ListBuffer[Diagnostic])
@@ -518,13 +555,6 @@ final class TypeChecker(
       i += 1
     }
     typedParams.toVector
-  }
-
-
-
-  private def inferParam(param: N.Expr.Param): T.Expr.Param = {
-    val typedPattern = inferPattern(param.pattern)
-    T.Expr.Param(typedPattern)
   }
 
   private def assertTypeMoreGeneralThan(loc: Loc)(t1: Type,  t2: Type): Iterable[Diagnostic] = {
@@ -570,6 +600,10 @@ final class TypeChecker(
           }),
           this.checkAnnotation(typ)
         )
+      case N.TypeAnnotation.Forall(scope, params, typ) =>
+        val typedParams = params.map(inferGenericParam)
+        val checkedTyp = checkAnnotation(typ)
+        T.TypeAnnotation.Forall(scope, typedParams, checkedTyp)
       case N.TypeAnnotation.Error =>
         T.TypeAnnotation.Error
     }
@@ -578,6 +612,39 @@ final class TypeChecker(
       variant = typedVariant
     )
   }
+
+  private def inferGenericParam(param: N.GenericParam): T.GenericParam = {
+    val checkedAnnotation = param.kindAnnotation.map(checkKindAnnotation)
+    val kind = checkedAnnotation.map(kindAnnotationToKind)
+    kind match {
+      case Some(k) =>
+        ctx.setKindOfSymbol(param.ident.name, k)
+      case None => ()
+    }
+    ctx.setTypeVar(
+      param.ident.name,
+      Generic(param.ident.name)
+    )
+    T.GenericParam(
+      meta = param.meta.typed,
+      ident = T.Ident(
+        param.ident.meta.typed,
+        param.ident.name
+      ),
+      kindAnnotation = checkedAnnotation
+    )
+  }
+
+  private def kindAnnotationToKind(annotation: Typed.KindAnnotation) = {
+    annotation.variant match {
+      case T.KindAnnotation.Star => Kind.Star
+    }
+  }
+
+  private def checkKindAnnotation(annotation: N.KindAnnotation): T.KindAnnotation = {
+    annotation.asInstanceOf[T.KindAnnotation]
+  }
+
 
   private def annotationToType(annotation: T.TypeAnnotation): Type = {
     annotation.variant match {
@@ -594,6 +661,11 @@ final class TypeChecker(
         })
         val retTyp = annotationToType(ret)
         lmc.types.Func(paramTypes.toVector, retTyp)
+      }
+      case T.TypeAnnotation.Forall(_, params, ret) => {
+        val paramTypes = params.map(_.ident.name)
+        val retType = annotationToType(ret)
+        lmc.types.Forall(paramTypes, retType)
       }
       case T.TypeAnnotation.Error => ErrorType
     }
