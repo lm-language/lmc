@@ -19,7 +19,6 @@ case class Var(symbol: Symbol) extends Type
   * This type represents an instance of a generic
   * type parameter that is never assignable to
   * anything other than itself.
-  * @param symbol
   * e.g. fn[A, B](a: A, b: B): A => A
   * Here, during type checking, A will be assigned
   * to Generic(n) and B to Generic(n + 1)
@@ -29,7 +28,9 @@ case class Var(symbol: Symbol) extends Type
   * Generic(n) is not assignable to Generic(n + 1)
   * and vice-versa.
   */
-case class Generic(symbol: Symbol) extends Type
+case class Generic(id: Int, text: String) extends Type {
+  override def toString: String = text
+}
 case class Func(
   from: Vector[Func.Param],
   to: Type

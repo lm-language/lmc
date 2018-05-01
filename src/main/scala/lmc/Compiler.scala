@@ -6,10 +6,10 @@ import lmc.common._
 
 import scala.concurrent.Future
 import scala.collection._
-import lmc.types.{Primitive, Type, Kind}
+import lmc.types.{Generic, Kind, Primitive, Type}
 import diagnostics._
 import io.File
-import lmc.syntax.{ Parsed, Typed }
+import lmc.syntax.{Parsed, Typed}
 
 class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
@@ -20,6 +20,7 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   val _symbolTypes = mutable.Map.empty[Symbol, Type]
   private val _symbolKinds = mutable.Map.empty[Symbol, Kind]
   private val _typeVariables = mutable.Map.empty[Symbol, Type]
+  private val _nextGenericId = 0
 
 
   private def makeUninferred(): Type = {
@@ -140,5 +141,11 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
     _id += 1
 
     Symbol(id, text)
+  }
+
+  override def makeGenericType(name: String): Type = {
+    val id = _nextGenericId
+    _nextUninferredId += 1
+    Generic(id, name)
   }
 }

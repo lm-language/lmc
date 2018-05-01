@@ -400,6 +400,7 @@ final class TypeChecker(
   }
 
   private def checkExpr(expr: N.Expr, typ: Type): T.Expr = {
+    val (instantiatedTyp, genericSubstitutions) = instantiate(typ)
     val (variant: T.Expr.Variant, diagnostics: Iterable[Diagnostic]) = expr.variant match {
       case N.Expr.Literal(N.Expr.LInt(x)) =>
         val exprTyp = Primitive.Int
@@ -428,26 +429,10 @@ final class TypeChecker(
           ))
         }
       case N.Expr.Func(tok, sc, genericParams, namedParams, retTyp, body) =>
-        typ match {
-          case Forall(expectedGenericParams, expectedTyp) =>
-            val checkedGenericParams = checkGenericParams(
-              genericParams,
-              expectedGenericParams
-            )
-            val checkedInnerExpr = checkExpr(
-              expr.copy(
-                variant = N.Expr.Func(
-                  tok, sc,
-                  List(),
-                  namedParams, retTyp, body
-                )
-              ),
-              expectedTyp
-            )
-            ???
+        instantiatedTyp match {
           case Func(expectedParamTypesWithLabels, expectedRetTyp) =>
             val errors = mutable.ListBuffer.empty[Diagnostic]
-            val checkedGenericParams = checkGenericParams(genericParams, List())
+            val checkedGenericParams = checkGenericParams(genericParams.toVector, genericSubstitutions)
 
             val checkedParams = checkParamList(tok.loc, errors)(
               expectedParamTypesWithLabels.map(_._2),
@@ -508,16 +493,15 @@ final class TypeChecker(
     )
   }
 
-  private def checkGenericParams(params: Iterable[N.GenericParam],
-    expectedParams: Iterable[Symbol]): Iterable[T.GenericParam] = {
-    val paramsVect = params.toVector
-    val expectedParamsVect = expectedParams.toVector
+  private def checkGenericParams(params: Vector[N.GenericParam],
+    expectedParams: Vector[(Symbol, Type)]): Iterable[T.GenericParam] = {
     val checkedParams = ListBuffer.empty[T.GenericParam]
     var i = 0
-    while (i < expectedParamsVect.length) {
-      i += 1
-    }
-    while (i < paramsVect.length) {
+    while (i < Math.min(params.length, expectedParams.length)) {
+      val (_, genericTyp) = expectedParams(i)
+      val param = params(i)
+      ctx.setTypeVar(param.ident.name, genericTyp)
+
       i += 1
     }
     checkedParams
@@ -572,12 +556,50 @@ final class TypeChecker(
   }
 
   private def typeMoreGeneralThan(t1: Type, t2: Type): Boolean = {
-    val t1Instance = instantiate(t1)
+    val (t1Instance, _) = instantiate(t1)
     t1Instance == t2
   }
 
-  private def instantiate(typ: Type): Type = {
-    typ
+  private def instantiate(typ: Type): (Type, Vector[(Symbol, Type)]) = {
+    typ match {
+      case Forall(params, innerTyp) =>
+        val subst = mutable.Map.empty[Symbol, Type]
+        val substList = ListBuffer.empty[(Symbol, Type)]
+        for (param <- params) {
+          val genericType = ctx.makeGenericType(param.text)
+          subst.put(param, genericType)
+          substList.append(param -> genericType)
+        }
+        (applySubst(subst, innerTyp), substList.toVector)
+      case _ => (typ, Vector.empty)
+    }
+  }
+
+  private def applySubst(subst: scala.collection.Map[Symbol, Type], typ: Type): Type = {
+    typ match {
+      case Var(sym) =>
+        subst.get(sym) match {
+          case Some(t) => t
+          case None => typ
+        }
+      case Forall(params, t) =>
+        // because all generic instances are unique,
+        // there's no chance of conflict between params and subst
+        // so we don't need to filter out params from subst
+        Forall(params, applySubst(subst, t))
+      case Func(from, to) =>
+        Func(
+          from.map(param => {
+            val (name, t) = param
+            (name, applySubst(subst, t))
+          }),
+          applySubst(subst, to)
+        )
+      case Primitive.Bool => typ
+      case Primitive.Int => typ
+      case Primitive.Unit => typ
+      case ErrorType => typ
+    }
   }
 
   private def identToTypedIdent(ident: N.Ident): T.Ident = {
@@ -623,7 +645,7 @@ final class TypeChecker(
     }
     ctx.setTypeVar(
       param.ident.name,
-      Generic(param.ident.name)
+      Var(param.ident.name)
     )
     T.GenericParam(
       meta = param.meta.typed,
