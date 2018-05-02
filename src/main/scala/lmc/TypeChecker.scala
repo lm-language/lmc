@@ -370,7 +370,7 @@ final class TypeChecker(
         val checkedAnnotation = checkAnnotation(annotation)
         val annotationType = annotationToType(checkedAnnotation)
         val diagnostics =
-          if (typeMoreGeneralThan(typ, annotationType)) {
+          if (subtypeOf(typ, annotationType)) {
              List.empty
           }
           else {
@@ -404,18 +404,18 @@ final class TypeChecker(
     val (variant: T.Expr.Variant, diagnostics: Iterable[Diagnostic]) = expr.variant match {
       case N.Expr.Literal(N.Expr.LInt(x)) =>
         val exprTyp = Primitive.Int
-        val diagnostics = assertTypeMoreGeneralThan(expr.loc)(typ, exprTyp)
+        val diagnostics = assertSubTypeOf(expr.loc)(exprTyp, typ)
         (T.Expr.Literal(T.Expr.LInt(x)), diagnostics)
       case N.Expr.Var(ident) =>
         val varTyp = ctx.getTypeOfSymbol(ident.name) match {
           case Some(t) => t
           case None => ErrorType
         }
-        val diagnostics = assertTypeMoreGeneralThan(loc = ident.loc)(typ, varTyp)
+        val diagnostics = assertSubTypeOf(loc = ident.loc)(varTyp, typ)
         (T.Expr.Var(ident = T.Ident(meta = ident.meta.typed, ident.name)), diagnostics)
       case N.Expr.Call(_, _, _) =>
         val inferredExpr = inferExpr(expr)
-        if (typeMoreGeneralThan(typ, inferredExpr.typ)) {
+        if (subtypeOf(typ, inferredExpr.typ)) {
           (inferredExpr.variant, List())
         } else {
           (inferredExpr.variant, List(
@@ -443,7 +443,7 @@ final class TypeChecker(
               val checkedAnnot: T.TypeAnnotation = this.checkAnnotation(annot)
               val typ: Type = this.annotationToType(checkedAnnot)
               checkedRetTyp = Some(typ)
-              val errs = if (!typeMoreGeneralThan(expectedRetTyp, typ)) {
+              val errs = if (!subtypeOf(expectedRetTyp, typ)) {
                 List(Diagnostic(
                     loc = annot.loc,
                     severity = Severity.Error,
@@ -541,23 +541,59 @@ final class TypeChecker(
     typedParams.toVector
   }
 
-  private def assertTypeMoreGeneralThan(loc: Loc)(t1: Type,  t2: Type): Iterable[Diagnostic] = {
-    if (typeMoreGeneralThan(t1, t2)) {
+  private def assertSubTypeOf(loc: Loc)(t1: Type,  t2: Type): Iterable[Diagnostic] = {
+    if (subtypeOf(t1, t2)) {
       List.empty
     } else {
       List(
         Diagnostic(
           loc = loc,
           severity = Severity.Error,
-          variant = TypeMismatch(t1, t2)
+          variant = TypeMismatch(t2, t1)
         )
       )
     }
   }
 
-  private def typeMoreGeneralThan(t1: Type, t2: Type): Boolean = {
-    val (t1Instance, _) = instantiate(t1)
-    t1Instance == t2
+  private def subtypeOf(a: Type, b: Type): Boolean = {
+    val result = (a, b) match {
+      case (Var(a), Var(b)) =>
+        a.id == b.id
+      case (Func(from1, to1), Func(from2, to2)) =>
+        ???
+      case (Forall(params, a1), _) =>
+        val subst = mutable.Map.empty[Symbol, Type]
+        for (param <- params) {
+          val genericType = ctx.makeGenericType(param.text)
+          subst.put(param, genericType)
+        }
+        val substA = applySubst(subst, a1)
+        subtypeOf(substA, b)
+      case (Generic(n, _), t) =>
+        instantiateGenericTo(n, t)
+      case (a, b) if a == b =>
+        true
+      case (Var(a), b) =>
+        ctx.getTypeVar(a) match {
+          case Some(t1) =>
+            subtypeOf(t1, b)
+          case None => false
+        }
+      case (a, Var(b)) =>
+        ctx.getTypeVar(b) match {
+          case Some(b1) =>
+            subtypeOf(a, b1)
+          case None =>
+            false
+        }
+      case _ => false
+    }
+    result
+  }
+
+  private def instantiateGenericTo(i: Int, t: Type): Boolean = {
+    ctx.assignGeneric(i, t)
+    true
   }
 
   private def instantiate(typ: Type): (Type, Vector[(Symbol, Type)]) = {

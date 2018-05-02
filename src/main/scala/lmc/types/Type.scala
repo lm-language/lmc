@@ -29,7 +29,7 @@ case class Var(symbol: Symbol) extends Type
   * and vice-versa.
   */
 case class Generic(id: Int, text: String) extends Type {
-  override def toString: String = text
+  override def toString: String = s"text"
 }
 case class Func(
   from: Vector[Func.Param],

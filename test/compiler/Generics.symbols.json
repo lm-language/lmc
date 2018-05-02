@@ -1,0 +1,268 @@
+{
+  "loc" : {
+    "start" : {
+      "line" : 1,
+      "column" : 1
+    },
+    "end" : {
+      "line" : 10,
+      "column" : 1
+    }
+  },
+  "symbols" : {
+    "idErr" : {
+      "typ" : "Forall(List(X),fn(x:Var(X))=>Var(X))"
+    },
+    "fail" : {
+      "typ" : "Forall(List(A),Var(A))"
+    },
+    "idAnnotated" : {
+      "typ" : "Forall(List(X),fn(x:Var(X))=>Var(X))"
+    },
+    "tooManyParams" : {
+      "typ" : "Forall(List(X, Y),fn(x:Var(X),y:Var(Y))=>Var(X))"
+    },
+    "snd" : {
+      "typ" : "fn(a:Var(A),b:Var(B))=>Var(B)"
+    },
+    "boolVal" : {
+      "typ" : "Bool"
+    },
+    "duplicateParam" : {
+      "typ" : "Forall(List(A, A),Var(A))"
+    },
+    "idWithPatternAndLambdaAnnotation" : {
+      "typ" : "Forall(List(X),fn(x:Var(X))=>Var(X))"
+    },
+    "fst" : {
+      "typ" : "fn(a:Var(A),b:Var(B))=>Var(A)"
+    }
+  },
+  "children" : [
+    {
+      "loc" : {
+        "start" : {
+          "line" : 1,
+          "column" : 24
+        },
+        "end" : {
+          "line" : 1,
+          "column" : 38
+        }
+      },
+      "symbols" : {
+        
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 2,
+          "column" : 14
+        },
+        "end" : {
+          "line" : 2,
+          "column" : 25
+        }
+      },
+      "symbols" : {
+        
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 3,
+          "column" : 12
+        },
+        "end" : {
+          "line" : 3,
+          "column" : 38
+        }
+      },
+      "symbols" : {
+        
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 3,
+          "column" : 42
+        },
+        "end" : {
+          "line" : 3,
+          "column" : 54
+        }
+      },
+      "symbols" : {
+        "a" : {
+          "typ" : "text"
+        }
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 4,
+          "column" : 18
+        },
+        "end" : {
+          "line" : 4,
+          "column" : 44
+        }
+      },
+      "symbols" : {
+        
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 4,
+          "column" : 48
+        },
+        "end" : {
+          "line" : 4,
+          "column" : 57
+        }
+      },
+      "symbols" : {
+        "a" : {
+          "typ" : "text"
+        }
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 5,
+          "column" : 39
+        },
+        "end" : {
+          "line" : 5,
+          "column" : 65
+        }
+      },
+      "symbols" : {
+        
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 5,
+          "column" : 69
+        },
+        "end" : {
+          "line" : 5,
+          "column" : 87
+        }
+      },
+      "symbols" : {
+        "a" : {
+          "typ" : "text"
+        }
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 6,
+          "column" : 20
+        },
+        "end" : {
+          "line" : 6,
+          "column" : 55
+        }
+      },
+      "symbols" : {
+        
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 6,
+          "column" : 59
+        },
+        "end" : {
+          "line" : 6,
+          "column" : 89
+        }
+      },
+      "symbols" : {
+        "y" : {
+          "typ" : "text"
+        },
+        "a" : {
+          "typ" : "text"
+        }
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 7,
+          "column" : 11
+        },
+        "end" : {
+          "line" : 7,
+          "column" : 35
+        }
+      },
+      "symbols" : {
+        "b" : {
+          "typ" : "Var(B)"
+        },
+        "a" : {
+          "typ" : "Var(A)"
+        }
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 8,
+          "column" : 11
+        },
+        "end" : {
+          "line" : 8,
+          "column" : 35
+        }
+      },
+      "symbols" : {
+        "b" : {
+          "typ" : "Var(B)"
+        },
+        "a" : {
+          "typ" : "Var(A)"
+        }
+      },
+      "children" : [
+      ]
+    }
+  ]
+}

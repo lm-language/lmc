@@ -21,6 +21,7 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   private val _symbolKinds = mutable.Map.empty[Symbol, Kind]
   private val _typeVariables = mutable.Map.empty[Symbol, Type]
   private val _nextGenericId = 0
+  private val _generics = mutable.Map.empty[Int, Type]
 
 
   private def makeUninferred(): Type = {
@@ -131,6 +132,12 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   def getType(symbol: Symbol): Option[Type] = {
     _symbolTypes.get(symbol)
   }
+
+  override def assignGeneric(n: Int, t: Type): Unit =
+    _generics.put(n, t)
+
+  override def getGeneric(n: Int): Option[Type] =
+    _generics.get(n)
 
   def getKind(symbol: Symbol): Option[Kind] = {
     _symbolKinds.get(symbol)
