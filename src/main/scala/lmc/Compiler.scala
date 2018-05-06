@@ -6,7 +6,7 @@ import lmc.common._
 
 import scala.concurrent.Future
 import scala.collection._
-import lmc.types.{Generic, Kind, Primitive, Type}
+import lmc.types.{Existential, Kind, Primitive, Type}
 import diagnostics._
 import io.File
 import lmc.syntax.{Parsed, Typed}
@@ -16,20 +16,13 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
 
   private var _id = 0
-  var _nextUninferredId = 0
   val _symbolTypes = mutable.Map.empty[Symbol, Type]
   private val _symbolKinds = mutable.Map.empty[Symbol, Kind]
   private val _typeVariables = mutable.Map.empty[Symbol, Type]
-  private val _nextGenericId = 0
+  private var _nextGenericId = 0
   private val _generics = mutable.Map.empty[Int, Type]
 
-
-  private def makeUninferred(): Type = {
-    val id = _nextUninferredId
-    _nextUninferredId += 1
-    types.UnInferred(id)
-  }
-
+  override def getVars(): collection.Map[Symbol, Type] = _symbolTypes
   override val PrimitiveScope: Scope = {
     val loc = Loc(
       path = Paths.get("<builtin>"),
@@ -74,7 +67,7 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
       case None =>
         val parsed = getParsedSourceFile(path)
         val checker = new TypeChecker(this)
-        val checkedSourceFile = checker.checkSourceFile(parsed)
+        val checkedSourceFile = checker.inferSourceFile(parsed)
         cacheCheckedSourceFile(path, checkedSourceFile)
         checkedSourceFile
     }
@@ -152,7 +145,7 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
 
   override def makeGenericType(name: String): Type = {
     val id = _nextGenericId
-    _nextUninferredId += 1
-    Generic(id, name)
+    _nextGenericId += 1
+    Existential(id, name)
   }
 }

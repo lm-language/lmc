@@ -12,7 +12,7 @@
         }
       },
       "severity" : "Error",
-      "message" : "TypeMismatch(text,Bool)"
+      "message" : "TypeMismatch(X,Bool)"
     }
   ]
 }

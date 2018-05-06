@@ -18,6 +18,8 @@ object Context {
 
     def assignGeneric(n: Int, t: Type): Unit
     def getGeneric(n: Int): Option[Type]
+
+    def getVars(): collection.Map[Symbol, Type]
   }
 }
 

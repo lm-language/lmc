@@ -143,7 +143,8 @@ class Binder(
               severity = Severity.Error,
               variant = DuplicateBinding(ident.name)
             )
-          )
+          ),
+          duplicateBinder = true
         )
       case None =>
         currentScope.setSymbol(

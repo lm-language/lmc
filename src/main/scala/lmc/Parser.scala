@@ -264,7 +264,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             variant = Expr.Func(
               startTok,
               fnScope,
-              genericParams,
+              genericParams.toVector,
               params,
               annotation,
               body

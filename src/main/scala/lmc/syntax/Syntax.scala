@@ -56,7 +56,10 @@ trait Syntax {
     def loc: Loc = m.loc
   }
 
-  case class Ident(meta: Meta, name: Name) extends NodeOps(meta) with Node {
+  case class Ident(
+    meta: Meta, name: Name,
+    duplicateBinder: Boolean = false
+  ) extends NodeOps(meta) with Node {
     override def children: Iterable[Node] = List()
 
     override def toString: String = name.toString
@@ -118,7 +121,11 @@ trait Syntax {
       scope: _Scope,
       params: Iterable[GenericParam],
       annotation: TypeAnnotation
-    ) extends T
+    ) extends T {
+
+      override def toString: String =
+        s"forall [$params] $annotation"
+    }
     case object Error extends T
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] =
@@ -171,7 +178,7 @@ trait Syntax {
     case class Func(
       fnTok: lmc.syntax.token.Token,
       scope: _Scope,
-      genericParams: Iterable[GenericParam],
+      genericParams: Vector[GenericParam],
       params: Iterable[Param],
       returnTypeAnnotation: Option[TypeAnnotation],
       body: Expr
@@ -186,9 +193,6 @@ trait Syntax {
     ) extends T
     case class Error() extends T
 
-    case class Params(
-      labeled: Vector[Symbol]
-    )
     case class Arg(
       // label isn't a Name because the renamer
       // will have to know about the type of the function
@@ -228,7 +232,10 @@ trait Syntax {
       }
     }
     type T = Variant
-    case class Let(pattern: Pattern, rhs: Expr) extends T
+    case class Let(pattern: Pattern, rhs: Expr) extends T {
+      override def toString: String =
+        s"let $pattern = $rhs"
+    }
     case class Extern(name: Ident, typeAnnotation: TypeAnnotation) extends T
     case class Error() extends T
 
@@ -269,6 +276,7 @@ trait Syntax {
     variant: Declaration.Variant
   ) extends NodeOps(meta) with Node with HasVariant[Declaration.Variant] {
     override def children: Iterable[Node] = variant.children
+    override def toString: String = variant.toString
   }
 
   case class SourceFile(

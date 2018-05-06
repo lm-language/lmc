@@ -1,9 +1,12 @@
 extern duplicateParam: forall [A, A] A;
 extern fail: forall [A] A;
-let idErr: forall [X] (fn (x: X) => X) = fn(a) => true;
+let idErr: forall [X] (fn (x: X) => X) = fn(x) => true;
 let idAnnotated: forall [X] (fn (x: X) => X) = fn(a) => a;
 let idWithPatternAndLambdaAnnotation: forall [X] (fn (x: X) => X) = fn[A](a: A): A => a;
 let tooManyParams: forall [X, Y] (fn (x: X, y: Y) => X) = fn[A, B, C](a: A, y: B): A => a;
 let fst = fn[A, B](a: A, b: B) => a;
 let snd = fn[A, B](a: A, b: B) => b;
+let sndError: forall[A,B] fn(A, B) => B = fn(a, b) => a;
+let idInt: fn(Int) => Int = idAnnotated;
+let idBoolWithStrictLabel: fn(x: Bool) => Bool = idAnnotated;
 let boolVal: Bool = fail;

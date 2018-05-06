@@ -103,7 +103,7 @@
       },
       "symbols" : {
         "a" : {
-          "typ" : "text"
+          "typ" : "X"
         }
       },
       "children" : [
@@ -139,7 +139,7 @@
       },
       "symbols" : {
         "a" : {
-          "typ" : "text"
+          "typ" : "X"
         }
       },
       "children" : [
@@ -175,7 +175,7 @@
       },
       "symbols" : {
         "a" : {
-          "typ" : "text"
+          "typ" : "A"
         }
       },
       "children" : [
@@ -211,10 +211,10 @@
       },
       "symbols" : {
         "y" : {
-          "typ" : "text"
+          "typ" : "B"
         },
         "a" : {
-          "typ" : "text"
+          "typ" : "A"
         }
       },
       "children" : [

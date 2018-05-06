@@ -16,9 +16,9 @@ case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
 
 /**
-  * This type represents an instance of a generic
-  * type parameter that is never assignable to
-  * anything other than itself.
+  * This type represents an as of un-inferred but
+  * fixed type variable. This will be "instantiated"
+  * to a type on use.
   * e.g. fn[A, B](a: A, b: B): A => A
   * Here, during type checking, A will be assigned
   * to Generic(n) and B to Generic(n + 1)
@@ -28,8 +28,8 @@ case class Var(symbol: Symbol) extends Type
   * Generic(n) is not assignable to Generic(n + 1)
   * and vice-versa.
   */
-case class Generic(id: Int, text: String) extends Type {
-  override def toString: String = s"text"
+case class Existential(id: Int, text: String) extends Type {
+  override def toString: String = s"$text:$id"
 }
 case class Func(
   from: Vector[Func.Param],
@@ -58,32 +58,7 @@ case class Func(
 object Func {
   type Param = (Option[Symbol], Type)
 }
-/**
-  * An as of yet unbound type. This is assigned to all
-  * bindings that will have been defined but not in current
-  * scope. Used for producing better error messages. This
-  * can distinguish between actually unbound values and
-  * use before assignment errors.
-  *
-  * For e.g.
-  * {
-  *   // x: UnInferred
-  *   // y: UnInferred
-  *   let x = y; // error: Use before assignment
-  *   let p = asdf; // error: Unbound variable asdf
-  *   ...
-  *   let y = 4
-  *   // y: Int
-  *   ...
-  * }
-  */
-case object UnAssigned extends Type
-
-/**
-  * A placeholder for a type that hasn't been inferred
-  * yet.
- *
-  * @param id
-  */
-case class UnInferred(id: Int) extends Type
-case class Forall(params: Iterable[Symbol], typ: Type) extends Type
+case class Forall(params: Iterable[Symbol], typ: Type) extends Type {
+  override def toString: String =
+    s"forall [$params] $typ"
+}
