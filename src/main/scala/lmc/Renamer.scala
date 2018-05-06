@@ -270,7 +270,7 @@ class Renamer(
   private def renameTypeIdent(ident: P.Ident): N.Ident = {
     _scopes.head.typeSymbols.get(ident.name) match {
       case Some(entry) =>
-        N.Ident(ident.meta.named, entry.symbol)
+        N.Ident(ident.meta.named, entry.symbol, ident.duplicateBinder)
       case None =>
         throw new Error(s"Compiler bug: No typeVar symbol for $ident; Check binder")
     }
@@ -279,7 +279,7 @@ class Renamer(
   def renameVariableIdent(ident: P.Ident): N.Ident = {
     _scopes.head.symbols.get(ident.name) match {
       case Some(entry) =>
-        N.Ident(ident.meta.named, entry.symbol)
+        N.Ident(ident.meta.named, entry.symbol, ident.duplicateBinder)
       case None =>
         throw new Error(s"Compiler bug: No var symbol for $ident; Check binder")
     }
