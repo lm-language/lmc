@@ -29,7 +29,7 @@ case class Var(symbol: Symbol) extends Type
   * and vice-versa.
   */
 case class Existential(id: Int, text: String) extends Type {
-  override def toString: String = s"$text:$id"
+  override def toString: String = s"Existential($text)"
 }
 case class Func(
   from: Vector[Func.Param],

@@ -248,6 +248,76 @@ final class TypeChecker(
 
   private def checkFunc(expr: N.Expr, func: Named.Expr.Func,  typ: Type): T.Expr = {
     typ match {
+      case Func(from, to) =>
+        val funcParamsVec = func.params.toVector
+        var i = 0
+        val checkedParams = ListBuffer.empty[T.Expr.Param]
+        for ((expectedParamLabel, expectedParamTyp) <- from) {
+          if (i < funcParamsVec.length) {
+            val funcParam = funcParamsVec(i)
+            var checkedPattern = checkPattern(funcParam.pattern, expectedParamTyp)
+            expectedParamLabel match {
+              case Some(expectedLabelSym) =>
+                if (!getPatternLabel(checkedPattern).map(_.text).contains(expectedLabelSym.text)) {
+                  checkedPattern = checkedPattern.copy(
+                    meta = checkedPattern.meta.withDiagnostic(
+                      Diagnostic(
+                        loc = checkedPattern.loc,
+                        severity = Severity.Error,
+                        variant = FuncParamLabelMismatch(expectedLabelSym.text)
+                      )
+                    )
+                  )
+                }
+              case None =>
+                ()
+            }
+            checkedParams.append(T.Expr.Param(checkedPattern))
+          }
+          i += 1
+        }
+        while (i < funcParamsVec.length) {
+          val funcParam = funcParamsVec(i)
+          var inferredPattern = inferPattern(funcParam.pattern)
+          inferredPattern = inferredPattern.copy(
+            meta = inferredPattern.meta.withDiagnostic(
+              Diagnostic(
+                loc = inferredPattern.loc,
+                severity = Severity.Error,
+                variant = ExtraParam
+              )
+            )
+          )
+          checkedParams.append(T.Expr.Param(inferredPattern))
+          i += 1
+        }
+        val checkedRetTypAnnotation = func.returnTypeAnnotation.map({ checkAnnotation(_, to) })
+        val checkedBody = checkedRetTypAnnotation match {
+          case Some(annot) =>
+            val t = annotationToType(annot)
+            checkExpr(func.body, t)
+          case None =>
+            checkExpr(func.body, to)
+        }
+        val checkedGenericParams = func.genericParams.map(p => {
+          T.GenericParam(
+            meta = p.meta.typed,
+            kindAnnotation = p.kindAnnotation.map(inferKindAnnotation),
+            ident = inferIdent(p.ident)
+          )
+        })
+        T.Expr(
+          meta = expr.meta.typed,
+          typ = typ,
+          variant = T.Expr.Func(
+            func.fnTok,
+            func.scope,
+            checkedGenericParams,
+            checkedParams,
+            checkedRetTypAnnotation,
+            checkedBody
+          )
+        )
       case _ =>
         val e = inferExpr(expr)
         e.copy(
@@ -266,7 +336,9 @@ final class TypeChecker(
   }
 
 
-  private def assertSubType(loc: Loc)(a: Type, b: Type): Iterable[Diagnostic] = {
+  private def assertSubType(loc: Loc)(_a: Type, _b: Type): Iterable[Diagnostic] = {
+    val a = resolveType(_a)
+    val b = resolveType(_b)
     val errors = ListBuffer.empty[Diagnostic]
     (a, b) match {
       case (Primitive.Int, Primitive.Int) |
@@ -274,23 +346,12 @@ final class TypeChecker(
            (Primitive.Unit, Primitive.Unit)
       =>
         ()
-      case (_, Var(v)) =>
-        ctx.getTypeVar(v) match {
-          case Some(t) =>
-            assertSubType(loc)(a, t)
-          case None =>
-            errors.append(
-              Diagnostic(
-                TypeMismatch(a, b),
-                Severity.Error,
-                loc
-              )
-            )
-        }
+      case (Var(as), Var(bs)) if as.id == bs.id =>
+        ()
       case (_, _) =>
         errors.append(
           Diagnostic(
-            TypeMismatch(a, b),
+            TypeMismatch(b, a),
             Severity.Error,
             loc
           )
@@ -421,7 +482,7 @@ final class TypeChecker(
   }
 
   private def annotationToType(annotation: T.TypeAnnotation): Type = {
-    annotation.variant match {
+    resolveType(annotation.variant match {
       case T.TypeAnnotation.Var(ident) =>
         Var(ident.name)
       case T.TypeAnnotation.Func(params, to) =>
@@ -436,6 +497,6 @@ final class TypeChecker(
         Forall(typParams, annotationToType(inner))
       case T.TypeAnnotation.Error =>
         ErrorType
-    }
+    })
   }
 }

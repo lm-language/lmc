@@ -11,7 +11,7 @@
   },
   "symbols" : {
     "f1" : {
-      "typ" : "fn()=>Int"
+      "typ" : "fn()=>Bool"
     },
     "f" : {
       "typ" : "fn()=>Int"
@@ -26,7 +26,7 @@
       "typ" : "fn(a:Int)=>Bool"
     },
     "uninferred" : {
-      "typ" : "fn(a:ErrorType)=>ErrorType"
+      "typ" : "fn(a:Existential(a))=>Existential(a)"
     },
     "fstIntBool" : {
       "typ" : "fn(a:Int,b:Bool)=>Int"
@@ -162,10 +162,10 @@
         }
       },
       "symbols" : {
-        "y" : {
+        "b" : {
           "typ" : "Bool"
         },
-        "x" : {
+        "a" : {
           "typ" : "Int"
         }
       },
@@ -185,7 +185,7 @@
       },
       "symbols" : {
         "a" : {
-          "typ" : "ErrorType"
+          "typ" : "Existential(a)"
         }
       },
       "children" : [

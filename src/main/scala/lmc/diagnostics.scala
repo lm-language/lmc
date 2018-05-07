@@ -23,7 +23,7 @@ object diagnostics {
   case object ExtraParam extends Variant
   case object PositionalArgAfterLabelled extends Variant
   case object PositionalParamAfterLabelled extends Variant
-  case class NoSuchParamLabel(label: String) extends Variant
+  case class FuncParamLabelMismatch(expected: String) extends Variant
   case object MissingTypeAnnotation extends Variant
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {

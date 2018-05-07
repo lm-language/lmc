@@ -40,6 +40,20 @@
         }
       },
       "severity" : "Error",
+      "message" : "FuncParamLabelMismatch(a)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 7,
+          "column" : 9
+        },
+        "end" : {
+          "line" : 7,
+          "column" : 12
+        }
+      },
+      "severity" : "Error",
       "message" : "TypeMismatch(Int,Bool)"
     },
     {
