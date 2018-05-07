@@ -108,7 +108,16 @@ final class TypeChecker(
 
   private def inferCall(expr: N.Expr, call: N.Expr.Call): T.Expr = {
     val inferredFunc = inferExpr(call.func)
-    inferredFunc.typ match {
+    val typ = inferredFunc.typ match {
+      case Forall(params, innerTyp) =>
+        val subst = mutable.Map.empty[Symbol, Type]
+        for (param <- params) {
+          subst.put(param, ctx.makeGenericType(param.text))
+        }
+        applySubst(innerTyp, subst)
+      case t => t
+    }
+    val inferredExpr = typ match {
       case Func(from, to) =>
         val expectedLabeledArgs = from.filter({ _._1.isDefined }).map(arg => {
           (arg._1.get.text, arg._2)
@@ -270,6 +279,36 @@ final class TypeChecker(
           )
         )
     }
+    inferredExpr.copy(
+      typ = applyEnv(inferredExpr.typ)
+    )
+  }
+
+  private def applyEnv(typ: Type): Type = {
+    typ match {
+      case (
+        Primitive.Unit
+        | Primitive.Bool
+        | Primitive.Int
+        | ErrorType
+        ) => typ
+      case Existential(id, _) =>
+        ctx.getGeneric(id).getOrElse(typ)
+      case Var(name) =>
+        ctx.getTypeOfSymbol(name).getOrElse(typ)
+      case Func(from, to) =>
+        Func(
+          from.map(p => {
+            (p._1, applyEnv(p._2))
+          }),
+          applyEnv(to)
+        )
+      case Forall(params, inner) =>
+        Forall(
+          params,
+          applyEnv(inner)
+        )
+    }
   }
 
   private def inferArgs(args: Vector[Named.Expr.Arg]): Vector[T.Expr.Arg] = {
@@ -386,11 +425,25 @@ final class TypeChecker(
         )
       case (func@N.Expr.Func(_, _, _, _, _, _), _) =>
         checkFunc(expr, func, typ)
+      case (_, Forall(_, innerTyp)) =>
+        checkExpr(expr, innerTyp)
     }
   }
 
-  private def checkFunc(expr: N.Expr, func: Named.Expr.Func,  typ: Type): T.Expr = {
+  private def checkFunc(expr: N.Expr, func: Named.Expr.Func, typ: Type): T.Expr = {
     typ match {
+      case Forall(params, innerTyp) =>
+        var i = 0
+        for (expectedParam <- params) {
+          if (i >= func.genericParams.length) {
+            ()
+          } else {
+            val funcGenericParam = func.genericParams(i)
+            ctx.setTypeVar(funcGenericParam.ident.name, Var(expectedParam))
+          }
+          i += 1
+        }
+        checkFunc(expr, func, innerTyp)
       case Func(from, to) =>
         val funcParamsVec = func.params.toVector
         var i = 0
@@ -480,8 +533,10 @@ final class TypeChecker(
 
 
   private def assertSubType(loc: Loc)(_a: Type, _b: Type): Iterable[Diagnostic] = {
+
     val a = resolveType(_a)
     val b = resolveType(_b)
+
     val errors = ListBuffer.empty[Diagnostic]
     (a, b) match {
       case (Primitive.Int, Primitive.Int) |
@@ -491,6 +546,17 @@ final class TypeChecker(
         ()
       case (Var(as), Var(bs)) if as.id == bs.id =>
         ()
+      case (_, existential@Existential(_, _)) =>
+        instantiateR(loc)(a, existential)
+      case (existential@Existential(_, _), _) =>
+        instantiateL(loc)(existential, b)
+      case (Forall(params, innerTyp), _) =>
+        val subst = mutable.Map.empty[Symbol, Type]
+        for (param <- params) {
+          subst.put(param, ctx.makeGenericType(param.text))
+        }
+        val substituted = applySubst(innerTyp, subst)
+        assertSubType(loc)(substituted, b)
       case (_, _) =>
         errors.append(
           Diagnostic(
@@ -501,6 +567,51 @@ final class TypeChecker(
         )
     }
     errors
+  }
+
+  private def instantiateL(loc: Loc)(existential: Existential, t: Type): Iterable[Diagnostic] = {
+    ctx.getGeneric(existential.id) match {
+      case Some(a) =>
+        assertSubType(loc)(a, t)
+      case None =>
+        ctx.assignGeneric(existential.id, t)
+        List.empty
+    }
+  }
+
+  private def instantiateR(loc: Loc)(a: Type, existential: Existential): Iterable[Diagnostic] = {
+    ctx.getGeneric(existential.id) match {
+      case Some(b) =>
+        assertSubType(loc)(a, b)
+      case None =>
+        ctx.assignGeneric(existential.id, a)
+        List.empty
+    }
+  }
+
+  private def applySubst(t: Type, subst: collection.Map[Symbol, Type]): Type = {
+    t match {
+      case (
+        Primitive.Bool
+        | Primitive.Int
+        | Primitive.Unit
+        | ErrorType
+        | Existential(_, _)
+      ) => t
+      case Var(name) =>
+        subst.get(name) match {
+          case Some(typ) =>
+            applySubst(typ, subst)
+          case None => t
+        }
+      case Forall(params, inner) =>
+        Forall(params, applySubst(inner, subst))
+      case Func(from, to) =>
+        Func(
+          from.map(param => (param._1, applySubst(param._2, subst))),
+          applySubst(to, subst)
+        )
+    }
   }
 
   private def checkPattern(pattern: N.Pattern, typ: Type): T.Pattern = {
@@ -558,7 +669,8 @@ final class TypeChecker(
     typ match {
       case Var(name) =>
         ctx.getTypeVar(name) match {
-          case Some(t) => resolveType(t)
+          case Some(t) =>
+            resolveType(t)
           case None => typ
         }
       case _ => typ
@@ -615,7 +727,6 @@ final class TypeChecker(
   }
 
   private def checkAnnotation(annotation: N.TypeAnnotation, typ: Type): T.TypeAnnotation = {
-    println(s"checkAnnotation(a")
     val inferredAnnotation = inferAnnotation(annotation)
     val annotTyp = annotationToType(inferredAnnotation)
     val errors = assertSubType(annotation.loc)(annotTyp, typ)

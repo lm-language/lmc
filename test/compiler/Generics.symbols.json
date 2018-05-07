@@ -5,22 +5,34 @@
       "column" : 1
     },
     "end" : {
-      "line" : 10,
+      "line" : 14,
       "column" : 1
     }
   },
   "symbols" : {
+    "boolVal1" : {
+      "typ" : "Bool"
+    },
     "idErr" : {
-      "typ" : "Forall(List(X),fn(x:Var(X))=>Var(X))"
+      "typ" : "forall [List(X)] fn(x:Var(X))=>Var(X)"
     },
     "fail" : {
-      "typ" : "Forall(List(A),Var(A))"
+      "typ" : "forall [List(A)] Var(A)"
+    },
+    "idBoolWithStrictLabel" : {
+      "typ" : "fn(x:Bool)=>Bool"
     },
     "idAnnotated" : {
-      "typ" : "Forall(List(X),fn(x:Var(X))=>Var(X))"
+      "typ" : "forall [List(X)] fn(x:Var(X))=>Var(X)"
+    },
+    "sndError" : {
+      "typ" : "forall [List(A, B)] fn(Var(A),Var(B))=>Var(B)"
+    },
+    "idInt" : {
+      "typ" : "fn(Int)=>Int"
     },
     "tooManyParams" : {
-      "typ" : "Forall(List(X, Y),fn(x:Var(X),y:Var(Y))=>Var(X))"
+      "typ" : "forall [List(X, Y)] fn(x:Var(X),y:Var(Y))=>Var(X)"
     },
     "snd" : {
       "typ" : "fn(a:Var(A),b:Var(B))=>Var(B)"
@@ -29,10 +41,10 @@
       "typ" : "Bool"
     },
     "duplicateParam" : {
-      "typ" : "Forall(List(A, A),Var(A))"
+      "typ" : "forall [List(A, A)] Var(A)"
     },
     "idWithPatternAndLambdaAnnotation" : {
-      "typ" : "Forall(List(X),fn(x:Var(X))=>Var(X))"
+      "typ" : "forall [List(X)] fn(x:Var(X))=>Var(X)"
     },
     "fst" : {
       "typ" : "fn(a:Var(A),b:Var(B))=>Var(A)"
@@ -102,8 +114,8 @@
         }
       },
       "symbols" : {
-        "a" : {
-          "typ" : "X"
+        "x" : {
+          "typ" : "Var(X)"
         }
       },
       "children" : [
@@ -138,8 +150,8 @@
         }
       },
       "symbols" : {
-        "a" : {
-          "typ" : "X"
+        "x" : {
+          "typ" : "Var(X)"
         }
       },
       "children" : [
@@ -174,8 +186,8 @@
         }
       },
       "symbols" : {
-        "a" : {
-          "typ" : "A"
+        "x" : {
+          "typ" : "Var(X)"
         }
       },
       "children" : [
@@ -211,10 +223,10 @@
       },
       "symbols" : {
         "y" : {
-          "typ" : "B"
+          "typ" : "Var(Y)"
         },
-        "a" : {
-          "typ" : "A"
+        "x" : {
+          "typ" : "Var(X)"
         }
       },
       "children" : [
@@ -251,6 +263,45 @@
         "end" : {
           "line" : 8,
           "column" : 35
+        }
+      },
+      "symbols" : {
+        "b" : {
+          "typ" : "Var(B)"
+        },
+        "a" : {
+          "typ" : "Var(A)"
+        }
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 9,
+          "column" : 15
+        },
+        "end" : {
+          "line" : 9,
+          "column" : 39
+        }
+      },
+      "symbols" : {
+        
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 9,
+          "column" : 43
+        },
+        "end" : {
+          "line" : 9,
+          "column" : 55
         }
       },
       "symbols" : {

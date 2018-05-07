@@ -12,7 +12,21 @@
         }
       },
       "severity" : "Error",
-      "message" : "TypeMismatch(X,Bool)"
+      "message" : "TypeMismatch(Var(X),Bool)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 9,
+          "column" : 55
+        },
+        "end" : {
+          "line" : 9,
+          "column" : 55
+        }
+      },
+      "severity" : "Error",
+      "message" : "TypeMismatch(Var(B),Var(A))"
     }
   ]
 }
