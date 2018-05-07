@@ -19,12 +19,15 @@ object diagnostics {
   case class TypeMismatch(expected: Type, found: Type) extends Variant
   case class UnBoundTypeVar(name: String) extends Variant
   case class FnParamMismatch(expected: List[Type], found: List[Type]) extends Variant
+  case class FuncParamLabelMismatch(name: String) extends Variant
   case class NotAFunction(foundTyp: Type) extends Variant
   case object ExtraParam extends Variant
   case object PositionalArgAfterLabelled extends Variant
   case object PositionalParamAfterLabelled extends Variant
-  case class FuncParamLabelMismatch(expected: String) extends Variant
   case object MissingTypeAnnotation extends Variant
+  case object ExtraArg extends Variant
+  case class DuplicateLabelArg(name: String) extends Variant
+  case class NoSuchParamLabel(name: String) extends Variant
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {
       val paramsStr = params.foldLeft("")(

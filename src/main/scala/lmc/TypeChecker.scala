@@ -109,12 +109,155 @@ final class TypeChecker(
   private def inferCall(expr: N.Expr, call: N.Expr.Call): T.Expr = {
     val inferredFunc = inferExpr(call.func)
     inferredFunc.typ match {
+      case Func(from, to) =>
+        val expectedLabeledArgs = from.filter({ _._1.isDefined }).map(arg => {
+          (arg._1.get.text, arg._2)
+        }).toMap
+        val labelChecked = mutable.Set.empty[String]
+        var i = 0
+        val checkedArgs = ListBuffer.empty[T.Expr.Arg]
+        val missingArguments = ListBuffer.empty[(Option[String], Type)]
+        var labelEncountered = false
+        val labeledArgsToCheck = ListBuffer.empty[((token.Token, String), N.Expr)]
+        for (expectedArg <- from) {
+          if (i >= call.args.length) {
+            missingArguments.append(expectedArg._1.map(_.text) -> expectedArg._2)
+            expectedArg._1 match {
+              case Some(s) => labelChecked += s.text
+              case None => ()
+            }
+          } else {
+            val arg = call.args(i)
+            arg.label match {
+              case Some(label) =>
+                labelEncountered = true
+                labeledArgsToCheck.append(label -> arg.value)
+              case None =>
+                val diagnostic = if (labelEncountered) {
+                  Some(Diagnostic(
+                    loc = arg.value.loc,
+                    severity = Severity.Error,
+                    variant = PositionalArgAfterLabelled
+                  ))
+                } else {
+                  None
+                }
+                expectedArg._1 match {
+                  case None => ()
+                  case Some(label) =>
+                    labelChecked += label.text
+                }
+                var checkedExpr = checkExpr(arg.value, expectedArg._2)
+                diagnostic match {
+                  case Some(d) =>
+                    checkedExpr = checkedExpr.copy(
+                      meta = checkedExpr.meta.withDiagnostic(d)
+                    )
+                  case None => ()
+                }
+                val checkedArg = T.Expr.Arg(None, checkedExpr)
+                checkedArgs.append(checkedArg)
+            }
+          }
+          i += 1
+        }
+        while (i < call.args.length) {
+          val arg = call.args(i)
+          arg.label match {
+            case Some(label) =>
+              labelEncountered = true
+              labeledArgsToCheck.append(label -> arg.value)
+            case None =>
+              var inferredExpr = inferExpr(arg.value)
+              inferredExpr = inferredExpr.copy(
+                meta = inferredExpr.meta.withDiagnostic(
+                  Diagnostic(
+                    loc = arg.value.loc,
+                    severity = Severity.Error,
+                    variant = ExtraArg
+                  )
+                )
+              )
+              val checkedArg = T.Expr.Arg(None, inferredExpr)
+              checkedArgs.append(checkedArg)
+          }
+          i += 1
+        }
+        for (((tok, name), expr) <- labeledArgsToCheck) {
+          expectedLabeledArgs.get(name) match {
+            case Some(expectedTyp) =>
+              val diagnostic = if (labelChecked.contains(name)) {
+                Some(Diagnostic(
+                  loc = tok.loc,
+                  severity = Severity.Error,
+                  variant = DuplicateLabelArg(name)
+                ))
+              } else {
+                None
+              }
+              var checkedExpr = checkExpr(expr, expectedTyp)
+              diagnostic match {
+                case Some(d) =>
+                  checkedExpr = checkedExpr.copy(
+                    meta = checkedExpr.meta.withDiagnostic(d)
+                  )
+                case None => ()
+              }
+              val checkedArg = T.Expr.Arg(Some(tok -> name), checkedExpr)
+              checkedArgs.append(checkedArg)
+              labelChecked += name
+            case None =>
+              var inferredExpr = inferExpr(expr)
+              inferredExpr = inferredExpr.copy(
+                meta = inferredExpr.meta.withDiagnostic(
+                  Diagnostic(
+                    loc = tok.loc,
+                    severity = Severity.Error,
+                    variant = NoSuchParamLabel(name)
+                  )
+                )
+              )
+              val inferredArg = T.Expr.Arg(
+                label = Some(tok -> name),
+                value = inferredExpr
+              )
+              checkedArgs.append(inferredArg)
+          }
+        }
+        for (expected <- from) {
+          expected._1 match {
+            case Some(name) =>
+              if (!labelChecked.contains(name.text)) {
+                missingArguments.append(Some(name.text) -> expected._2)
+              }
+            case None => ()
+          }
+        }
+        val meta = if (missingArguments.isEmpty)
+          expr.meta.typed
+        else
+          expr.meta.typed.withDiagnostic(
+            Diagnostic(
+              loc = call.argsLoc,
+              variant = MissingArguments(missingArguments.toList),
+              severity = Severity.Error
+            )
+          )
+        T.Expr(
+          meta = meta,
+          typ = to,
+          variant = T.Expr.Call(
+            call.argsLoc,
+            inferredFunc,
+            checkedArgs.toVector
+          )
+        )
       case _ =>
         val inferredArgs = inferArgs(call.args)
         T.Expr(
           meta = expr.meta.withDiagnostic(
             Diagnostic(
-              loc = expr.loc,
+              loc = inferredFunc.loc,
               severity = Severity.Error,
               variant = NotAFunction(inferredFunc.typ)
             )

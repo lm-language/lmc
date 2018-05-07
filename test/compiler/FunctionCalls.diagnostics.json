@@ -45,6 +45,20 @@
     {
       "loc" : {
         "start" : {
+          "line" : 8,
+          "column" : 36
+        },
+        "end" : {
+          "line" : 8,
+          "column" : 36
+        }
+      },
+      "severity" : "Error",
+      "message" : "ExtraArg"
+    },
+    {
+      "loc" : {
+        "start" : {
           "line" : 9,
           "column" : 28
         },
@@ -54,7 +68,7 @@
         }
       },
       "severity" : "Error",
-      "message" : "MissingArguments(b:Bool,a:Int)"
+      "message" : "MissingArguments(a:Int,b:Bool)"
     },
     {
       "loc" : {
