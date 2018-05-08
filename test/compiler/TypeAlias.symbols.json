@@ -26,6 +26,15 @@
       "typ" : "Int"
     }
   },
+  "types" : {
+    "CyclicForall" : "*",
+    "X" : "*",
+    "Y" : "*",
+    "CyclicFuncType" : "*",
+    "A" : "*",
+    "B" : "*",
+    "Cyclic" : "*"
+  },
   "children" : [
     {
       "loc" : {
@@ -40,6 +49,9 @@
       },
       "symbols" : {
         
+      },
+      "types" : {
+        "A" : "*"
       },
       "children" : [
       ]

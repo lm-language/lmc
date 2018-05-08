@@ -16,9 +16,6 @@
     "y" : {
       "typ" : "Unit"
     },
-    "z" : {
-      "typ" : "Bool"
-    },
     "a" : {
       "typ" : "Int"
     },
@@ -28,9 +25,15 @@
     "c" : {
       "typ" : "Bool"
     },
+    "z" : {
+      "typ" : "Bool"
+    },
     "d" : {
       "typ" : "Bool"
     }
+  },
+  "types" : {
+    
   },
   "children" : [
   ]

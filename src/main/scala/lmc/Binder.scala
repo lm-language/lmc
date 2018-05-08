@@ -93,7 +93,7 @@ class Binder(
           meta = decl.meta,
           variant = Extern(boundIdent, newAnnotation)
         )
-      case TypeAlias(ident, annotation) =>
+      case TypeAlias(ident, kindAnnotation, annotation) =>
         val error = currentScope.typeSymbols.get(ident.name) match {
           case Some(_) =>
             Some(
@@ -112,7 +112,7 @@ class Binder(
         val boundIdent = ident
         val result = decl.copy(
           meta = decl.meta,
-          variant = TypeAlias(boundIdent, boundAnnotation)
+          variant = TypeAlias(boundIdent, kindAnnotation, boundAnnotation)
         )
         error match {
           case Some(e) =>

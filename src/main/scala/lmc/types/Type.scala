@@ -1,5 +1,6 @@
 package lmc.types
 import lmc.common.Symbol
+import lmc.utils
 
 sealed trait Type
 
@@ -60,5 +61,7 @@ object Func {
 }
 case class Forall(params: Iterable[Symbol], typ: Type) extends Type {
   override def toString: String =
-    s"forall [${params.toList}] $typ"
+    s"forall [${utils.joinIterable(params)}] $typ"
 }
+
+

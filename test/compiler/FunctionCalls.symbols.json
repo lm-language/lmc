@@ -44,6 +44,9 @@
       "typ" : "fn(a:Int,b:Bool)=>Bool"
     }
   },
+  "types" : {
+    
+  },
   "children" : [
     {
       "loc" : {
@@ -63,6 +66,9 @@
         "a" : {
           "typ" : "Int"
         }
+      },
+      "types" : {
+        
       },
       "children" : [
       ]
@@ -85,6 +91,9 @@
         "a" : {
           "typ" : "Int"
         }
+      },
+      "types" : {
+        
       },
       "children" : [
       ]

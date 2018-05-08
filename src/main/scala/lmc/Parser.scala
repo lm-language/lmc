@@ -219,15 +219,15 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val startTok = advance()
         val ident = parseIdent()
         expect(errors)(EQ)
-        val annotation = parseTypeAnnotation()
+        val rhs = parseTypeAnnotation()
         expect(errors)(SEMICOLON)
         Declaration(
           meta = makeMeta(
-            loc = Loc.between(startTok, annotation),
+            loc = Loc.between(startTok, rhs),
             diagnostics = errors.toList,
             scope = scope()
           ),
-          variant = Declaration.TypeAlias(ident, annotation)
+          variant = Declaration.TypeAlias(ident, None, rhs)
         )
       case _ =>
         val loc = currentToken.loc

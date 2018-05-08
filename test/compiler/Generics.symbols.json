@@ -11,47 +11,50 @@
   },
   "symbols" : {
     "idErr" : {
-      "typ" : "forall [List(X)] fn(x:Var(X))=>Var(X)"
+      "typ" : "forall [X] fn(x:Var(X))=>Var(X)"
     },
     "fail" : {
-      "typ" : "forall [List(A)] Var(A)"
+      "typ" : "forall [A] Var(A)"
     },
     "idBoolWithStrictLabel" : {
       "typ" : "fn(x:Bool)=>Bool"
     },
     "idAnnotated" : {
-      "typ" : "forall [List(X)] fn(x:Var(X))=>Var(X)"
+      "typ" : "forall [X] fn(x:Var(X))=>Var(X)"
     },
     "sndError" : {
-      "typ" : "forall [List(A, B)] fn(Var(A),Var(B))=>Var(B)"
+      "typ" : "forall [A,B] fn(Var(A),Var(B))=>Var(B)"
     },
     "idInt" : {
       "typ" : "fn(Int)=>Int"
     },
     "tooManyParams" : {
-      "typ" : "forall [List(X, Y)] fn(x:Var(X),y:Var(Y))=>Var(X)"
+      "typ" : "forall [X,Y] fn(x:Var(X),y:Var(Y))=>Var(X)"
     },
     "snd" : {
-      "typ" : "forall [List(A, B)] fn(a:Var(A),b:Var(B))=>Var(B)"
+      "typ" : "forall [A,B] fn(a:Var(A),b:Var(B))=>Var(B)"
     },
     "boolVal" : {
       "typ" : "Bool"
     },
     "duplicateParam" : {
-      "typ" : "forall [List(A, A)] Var(A)"
+      "typ" : "forall [A,A] Var(A)"
     },
     "intVal1" : {
       "typ" : "Int"
     },
     "idWithPatternAndLambdaAnnotation" : {
-      "typ" : "forall [List(X)] fn(x:Var(X))=>Var(X)"
+      "typ" : "forall [X] fn(x:Var(X))=>Var(X)"
     },
     "fst" : {
-      "typ" : "forall [List(A, B)] fn(a:Var(A),b:Var(B))=>Var(A)"
+      "typ" : "forall [A,B] fn(a:Var(A),b:Var(B))=>Var(A)"
     },
     "boolVal1" : {
       "typ" : "Bool"
     }
+  },
+  "types" : {
+    
   },
   "children" : [
     {
@@ -67,6 +70,9 @@
       },
       "symbols" : {
         
+      },
+      "types" : {
+        "A" : "*"
       },
       "children" : [
       ]
@@ -85,6 +91,9 @@
       "symbols" : {
         
       },
+      "types" : {
+        "A" : "*"
+      },
       "children" : [
       ]
     },
@@ -101,6 +110,9 @@
       },
       "symbols" : {
         
+      },
+      "types" : {
+        "X" : "*"
       },
       "children" : [
       ]
@@ -121,6 +133,9 @@
           "typ" : "Var(X)"
         }
       },
+      "types" : {
+        
+      },
       "children" : [
       ]
     },
@@ -137,6 +152,9 @@
       },
       "symbols" : {
         
+      },
+      "types" : {
+        "X" : "*"
       },
       "children" : [
       ]
@@ -157,6 +175,9 @@
           "typ" : "Var(X)"
         }
       },
+      "types" : {
+        
+      },
       "children" : [
       ]
     },
@@ -173,6 +194,9 @@
       },
       "symbols" : {
         
+      },
+      "types" : {
+        "X" : "*"
       },
       "children" : [
       ]
@@ -193,6 +217,9 @@
           "typ" : "Var(X)"
         }
       },
+      "types" : {
+        "A" : "*"
+      },
       "children" : [
       ]
     },
@@ -209,6 +236,10 @@
       },
       "symbols" : {
         
+      },
+      "types" : {
+        "Y" : "*",
+        "X" : "*"
       },
       "children" : [
       ]
@@ -232,6 +263,11 @@
           "typ" : "Var(X)"
         }
       },
+      "types" : {
+        "A" : "*",
+        "C" : "*",
+        "B" : "*"
+      },
       "children" : [
       ]
     },
@@ -254,6 +290,10 @@
           "typ" : "Var(A)"
         }
       },
+      "types" : {
+        "A" : "*",
+        "B" : "*"
+      },
       "children" : [
       ]
     },
@@ -275,6 +315,10 @@
         "a" : {
           "typ" : "Var(A)"
         }
+      },
+      "types" : {
+        "A" : "*",
+        "B" : "*"
       },
       "children" : [
       ]
@@ -292,6 +336,10 @@
       },
       "symbols" : {
         
+      },
+      "types" : {
+        "A" : "*",
+        "B" : "*"
       },
       "children" : [
       ]
@@ -314,6 +362,9 @@
         "a" : {
           "typ" : "Var(A)"
         }
+      },
+      "types" : {
+        
       },
       "children" : [
       ]

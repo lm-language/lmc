@@ -98,6 +98,7 @@ class CompilerTest {
   case class ScopeJSON(
     loc: LocJSON,
     symbols: scala.collection.Map[String, SymbolEntryJSON],
+    types: scala.collection.Map[String, String],
     children: List[ScopeJSON]
   )
   object ScopeJSON {
@@ -114,6 +115,13 @@ class CompilerTest {
             }
           })
           .mapValues(SymbolEntryJSON),
+        types = scope.typeSymbols.mapValues(sym => {
+          compiler.getKindOfSymbol(sym.symbol) match {
+            case Some(t) => t.toString
+           case None =>
+             throw new Error(s"""CompilerBug: No kind for symbol ${sym.symbol.text}""")
+          }
+        }),
         children = scope.children
           .map(_.get)
           .map(_.orNull)

@@ -138,10 +138,6 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   override def getGeneric(n: Int): Option[Type] =
     _generics.get(n)
 
-  def getKind(symbol: Symbol): Option[Kind] = {
-    _symbolKinds.get(symbol)
-  }
-
   override def makeSymbol(text: String): Symbol = {
     val id = _id
     _id += 1

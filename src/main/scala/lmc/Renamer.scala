@@ -45,10 +45,10 @@ class Renamer(
         val namedIdent = renameVariableIdent(ident)
         val namedExpr = renameAnnotation(annotation)
         (N.Declaration.Extern(namedIdent, namedExpr), List.empty)
-      case P.Declaration.TypeAlias(ident, annotation) =>
+      case P.Declaration.TypeAlias(ident, kindAnnotation, annotation) =>
         val namedIdent = renameTypeIdent(ident)
         val namedAnnotation = renameAnnotation(annotation)
-        (N.Declaration.TypeAlias(namedIdent, namedAnnotation), List.empty)
+        (N.Declaration.TypeAlias(namedIdent, kindAnnotation.map(renameKindAnnotation), namedAnnotation), List.empty)
       case P.Declaration.Error() =>
         (N.Declaration.Error(), List.empty)
     }
@@ -64,7 +64,7 @@ class Renamer(
 
   private def addDeclToScope(declaration: WeakReference[N.Declaration]): Unit = {
     declaration.get.map(_.variant) match {
-      case Some(N.Declaration.TypeAlias(ident, _)) =>
+      case Some(N.Declaration.TypeAlias(ident, _, _)) =>
         addDecl(ident.name, declaration)
       case _ => ()
     }

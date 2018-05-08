@@ -21,4 +21,11 @@ object utils {
       }
     }
   }
+  def joinIterable[T](iterable: Iterable[T]): String = {
+    iterable.foldLeft("")((prev, current) => {
+      prev
+        .concat(",")
+        .concat(current.toString)
+    }).drop(1)
+  }
 }

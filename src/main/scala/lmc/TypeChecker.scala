@@ -46,20 +46,21 @@ final class TypeChecker(
           decl.meta.typed,
           T.Declaration.Extern(inferredIdent, inferredAnnotation)
         )
-      case N.Declaration.TypeAlias(ident, annotation) =>
+      case N.Declaration.TypeAlias(ident, kindAnnotation, rhs) =>
         _checkedTypeAliasDecls.get(ident.name) match {
           case Some(d) if d.meta.id == decl.meta.id =>
             d
           case _ =>
             _isCheckingDefinitionForTypeAlias += ident.name
             val inferredIdent = inferIdent(ident)
-            val inferredAnnotation = inferAnnotation(annotation)
+            val inferredAnnotation = inferAnnotation(rhs)
+            val inferredKindAnnotation = kindAnnotation.map(inferKindAnnotation)
             val typ = annotationToType(inferredAnnotation)
             val errors = ListBuffer.empty[Diagnostic]
-            setTypeVar(ident.loc, errors)(inferredIdent.name, typ)
+            setTypeVar(ident.loc, errors)(inferredIdent.name, typ, inferredKindAnnotation)
             val result = T.Declaration(
               decl.meta.typed.withDiagnostics(errors),
-              T.Declaration.TypeAlias(inferredIdent, inferredAnnotation)
+              T.Declaration.TypeAlias(inferredIdent, inferredKindAnnotation, inferredAnnotation)
             )
             _checkedTypeAliasDecls.put(inferredIdent.name, result)
             _isCheckingDefinitionForTypeAlias -= ident.name
@@ -74,8 +75,13 @@ final class TypeChecker(
     }
   }
 
-  private def setTypeVar(loc: Loc, errors: ListBuffer[diagnostics.Diagnostic])(symbol: Symbol, typ: Type): Unit = {
+  private def setTypeVar(
+    loc: Loc,
+    errors: ListBuffer[diagnostics.Diagnostic]
+  )(symbol: Symbol, typ: Type, kindAnnotation: Option[T.KindAnnotation]): Unit = {
+    val kind = kindAnnotation.map(kindAnnotationToKind).getOrElse(Kind.Star)
     if (occursIn(symbol, typ)) {
+      ctx.setKindOfSymbol(symbol, kind)
       errors.append(
         Diagnostic(
           loc = loc,
@@ -84,7 +90,15 @@ final class TypeChecker(
         )
       )
     } else {
+      ctx.setKindOfSymbol(symbol, kind)
       ctx.setTypeVar(symbol, typ)
+    }
+  }
+
+  private def kindAnnotationToKind(annot: T.KindAnnotation): Kind = {
+    annot.variant match {
+      case T.KindAnnotation.Star => Kind.Star
+      case T.KindAnnotation.Error => Kind.Star
     }
   }
 
@@ -411,7 +425,7 @@ final class TypeChecker(
     val typ = if (func.genericParams.isEmpty) {
       innerTyp
     } else {
-      Forall(func.genericParams.map(param => param.ident.name), innerTyp)
+      Forall(inferGenericParams(func.genericParams).map(_.ident.name), innerTyp)
     }
     T.Expr(
       meta = expr.meta.typed,
@@ -503,7 +517,8 @@ final class TypeChecker(
             ()
           } else {
             val funcGenericParam = func.genericParams(i)
-            setTypeVar(funcGenericParam.loc, errors)(funcGenericParam.ident.name, Var(expectedParam))
+            val inferredKindAnnot = funcGenericParam.kindAnnotation.map(inferKindAnnotation)
+            setTypeVar(funcGenericParam.loc, errors)(funcGenericParam.ident.name, Var(expectedParam), inferredKindAnnot)
           }
           i += 1
         }
@@ -566,13 +581,7 @@ final class TypeChecker(
           case None =>
             checkExpr(func.body, to)
         }
-        val checkedGenericParams = func.genericParams.map(p => {
-          T.GenericParam(
-            meta = p.meta.typed,
-            kindAnnotation = p.kindAnnotation.map(inferKindAnnotation),
-            ident = inferIdent(p.ident)
-          )
-        })
+        val checkedGenericParams = inferGenericParams(func.genericParams).toVector
         T.Expr(
           meta = expr.meta.typed,
           typ = typ,
@@ -600,6 +609,18 @@ final class TypeChecker(
           )
         )
     }
+  }
+
+  private def inferGenericParams(params: Iterable[Named.GenericParam]): Iterable[T.GenericParam] = {
+    params.map(param => {
+      val kindAnnotation = param.kindAnnotation.map(inferKindAnnotation)
+      ctx.setKindOfSymbol(param.ident.name, kindAnnotation.map(kindAnnotationToKind).getOrElse(Kind.Star))
+      T.GenericParam(
+        meta = param.meta.typed,
+        kindAnnotation = kindAnnotation,
+        ident = inferIdent(param.ident)
+      )
+    })
   }
 
   /**
@@ -632,7 +653,7 @@ final class TypeChecker(
           case Some(scope) =>
             scope.declMap.get(v).flatMap(_.get) match {
               case Some(
-                decl@N.Declaration(_, N.Declaration.TypeAlias(ident, _))) =>
+                decl@N.Declaration(_, N.Declaration.TypeAlias(ident, _, _))) =>
                 _checkedTypeAliasDecls.put(
                   ident.name,
                   inferDeclaration(decl)
@@ -799,13 +820,7 @@ final class TypeChecker(
         T.TypeAnnotation.Var(inferIdent(ident))
       case N.TypeAnnotation.Forall(scope, params, innerAnnotation) =>
         val inferredInner = inferAnnotation(innerAnnotation)
-        val inferredParams = params.map(param => {
-          T.GenericParam(
-            meta = param.meta.typed,
-            kindAnnotation = param.kindAnnotation.map(inferKindAnnotation),
-            ident = inferIdent(param.ident)
-          )
-        })
+        val inferredParams = inferGenericParams(params.toVector)
         T.TypeAnnotation.Forall(scope, inferredParams, inferredInner)
       case N.TypeAnnotation.Func(params, retType) =>
         val inferredParams = params.map(param => {

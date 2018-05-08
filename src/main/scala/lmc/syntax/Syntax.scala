@@ -228,8 +228,11 @@ trait Syntax {
         case Let(pattern, rhs) => List(pattern, rhs)
         case Extern(name, annotation) =>
           List(name, annotation)
-        case TypeAlias(_, typeAnnotation) =>
-          List(typeAnnotation)
+        case TypeAlias(_, kindAnnotation, typeAnnotation) =>
+          kindAnnotation match {
+            case Some(k) => List(k, typeAnnotation)
+            case None => List(typeAnnotation)
+          }
         case Error() => List()
       }
     }
@@ -239,7 +242,7 @@ trait Syntax {
         s"let $pattern = $rhs"
     }
     case class Extern(name: Ident, typeAnnotation: TypeAnnotation) extends T
-    case class TypeAlias(name: Ident, typeAnnotation: TypeAnnotation) extends T
+    case class TypeAlias(name: Ident, kindAnnotation: Option[KindAnnotation], typeAnnotation: TypeAnnotation) extends T
     case class Error() extends T
 
   }
@@ -269,9 +272,13 @@ trait Syntax {
       override def children: Iterable[Node] =
         this match {
           case Star => List.empty
+          case KFun(from, to) => List(from, to)
+          case Error => List.empty
         }
     }
     case object Star extends T
+    case class KFun(from: KindAnnotation, to: KindAnnotation) extends T
+    case object Error extends T
   }
 
   case class Declaration(
