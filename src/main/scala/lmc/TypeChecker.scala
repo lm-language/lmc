@@ -13,6 +13,11 @@ final class TypeChecker(
 ) {
   import lmc.syntax.{Named => N, Typed => T}
 
+  private val _checkedTypeAliasDecls =
+    mutable.HashMap.empty[Symbol, T.Declaration]
+  private val _isCheckingDefinitionForTypeAlias =
+    mutable.Set.empty[Symbol]
+
   def inferSourceFile(parsed: Parsed.SourceFile): T.SourceFile = {
     val named = new Renamer(ctx).renameSourceFile(parsed)
     val inferredDeclarations = named.declarations.map(inferDeclaration)
@@ -41,11 +46,63 @@ final class TypeChecker(
           decl.meta.typed,
           T.Declaration.Extern(inferredIdent, inferredAnnotation)
         )
+      case N.Declaration.TypeAlias(ident, annotation) =>
+        _checkedTypeAliasDecls.get(ident.name) match {
+          case Some(d) if d.meta.id == decl.meta.id =>
+            d
+          case _ =>
+            _isCheckingDefinitionForTypeAlias += ident.name
+            val inferredIdent = inferIdent(ident)
+            val inferredAnnotation = inferAnnotation(annotation)
+            val typ = annotationToType(inferredAnnotation)
+            val errors = ListBuffer.empty[Diagnostic]
+            setTypeVar(ident.loc, errors)(inferredIdent.name, typ)
+            val result = T.Declaration(
+              decl.meta.typed.withDiagnostics(errors),
+              T.Declaration.TypeAlias(inferredIdent, inferredAnnotation)
+            )
+            _checkedTypeAliasDecls.put(inferredIdent.name, result)
+            _isCheckingDefinitionForTypeAlias -= ident.name
+            result
+        }
+
       case N.Declaration.Error() =>
         T.Declaration(
           decl.meta.typed,
           T.Declaration.Error()
         )
+    }
+  }
+
+  private def setTypeVar(loc: Loc, errors: ListBuffer[diagnostics.Diagnostic])(symbol: Symbol, typ: Type): Unit = {
+    if (occursIn(symbol, typ)) {
+      errors.append(
+        Diagnostic(
+          loc = loc,
+          severity = Severity.Error,
+          variant = CyclicType
+        )
+      )
+    } else {
+      ctx.setTypeVar(symbol, typ)
+    }
+  }
+
+  private def occursIn(symbol: Symbol, t: Type): Boolean = {
+    t match {
+      case Var(sym) if symbol.id == sym.id => true
+      case Var(_)  => false
+      case (
+        Primitive.Unit
+        | Primitive.Bool
+        | Primitive.Int
+        | ErrorType
+      ) => false
+      case Func(from, to) =>
+        occursIn(symbol, to) || from.exists(t => occursIn(symbol, t._2))
+      case Forall(_, typ) =>
+        occursIn(symbol, typ)
+      case Existential(_, _) => false
     }
   }
 
@@ -419,7 +476,7 @@ final class TypeChecker(
         _
       )=>
         val inferredExpr = inferExpr(expr)
-        val errors = assertSubType(expr.loc)(inferredExpr.typ, typ)
+        val errors = assertSubType(expr.meta)(inferredExpr.typ, typ)
         inferredExpr.copy(
           meta = inferredExpr.meta.withDiagnostics(errors)
         )
@@ -434,16 +491,24 @@ final class TypeChecker(
     typ match {
       case Forall(params, innerTyp) =>
         var i = 0
+        val errors = ListBuffer.empty[Diagnostic]
         for (expectedParam <- params) {
           if (i >= func.genericParams.length) {
             ()
           } else {
             val funcGenericParam = func.genericParams(i)
-            ctx.setTypeVar(funcGenericParam.ident.name, Var(expectedParam))
+            setTypeVar(funcGenericParam.loc, errors)(funcGenericParam.ident.name, Var(expectedParam))
           }
           i += 1
         }
-        checkFunc(expr, func, innerTyp)
+        val f = checkFunc(expr, func, innerTyp)
+        if (errors.isEmpty) {
+          f
+        } else {
+          f.copy(
+            meta = f.meta.withDiagnostics(errors)
+          )
+        }
       case Func(from, to) =>
         val funcParamsVec = func.params.toVector
         var i = 0
@@ -531,11 +596,56 @@ final class TypeChecker(
     }
   }
 
+  /**
+    * Checks if given type is a Var which is defined later in the
+    * file. If it is, check the declaration and cache it.
+    *
+    * e.g.
+    * let a: A = 23;
+    * type A = Int
+    *
+    * While checking let a ..., the type variable A is
+    * unresolved. So, we check if there's an unchecked declaration
+    * with the name A. In this case, there is (type A = Int) so,
+    * we check it which will add mapping A -> Int in context type vars.
+    * Because the mapping is now added, we can check 23 with Int.
+    * When we move to the type alias declaration, we already have the
+    * type checked version of it in cache so we simply return that.
+    * resolveForwardAlias(_, Var(A))
+    * @param meta
+    * @param typ
+    * @return
+    */
+  private def resolveForwardAlias(meta: N.Meta, typ: Type): Type = {
+    typ match {
+      case Var(v) =>
+        if (_isCheckingDefinitionForTypeAlias.contains(v)) {
+          throw new Error(s"circular type $v")
+        }
+        meta.scope.get match {
+          case Some(scope) =>
+            scope.declMap.get(v).flatMap(_.get) match {
+              case Some(
+                decl@N.Declaration(_, N.Declaration.TypeAlias(ident, _))) =>
+                _checkedTypeAliasDecls.put(
+                  ident.name,
+                  inferDeclaration(decl)
+                )
+                val resolved = resolveType(typ)
+                resolved
+              case _ => typ
+            }
+          case None => typ
+        }
+      case _ => typ
+    }
 
-  private def assertSubType(loc: Loc)(_a: Type, _b: Type): Iterable[Diagnostic] = {
+  }
 
-    val a = resolveType(_a)
-    val b = resolveType(_b)
+  private def assertSubType(meta: N.Meta)(_a: Type, _b: Type): Iterable[Diagnostic] = {
+
+    val a = resolveForwardAlias(meta, resolveType(_a))
+    val b = resolveForwardAlias(meta, resolveType(_b))
 
     val errors = ListBuffer.empty[Diagnostic]
     (a, b) match {
@@ -547,42 +657,42 @@ final class TypeChecker(
       case (Var(as), Var(bs)) if as.id == bs.id =>
         ()
       case (_, existential@Existential(_, _)) =>
-        instantiateR(loc)(a, existential)
+        instantiateR(meta)(a, existential)
       case (existential@Existential(_, _), _) =>
-        instantiateL(loc)(existential, b)
+        instantiateL(meta)(existential, b)
       case (Forall(params, innerTyp), _) =>
         val subst = mutable.Map.empty[Symbol, Type]
         for (param <- params) {
           subst.put(param, ctx.makeGenericType(param.text))
         }
         val substituted = applySubst(innerTyp, subst)
-        assertSubType(loc)(substituted, b)
+        assertSubType(meta)(substituted, b)
       case (_, _) =>
         errors.append(
           Diagnostic(
             TypeMismatch(b, a),
             Severity.Error,
-            loc
+            meta.loc
           )
         )
     }
     errors
   }
 
-  private def instantiateL(loc: Loc)(existential: Existential, t: Type): Iterable[Diagnostic] = {
+  private def instantiateL(meta: N.Meta)(existential: Existential, t: Type): Iterable[Diagnostic] = {
     ctx.getGeneric(existential.id) match {
       case Some(a) =>
-        assertSubType(loc)(a, t)
+        assertSubType(meta)(a, t)
       case None =>
         ctx.assignGeneric(existential.id, t)
         List.empty
     }
   }
 
-  private def instantiateR(loc: Loc)(a: Type, existential: Existential): Iterable[Diagnostic] = {
+  private def instantiateR(meta: N.Meta)(a: Type, existential: Existential): Iterable[Diagnostic] = {
     ctx.getGeneric(existential.id) match {
       case Some(b) =>
-        assertSubType(loc)(a, b)
+        assertSubType(meta)(a, b)
       case None =>
         ctx.assignGeneric(existential.id, a)
         List.empty
@@ -657,7 +767,7 @@ final class TypeChecker(
         )
       case _ => ()
     }
-    val resolvedType = resolveType(typ)
+    val resolvedType = resolveForwardAlias(ident.meta, typ)
     ctx.setTypeOfSymbol(ident.name, resolvedType)
     T.Ident(
       ident.meta.typed,
@@ -729,7 +839,7 @@ final class TypeChecker(
   private def checkAnnotation(annotation: N.TypeAnnotation, typ: Type): T.TypeAnnotation = {
     val inferredAnnotation = inferAnnotation(annotation)
     val annotTyp = annotationToType(inferredAnnotation)
-    val errors = assertSubType(annotation.loc)(annotTyp, typ)
+    val errors = assertSubType(annotation.meta)(annotTyp, typ)
     inferredAnnotation.copy(
       meta = inferredAnnotation.meta.withDiagnostics(errors)
     )

@@ -16,6 +16,8 @@ sealed trait Scope extends HasLoc {
   def parent: Option[WeakReference[Scope]]
   def children: Iterable[WeakReference[Scope]]
 
+  def declMap: collection.Map[Symbol, WeakReference[lmc.syntax.Named.Declaration]]
+
   def resolveTypeEntry(name: String): Option[TypeEntry] = {
     typeSymbols.get(name) match {
       case Some(n) => Some(n)
@@ -48,18 +50,14 @@ sealed trait Scope extends HasLoc {
 }
 
 object Scope {
-  val empty: Scope = new Scope {
-    override def parent: Option[WeakReference[Scope]] = None
-
-    override val symbols: Map[String, ScopeEntry] = Map()
-    override val typeSymbols: Map[String, TypeEntry] = Map()
-
-    override val children: Iterable[WeakReference[Scope]] = List()
-
-    override def getEntry(name: String): Option[ScopeEntry] = None
-
-    override lazy val loc: Loc = Loc(Paths.get(""), Pos(0, 0), Pos(0, 0))
-    override def typed: Scope = this
+  val empty: Scope = {
+    val scopeBuilder = ScopeBuilder(parent = None)
+    val loc = Loc(
+      path = Paths.get("<builtin>"),
+      start = Pos(0, 0),
+      end = Pos(0, 0))
+    scopeBuilder.setLoc(loc)
+    scopeBuilder
   }
 }
 
@@ -71,12 +69,21 @@ case class ScopeBuilder(
   private var _children: List[WeakReference[Scope]] = List()
   private var _loc: Loc = _
 
+  private val _declMap: mutable.HashMap[Symbol, WeakReference[lmc.syntax.Named.Declaration]] = mutable.HashMap.empty
+
   override def loc: Loc = _loc
 
   def setLoc(loc: Loc): Unit =
     _loc = loc
 
   override def typeSymbols: Map[String, TypeEntry] = _typeSymbols
+
+  override def declMap: collection.Map[Symbol, WeakReference[lmc.syntax.Named.Declaration]] =
+    _declMap
+
+  def addDeclaration(symbol: Symbol, decl: WeakReference[lmc.syntax.Named.Declaration]): Unit = {
+    _declMap.put(symbol, decl)
+  }
 
   override def children: Iterable[WeakReference[Scope]] = _children
 

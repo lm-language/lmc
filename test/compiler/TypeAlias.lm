@@ -1,0 +1,18 @@
+let a: A = 20;
+let b: A = true;
+let c: Int = a;
+let d = a;
+let x: X = 23;
+
+type A = Int;
+
+type X = Y;
+type Y = X;
+type Cyclic = Cyclic;
+type CyclicFuncType =
+  fn() => CyclicFuncType;
+
+type CyclicForall = forall [A] fn(CyclicForall) => A;
+
+type B = Int;
+type B = Bool;

@@ -6,6 +6,7 @@ import lmc.types.{Type, Kind}
 trait Context {
   val PrimitiveScope: Scope
   def makeSymbol(text: String): Symbol
+  def nextMetaId(): Int
 }
 object Context {
   trait TC extends Context {
@@ -20,6 +21,7 @@ object Context {
     def getGeneric(n: Int): Option[Type]
 
     def getVars(): collection.Map[Symbol, Type]
+
   }
 }
 

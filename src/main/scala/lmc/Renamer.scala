@@ -4,6 +4,8 @@ import lmc.syntax.{Named => N, Parsed => P}
 import lmc.common.{ScopeBuilder, ScopeEntry, Symbol}
 import lmc.diagnostics._
 
+import scala.ref.WeakReference
+
 class Renamer(
   ctx: Context
 ) {
@@ -43,18 +45,32 @@ class Renamer(
         val namedIdent = renameVariableIdent(ident)
         val namedExpr = renameAnnotation(annotation)
         (N.Declaration.Extern(namedIdent, namedExpr), List.empty)
+      case P.Declaration.TypeAlias(ident, annotation) =>
+        val namedIdent = renameTypeIdent(ident)
+        val namedAnnotation = renameAnnotation(annotation)
+        (N.Declaration.TypeAlias(namedIdent, namedAnnotation), List.empty)
       case P.Declaration.Error() =>
         (N.Declaration.Error(), List.empty)
     }
-    N.Declaration(
+    val result = N.Declaration(
       meta = decl.meta.copy(
         diagnostics = decl.meta.diagnostics ++ diagnostics
       ).named,
       variant = variant
     )
+    addDeclToScope(WeakReference(result))
+    result
   }
 
-  def renamePattern(pattern: P.Pattern, annotation: Option[P.TypeAnnotation] = None): N.Pattern = {
+  private def addDeclToScope(declaration: WeakReference[N.Declaration]): Unit = {
+    declaration.get.map(_.variant) match {
+      case Some(N.Declaration.TypeAlias(ident, _)) =>
+        addDecl(ident.name, declaration)
+      case _ => ()
+    }
+  }
+
+  private def renamePattern(pattern: P.Pattern, annotation: Option[P.TypeAnnotation] = None): N.Pattern = {
     val (namedVariant, diagnostics: Iterable[Diagnostic]) = pattern.variant match {
       case P.Pattern.Var(ident) =>
         val namedIdent = renameVariableIdent(ident)
@@ -274,6 +290,10 @@ class Renamer(
       case None =>
         throw new Error(s"Compiler bug: No typeVar symbol for $ident; Check binder")
     }
+  }
+
+  private def addDecl(symbol: Symbol, decl: WeakReference[N.Declaration]): Unit = {
+    _scopes.head.addDeclaration(symbol, decl)
   }
 
   def renameVariableIdent(ident: P.Ident): N.Ident = {

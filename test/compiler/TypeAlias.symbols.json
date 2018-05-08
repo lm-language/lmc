@@ -1,0 +1,48 @@
+{
+  "loc" : {
+    "start" : {
+      "line" : 1,
+      "column" : 1
+    },
+    "end" : {
+      "line" : 19,
+      "column" : 1
+    }
+  },
+  "symbols" : {
+    "x" : {
+      "typ" : "Var(Y)"
+    },
+    "a" : {
+      "typ" : "Int"
+    },
+    "b" : {
+      "typ" : "Int"
+    },
+    "c" : {
+      "typ" : "Int"
+    },
+    "d" : {
+      "typ" : "Int"
+    }
+  },
+  "children" : [
+    {
+      "loc" : {
+        "start" : {
+          "line" : 15,
+          "column" : 21
+        },
+        "end" : {
+          "line" : 15,
+          "column" : 52
+        }
+      },
+      "symbols" : {
+        
+      },
+      "children" : [
+      ]
+    }
+  ]
+}

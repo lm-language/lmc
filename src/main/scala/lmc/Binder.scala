@@ -93,6 +93,32 @@ class Binder(
           meta = decl.meta,
           variant = Extern(boundIdent, newAnnotation)
         )
+      case TypeAlias(ident, annotation) =>
+        val error = currentScope.typeSymbols.get(ident.name) match {
+          case Some(_) =>
+            Some(
+              Diagnostic(
+                loc = ident.loc,
+                variant = DuplicateBinding(
+                  ident.name
+                ),
+                severity = Severity.Error
+              )
+            )
+          case None => None
+        }
+        val boundAnnotation = bindAnnotation(annotation)
+        bindTypeVar(ident.name)
+        val boundIdent = ident
+        val result = decl.copy(
+          meta = decl.meta,
+          variant = TypeAlias(boundIdent, boundAnnotation)
+        )
+        error match {
+          case Some(e) =>
+            result.copy(meta = result.meta.withDiagnostic(e))
+          case None => result
+        }
       case Error() =>
         decl
     }

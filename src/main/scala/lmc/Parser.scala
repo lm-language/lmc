@@ -149,10 +149,10 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     val errors = collection.mutable.ListBuffer.empty[Diagnostic]
     val endToken = expect(errors)(EOF)
     val loc = Loc.between(startToken, endToken)
-    val meta = Meta(
+    val meta = makeMeta(
       loc,
       WeakReference(scope),
-      errors
+      errors.toList
     )
     SourceFile(
       meta,
@@ -160,6 +160,18 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       scope = scope
     )
   })
+
+  private def makeMeta(
+    loc: Loc,
+    scope: WeakReference[Scope],
+    diagnostics: Iterable[Diagnostic] = List.empty
+  ): Meta =
+    Meta(
+      loc = loc,
+      scope = scope,
+      id = ctx.nextMetaId(),
+      diagnostics = diagnostics
+    )
 
   def parseDeclaration: Declaration = {
     currentToken.variant match {
@@ -171,10 +183,10 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val expr = parseExpr()
         expect(errors)(SEMICOLON)
         Declaration(
-          meta = Meta(
+          meta = makeMeta(
             loc = Loc.between(startTok, expr),
             scope = scope(),
-            diagnostics = errors
+            diagnostics = errors.toList
           ),
           variant = Declaration.Let(pattern, expr)
         )
@@ -184,7 +196,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val identTokErrors = ListBuffer.empty[Diagnostic]
         val identTok = expect(identTokErrors)(ID)
         val ident = Ident(
-          meta = Meta(
+          meta = makeMeta(
             loc = identTok.loc,
             diagnostics = identTokErrors.toList,
             scope = scope()
@@ -195,12 +207,27 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val annotation = parseTypeAnnotation()
         expect(errors)(SEMICOLON)
         Declaration(
-          meta = Meta(
+          meta = makeMeta(
             loc = Loc.between(startTok, identTok),
-            diagnostics = List.empty,
+            diagnostics = errors.toList,
             scope = scope()
           ),
           variant = Declaration.Extern(ident, annotation)
+        )
+      case TYPE =>
+        val errors = ListBuffer.empty[Diagnostic]
+        val startTok = advance()
+        val ident = parseIdent()
+        expect(errors)(EQ)
+        val annotation = parseTypeAnnotation()
+        expect(errors)(SEMICOLON)
+        Declaration(
+          meta = makeMeta(
+            loc = Loc.between(startTok, annotation),
+            diagnostics = errors.toList,
+            scope = scope()
+          ),
+          variant = Declaration.TypeAlias(ident, annotation)
         )
       case _ =>
         val loc = currentToken.loc
@@ -214,7 +241,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         addDiagnostics(diagnostics)
         addDiagnostics(skippedDiagnostics)
         Declaration(
-          meta = Meta(
+          meta = makeMeta(
             loc = currentToken.loc,
             scope(),
             diagnostics ++ skippedDiagnostics
@@ -230,7 +257,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val tok = advance()
         val value = tok.lexeme.replaceAll("_", "").toInt
         Expr(
-          meta = Meta(loc = tok.loc, scope()),
+          meta = makeMeta(loc = tok.loc, scope()),
           typ = (),
           variant = Expr.Literal(Expr.LInt(value))
         )
@@ -259,7 +286,11 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           expect(errors)(FATARROW)
           val body = parseExpr()
           Expr(
-            meta = Meta(loc = Loc.between(startTok, body), scope = parentScope),
+            meta = makeMeta(
+              loc = Loc.between(startTok, body),
+              scope = parentScope,
+              errors.toList
+            ),
             typ = (),
             variant = Expr.Func(
               startTok,
@@ -273,7 +304,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         })
       case ID =>
         val tok = advance()
-        val meta = Meta(loc = tok.loc, scope())
+        val meta = makeMeta(loc = tok.loc, scope())
         Expr(
           meta = meta,
           typ = (),
@@ -291,7 +322,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         addDiagnostics(diagnostics)
         addDiagnostics(skippedDiagnostics)
         Expr(
-          meta = Meta(
+          meta = makeMeta(
             loc = currentToken.loc,
             scope(),
             diagnostics ++ skippedDiagnostics
@@ -311,7 +342,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val args = parseCommaSeperatedList(parseArg)(Parser.ARG_PREDICTORS).toVector
         val rparen = expect(errors)(RPAREN)
         Expr(
-          meta = Meta(
+          meta = makeMeta(
             scope = head.meta.scope,
             loc = Loc.between(head, rparen),
             diagnostics = errors
@@ -341,7 +372,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     val pattern = currentToken.variant match {
       case ID =>
         val tok = advance()
-        val meta = Meta(loc = tok.loc, scope())
+        val meta = makeMeta(loc = tok.loc, scope())
         Pattern(
           meta = meta,
           typ = (),
@@ -365,7 +396,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         addDiagnostics(diagnostics)
         addDiagnostics(skippedDiagnostics)
         Pattern(
-          meta = Meta(
+          meta = makeMeta(
             loc = currentToken.loc,
             scope(),
             diagnostics ++ skippedDiagnostics
@@ -379,7 +410,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         advance()
         val annotation = parseTypeAnnotation()
         Pattern(
-          meta = Meta(
+          meta = makeMeta(
             loc = Loc.between(pattern, annotation),
             scope()
           ),
@@ -410,7 +441,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
            val genericParams = parseGenericParamsList()
            expect(errors)(RSQB)
            val annotation = parseTypeAnnotation()
-           val meta = Meta(
+           val meta = makeMeta(
              loc = Loc.between(firstTok, annotation),
              diagnostics = errors,
              scope = this.scope()
@@ -424,7 +455,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
          })
        case ID =>
          val tok = advance()
-         val meta = Meta(
+         val meta = makeMeta(
            loc = tok.loc,
            scope = scope()
          )
@@ -443,7 +474,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
                val labelErrs = ListBuffer.empty[Diagnostic]
                val labelTok = expect(labelErrs)(ID)
                advance() // consume colon
-               val meta = Meta(
+               val meta = makeMeta(
                  loc = labelTok.loc,
                  diagnostics = labelErrs,
                  scope = scope()
@@ -461,9 +492,10 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
          expect(errors)(RPAREN)
          expect(errors)(FATARROW)
          val returnType = parseTypeAnnotation()
-         val meta = Meta(
+         val meta = makeMeta(
            loc = Loc.between(startTok, returnType),
-           scope = scope()
+           scope = scope(),
+           errors.toList
          )
          TypeAnnotation(meta, TypeAnnotation.Func(params, returnType))
        case _ =>
@@ -477,7 +509,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
          addDiagnostics(diagnostics)
          addDiagnostics(skippedDiagnostics)
          TypeAnnotation(
-           meta = Meta(
+           meta = makeMeta(
              loc = currentToken.loc,
              scope(),
              diagnostics ++ skippedDiagnostics
@@ -501,7 +533,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   private def parseGenericParam(): GenericParam = {
     val ident = parseIdent()
 
-    val meta = Meta(
+    val meta = makeMeta(
       loc = ident.loc,
       diagnostics = List.empty,
       scope = scope()
@@ -513,7 +545,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     val errors = ListBuffer.empty[Diagnostic]
     val tok = expect(errors)(ID)
     Ident(
-      Meta(
+      makeMeta(
         loc = tok.loc,
         scope = scope(),
         diagnostics = errors

@@ -28,6 +28,7 @@ object diagnostics {
   case object ExtraArg extends Variant
   case class DuplicateLabelArg(name: String) extends Variant
   case class NoSuchParamLabel(name: String) extends Variant
+  case object CyclicType extends Variant
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {
       val paramsStr = params.foldLeft("")(

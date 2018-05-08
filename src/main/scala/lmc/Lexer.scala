@@ -26,7 +26,8 @@ object Lexer {
     "let" -> LET,
     "fn" -> FN,
     "extern" -> EXTERN,
-    "forall" -> FORALL
+    "forall" -> FORALL,
+    "type" -> TYPE
   )
   val OPERATOR_TOKENS = Map(
     "==" -> EQEQ,

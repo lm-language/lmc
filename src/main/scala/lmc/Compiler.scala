@@ -21,6 +21,7 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   private val _typeVariables = mutable.Map.empty[Symbol, Type]
   private var _nextGenericId = 0
   private val _generics = mutable.Map.empty[Int, Type]
+  private var _nextNodeId = 0
 
   override def getVars(): collection.Map[Symbol, Type] = _symbolTypes
   override val PrimitiveScope: Scope = {
@@ -60,6 +61,12 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
     Future.unit
   }
 
+  override def nextMetaId(): Int = {
+    val id = _nextNodeId
+    _nextNodeId += 1
+    id
+  }
+
   def getCheckedSourceFile(path: Path): Typed.SourceFile = {
     _typedSourceFiles.get(path) match {
       case Some(sf) =>
@@ -80,7 +87,6 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
     _symbolKinds.get(symbol)
   }
-
 
   override def setTypeVar(symbol: Symbol, typ: Type): Unit = {
     _typeVariables.update(symbol, typ)

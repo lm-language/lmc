@@ -11,6 +11,7 @@ trait Syntax {
   type _Type
 
   case class Meta(
+    id: Int,
     loc: Loc,
     scope: WeakReference[_Scope],
     diagnostics: Iterable[Diagnostic] = List()
@@ -211,7 +212,6 @@ trait Syntax {
     }
   }
 
-
   case class Expr(
     meta: Meta,
     typ: _Type,
@@ -228,6 +228,8 @@ trait Syntax {
         case Let(pattern, rhs) => List(pattern, rhs)
         case Extern(name, annotation) =>
           List(name, annotation)
+        case TypeAlias(_, typeAnnotation) =>
+          List(typeAnnotation)
         case Error() => List()
       }
     }
@@ -237,6 +239,7 @@ trait Syntax {
         s"let $pattern = $rhs"
     }
     case class Extern(name: Ident, typeAnnotation: TypeAnnotation) extends T
+    case class TypeAlias(name: Ident, typeAnnotation: TypeAnnotation) extends T
     case class Error() extends T
 
   }
