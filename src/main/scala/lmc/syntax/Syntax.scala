@@ -10,6 +10,7 @@ trait Syntax {
   type Name
   type _Scope <: Scope
   type _Type
+  type _Kind
 
   case class Meta(
     id: Int,
@@ -102,6 +103,7 @@ trait Syntax {
 
   case class TypeAnnotation(
     meta: Meta,
+    kind: _Kind,
     variant: TypeAnnotation.Variant
   ) extends NodeOps(meta) with Node with HasVariant[TypeAnnotation.Variant] { self =>
     override def children: Iterable[Node] = variant.children
@@ -268,6 +270,7 @@ trait Syntax {
 
   case class GenericParam(
     meta: Meta,
+    kind: _Kind,
     ident: Ident,
     kindAnnotation: Option[KindAnnotation]
   ) extends NodeOps(meta) with HasMeta with Node {

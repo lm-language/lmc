@@ -509,6 +509,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
            )
            TypeAnnotation(
              meta = meta,
+             kind = (),
              variant = TypeAnnotation.Forall(
                scope, genericParams, annotation
              )
@@ -524,7 +525,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
            meta = meta,
            name = tok.lexeme
          )
-         TypeAnnotation(meta, TypeAnnotation.Var(ident))
+         TypeAnnotation(meta, (), TypeAnnotation.Var(ident))
        case FN =>
          val startTok = advance()
          val errors = ListBuffer.empty[Diagnostic]
@@ -558,7 +559,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
            scope = scope(),
            errors.toList
          )
-         TypeAnnotation(meta, TypeAnnotation.Func(params, returnType))
+         TypeAnnotation(meta, (), TypeAnnotation.Func(params, returnType))
        case _ =>
          val loc = currentToken.loc
          val skippedDiagnostics = recover()
@@ -575,6 +576,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
              scope(),
              diagnostics ++ skippedDiagnostics
            ),
+           kind = (),
            variant = TypeAnnotation.Error
          )
      }
@@ -596,6 +598,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
               loc = Loc.between(head, rsqb),
               scope = scope()
             ),
+            kind = (),
             variant = TypeAnnotation.TApplication(head, args)
           )
         )
@@ -628,7 +631,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       diagnostics = List.empty,
       scope = scope()
     )
-    GenericParam(meta, ident, kindAnnotation)
+    GenericParam(meta, (), ident, kindAnnotation)
   }
 
   private def parseIdent(): Ident = {

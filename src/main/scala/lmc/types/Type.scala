@@ -15,7 +15,9 @@ object Primitive {
 
 case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
-case class TApplication(tFunc: Type, arg: Type) extends Type
+case class TApplication(tFunc: Type, arg: Type) extends Type {
+  override def toString: String = s"$tFunc[$arg]"
+}
 
 /**
   * This type represents an as of un-inferred but
@@ -60,9 +62,30 @@ case class Func(
 object Func {
   type Param = (Option[Symbol], Type)
 }
-case class Forall(params: Iterable[Symbol], typ: Type) extends Type {
-  override def toString: String =
-    s"([${utils.joinIterable(params)}] => $typ)"
+case class Forall(param: Symbol, typ: Type) extends Type {
+  override def toString: String = {
+    val inner = _innerTyp(this)
+    val params = _params(this)
+    s"([${utils.joinIterable(params)}] => $inner)"
+  }
+
+  private def _params(t: Type): List[Symbol] = {
+    t match {
+      case Forall(p, t1) => p::_params(t1)
+      case _ => List.empty
+    }
+  }
+
+  private def _innerTyp(t: Type): Type = {
+    t match {
+      case Forall(_, t1) => _innerTyp(t1)
+      case _ => t
+    }
+  }
 }
 
+sealed trait Variance
+case object CoVariance
+case object ContraVariance
+case object InVariance
 

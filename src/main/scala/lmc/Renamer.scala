@@ -152,6 +152,7 @@ class Renamer(
       meta = annotation.meta.copy(
         diagnostics = annotation.meta.diagnostics ++ diagnostics
       ).named,
+      (),
       variant = variant
     )
   }
@@ -165,6 +166,7 @@ class Renamer(
     val renamedKindAnnotation = param.kindAnnotation.map(renameKindAnnotation)
     N.GenericParam(
       meta = param.meta.named,
+      kind = (),
       ident = renamedIdent,
       kindAnnotation =  renamedKindAnnotation
     )

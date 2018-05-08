@@ -1,0 +1,46 @@
+{
+  "diagnostics" : [
+    {
+      "loc" : {
+        "start" : {
+          "line" : 8,
+          "column" : 43
+        },
+        "end" : {
+          "line" : 8,
+          "column" : 43
+        }
+      },
+      "severity" : "Error",
+      "message" : "KindMismatch(*,([*] => *))"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 9,
+          "column" : 53
+        },
+        "end" : {
+          "line" : 9,
+          "column" : 55
+        }
+      },
+      "severity" : "Error",
+      "message" : "KindMismatch(*,([*] => *))"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 16,
+          "column" : 26
+        },
+        "end" : {
+          "line" : 16,
+          "column" : 32
+        }
+      },
+      "severity" : "Error",
+      "message" : "TypeMismatch(Bool,Int)"
+    }
+  ]
+}

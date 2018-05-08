@@ -5,7 +5,9 @@ import lmc.syntax._
 import lmc.common.{Loc, Symbol}
 import lmc.diagnostics._
 import lmc.types._
+import lmc.utils.Debug
 
+import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 
 final class TypeChecker(
@@ -27,7 +29,7 @@ final class TypeChecker(
   }
 
   private def inferDeclaration(decl: N.Declaration): T.Declaration = {
-    decl.variant match {
+    val result = decl.variant match {
       case N.Declaration.Let(pattern, rhs) =>
         val (checkedPattern, checkedRhs) = assignExprToPattern(pattern, rhs)
         T.Declaration(
@@ -37,6 +39,7 @@ final class TypeChecker(
           )
         )
       case N.Declaration.Extern(ident, annotation) =>
+        Debug.log(s"inferDecl(extern $ident: $annotation)")
         val inferredAnnotation = inferAnnotation(annotation)
         val typ = annotationToType(inferredAnnotation)
         val inferredIdent = checkIdent(ident, typ)
@@ -68,6 +71,7 @@ final class TypeChecker(
           T.Declaration.Error()
         )
     }
+    result
   }
 
   private def inferTypeDeclHelper(
@@ -97,7 +101,16 @@ final class TypeChecker(
 
   private def checkTypeAnnotation(expectedKind: Kind)(annotation: N.TypeAnnotation): T.TypeAnnotation = {
     val errors = ListBuffer.empty[Diagnostic]
-    ???
+    val inferred = inferAnnotation(annotation)
+    Debug.log(s"checking kind eqality ${inferred.kind}, $expectedKind")
+    if (inferred.kind != expectedKind) {
+      addKindMismatchError(errors, annotation.loc)(expectedKind,  inferred.kind)
+      inferred.copy(
+        meta = inferred.meta.withDiagnostics(errors.toVector)
+      )
+    } else {
+      inferred
+    }
   }
 
   private def addKindMismatchError(errors: ListBuffer[Diagnostic], loc: Loc)
@@ -111,24 +124,6 @@ final class TypeChecker(
     )
   }
 
-  private def getKind(t: Type): Kind = {
-    t match {
-      case Var(sym) =>
-        ctx.getKindOfSymbol(sym).getOrElse(Kind.Star)
-      case (
-        Primitive.Int
-        | Primitive.Bool
-        | Primitive.Unit
-        | ErrorType
-        ) =>
-        Kind.Star
-      case Func(_, _) =>
-        Kind.Star
-      case Forall(params, ty) =>
-        params.foldRight(getKind(ty))((f, arg) => Kind.KFun(Kind.Star, arg))
-    }
-  }
-
 
   private def setTypeVar(
     loc: Loc,
@@ -136,6 +131,7 @@ final class TypeChecker(
   )(symbol: Symbol, kindAnnotation: Option[T.KindAnnotation], typOpt: Option[Type] = None): Unit = {
 
     val kind = kindAnnotation.map(kindAnnotationToKind).getOrElse(Kind.Star)
+    Debug.log(s"setTypeVar($symbol, $kind, $typOpt)")
     ctx.setKindOfSymbol(symbol, kind)
     typOpt match  {
       case None => ()
@@ -242,17 +238,19 @@ final class TypeChecker(
     }
   }
 
+  private def instantiateForall(typ: Type): Type = {
+    typ match {
+      case Forall(param, innerTyp) =>
+        val subst = mutable.Map.empty[Symbol, Type]
+        subst.put(param, ctx.makeGenericType(param.text))
+        instantiateForall(applySubst(innerTyp, subst))
+      case _ => typ
+    }
+  }
+
   private def inferCall(expr: N.Expr, call: N.Expr.Call): T.Expr = {
     val inferredFunc = inferExpr(call.func)
-    val typ = inferredFunc.typ match {
-      case Forall(params, innerTyp) =>
-        val subst = mutable.Map.empty[Symbol, Type]
-        for (param <- params) {
-          subst.put(param, ctx.makeGenericType(param.text))
-        }
-        applySubst(innerTyp, subst)
-      case t => t
-    }
+    val typ = instantiateForall(inferredFunc.typ)
     val inferredExpr = typ match {
       case Func(from, to) =>
         val expectedLabeledArgs = from.filter({ _._1.isDefined }).map(arg => {
@@ -457,6 +455,7 @@ final class TypeChecker(
 
   private def inferFunc(expr: N.Expr, func: N.Expr.Func): T.Expr = {
     var inferringPositional = true
+    val inferredGenericParams = inferGenericParams(func.genericParams)
     val inferredParams = func.params.map(param => {
       var inferredPattern = inferPattern(param.pattern)
       getPatternLabel(inferredPattern) match {
@@ -479,7 +478,7 @@ final class TypeChecker(
     })
     val (checkedBody, checkedReturnTypeAnnotation) = func.returnTypeAnnotation match {
       case Some(t) =>
-        val checkedRetTypAnnotation = inferAnnotation(t)
+        val checkedRetTypAnnotation = checkTypeAnnotation(Kind.Star)(t)
         val expectedRetTyp = annotationToType(checkedRetTypAnnotation)
         (checkExpr(func.body, expectedRetTyp), Some(checkedRetTypAnnotation))
       case None =>
@@ -492,7 +491,7 @@ final class TypeChecker(
     val typ = if (func.genericParams.isEmpty) {
       innerTyp
     } else {
-      Forall(inferGenericParams(func.genericParams).map(_.ident.name), innerTyp)
+      makeForall(inferredGenericParams.map(_.ident.name), innerTyp)
     }
     T.Expr(
       meta = expr.meta.typed,
@@ -526,7 +525,7 @@ final class TypeChecker(
             List(diagnostic)
           )
         case N.Pattern.Annotated(inner, annotation) =>
-          val inferredAnnotation = inferAnnotation(annotation)
+          val inferredAnnotation = checkTypeAnnotation(Kind.Star)(annotation)
           val annotationTyp = annotationToType(inferredAnnotation)
           val checkedPattern = checkPattern(inner, annotationTyp)
           (
@@ -549,6 +548,14 @@ final class TypeChecker(
       case T.Pattern.Var(ident) => Some(ident.name)
       case T.Pattern.Annotated(p, _) =>
         getPatternLabel(p)
+      case _ => None
+    }
+  }
+  private def getPatternLabelStr(pattern: N.Pattern): Option[Symbol] = {
+    pattern.variant match {
+      case N.Pattern.Var(ident) => Some(ident.name)
+      case N.Pattern.Annotated(p, _) =>
+        getPatternLabelStr(p)
       case _ => None
     }
   }
@@ -576,20 +583,24 @@ final class TypeChecker(
 
   private def checkFunc(expr: N.Expr, func: Named.Expr.Func, typ: Type): T.Expr = {
     typ match {
-      case Forall(params, innerTyp) =>
-        var i = 0
+      case Forall(expectedParam, innerTyp) =>
         val errors = ListBuffer.empty[Diagnostic]
-        for (expectedParam <- params) {
-          if (i >= func.genericParams.length) {
-            ()
-          } else {
-            val funcGenericParam = func.genericParams(i)
-            val inferredKindAnnot = funcGenericParam.kindAnnotation.map(inferKindAnnotation)
-            setTypeVar(funcGenericParam.loc, errors)(funcGenericParam.ident.name, inferredKindAnnot, Some(Var(expectedParam)))
-          }
-          i += 1
+        if (func.genericParams.length < 1) {
+          ()
+        } else {
+          val funcGenericParam = func.genericParams.head
+          val inferredKindAnnot = funcGenericParam.kindAnnotation.map(inferKindAnnotation)
+          setTypeVar(
+            funcGenericParam.loc, errors
+          )(funcGenericParam.ident.name, inferredKindAnnot, Some(Var(expectedParam)))
         }
-        val f = checkFunc(expr, func, innerTyp)
+        val f = checkFunc(expr, func.copy(
+          genericParams =
+            if (func.genericParams.nonEmpty)
+              func.genericParams.tail
+            else
+              Vector.empty
+        ), innerTyp)
         if (errors.isEmpty) {
           f
         } else {
@@ -681,9 +692,12 @@ final class TypeChecker(
   private def inferGenericParams(params: Iterable[Named.GenericParam]): Iterable[T.GenericParam] = {
     params.map(param => {
       val kindAnnotation = param.kindAnnotation.map(inferKindAnnotation)
-      ctx.setKindOfSymbol(param.ident.name, kindAnnotation.map(kindAnnotationToKind).getOrElse(Kind.Star))
+      val kind = kindAnnotation.map(kindAnnotationToKind).getOrElse(Kind.Star)
+      ctx.setKindOfSymbol(param.ident.name, kind)
+      Debug.log(s"Assigning kind ${param.ident}: $kind")
       T.GenericParam(
         meta = param.meta.typed,
+        kind = kind,
         kindAnnotation = kindAnnotation,
         ident = inferIdent(param.ident)
       )
@@ -732,13 +746,20 @@ final class TypeChecker(
     }
 
   }
+  private def assertSubType(meta: Named.Meta, exact: Boolean = false)(a: Type, b: Type): Iterable[Diagnostic] = {
+    _assertSubType(meta, exact, ListBuffer.empty)(a, b)
+  }
 
-  private def assertSubType(meta: N.Meta)(_a: Type, _b: Type): Iterable[Diagnostic] = {
+  private def _assertSubType(
+    meta: N.Meta, exact: Boolean = false,
+    errors: ListBuffer[Diagnostic]
+  )(_a: Type, _b: Type): Iterable[Diagnostic] = {
 
     val a = resolveForwardAlias(meta, resolveType(_a))
     val b = resolveForwardAlias(meta, resolveType(_b))
 
-    val errors = ListBuffer.empty[Diagnostic]
+    Debug.log(s"checking if $a <: $b (${_a} <: ${_b})")
+
     (a, b) match {
       case (Primitive.Int, Primitive.Int) |
            (Primitive.Bool, Primitive.Bool) |
@@ -748,16 +769,23 @@ final class TypeChecker(
       case (Var(as), Var(bs)) if as.id == bs.id =>
         ()
       case (_, existential@Existential(_, _)) =>
-        instantiateR(meta)(a, existential)
+        instantiateR(meta, errors)(a, existential)
       case (existential@Existential(_, _), _) =>
-        instantiateL(meta)(existential, b)
-      case (Forall(params, innerTyp), _) =>
+        instantiateL(meta, errors)(existential, b)
+      case (Func(aFrom, aTo), Func(bFrom, bTo)) =>
+        // TODO: Check param types; each bFrom <: aFrom
+        _assertSubType(meta, errors = errors)(aTo, bTo)
+      case (Forall(param, innerTyp), _) =>
         val subst = mutable.Map.empty[Symbol, Type]
-        for (param <- params) {
-          subst.put(param, ctx.makeGenericType(param.text))
-        }
+        subst.put(param, ctx.makeGenericType(param.text))
         val substituted = applySubst(innerTyp, subst)
-        assertSubType(meta)(substituted, b)
+        _assertSubType(meta, exact, errors)(substituted, b)
+      case (TApplication(aF, aArg), TApplication(bF, bArg)) =>
+        _assertSubType(meta, errors = errors)(aF, bF)
+        // Type application is invariant; i.e.
+        // List[Super] is neither a super type, nor a sub type
+        // of List[Sub] if Sub <: Super
+        _assertSubType(meta, exact = true, errors)(aArg, bArg)
       case (_, _) =>
         errors.append(
           Diagnostic(
@@ -770,20 +798,21 @@ final class TypeChecker(
     errors
   }
 
-  private def instantiateL(meta: N.Meta)(existential: Existential, t: Type): Iterable[Diagnostic] = {
+  private def instantiateL(meta: N.Meta, errors: ListBuffer[Diagnostic])(existential: Existential, t: Type): Iterable[Diagnostic] = {
     ctx.getGeneric(existential.id) match {
       case Some(a) =>
-        assertSubType(meta)(a, t)
+        _assertSubType(meta, errors = errors)(a, t)
       case None =>
         ctx.assignGeneric(existential.id, t)
         List.empty
     }
   }
 
-  private def instantiateR(meta: N.Meta)(a: Type, existential: Existential): Iterable[Diagnostic] = {
+  private def instantiateR(meta: N.Meta, errors: ListBuffer[Diagnostic])
+    (a: Type, existential: Existential): Iterable[Diagnostic] = {
     ctx.getGeneric(existential.id) match {
       case Some(b) =>
-        assertSubType(meta)(a, b)
+        _assertSubType(meta, errors = errors)(a, b)
       case None =>
         ctx.assignGeneric(existential.id, a)
         List.empty
@@ -870,6 +899,9 @@ final class TypeChecker(
 
   private def resolveType(typ: Type): Type = {
     typ match {
+      case TApplication(Forall(param, t), arg) =>
+        val subst = Map(param -> arg)
+        resolveType(applySubst(t, subst))
       case Var(name) =>
         ctx.getTypeVar(name) match {
           case Some(t) =>
@@ -881,34 +913,109 @@ final class TypeChecker(
   }
 
   private def inferAnnotation(annotation: N.TypeAnnotation): T.TypeAnnotation = {
-    val variant = annotation.variant match {
+    val (variant: T.TypeAnnotation.Variant, kind) = annotation.variant match {
       case N.TypeAnnotation.Var(ident) =>
-        T.TypeAnnotation.Var(inferIdent(ident))
+        val inferredIndent = inferIdent(ident)
+        val k = ctx.getKindOfSymbol(inferredIndent.name).getOrElse(Kind.Star)
+        (T.TypeAnnotation.Var(inferredIndent), k)
       case N.TypeAnnotation.Forall(scope, params, innerAnnotation) =>
         val inferredInner = inferAnnotation(innerAnnotation)
         val inferredParams = inferGenericParams(params.toVector)
-        T.TypeAnnotation.Forall(scope, inferredParams, inferredInner)
+        (
+          T.TypeAnnotation.Forall(scope, inferredParams, inferredInner),
+          makeKFun(inferredParams.map(_.kind), inferredInner.kind)
+        )
       case N.TypeAnnotation.Func(params, retType) =>
         val inferredParams = params.map(param => {
           (param._1.map(inferIdent), inferAnnotation(param._2))
         })
-        T.TypeAnnotation.Func(
-          inferredParams,
-          inferAnnotation(retType)
+        val checkedRetTypAnnotation = checkTypeAnnotation(Kind.Star)(retType)
+        (
+          T.TypeAnnotation.Func(
+            inferredParams,
+            checkedRetTypAnnotation
+          ),
+          Kind.Star
         )
       case N.TypeAnnotation.TApplication(f, args) =>
-        T.TypeAnnotation.TApplication(
-          inferAnnotation(f),
-          args.map(inferAnnotation)
+        val inferredF = inferAnnotation(f)
+        val inferredArgs = args.map(inferAnnotation)
+        val expectedArgKinds = getKindParamArgs(inferredF.kind)
+        val checkedArgs =
+          inferredArgs
+            .take(expectedArgKinds.length)
+            .zip(expectedArgKinds)
+            .map(tuple => {
+              val errors = ListBuffer.empty[Diagnostic]
+              val (arg, expectedKind) = tuple
+              if (arg.kind == expectedKind) {
+                arg
+              } else {
+                addKindMismatchError(errors, arg.loc)(expectedKind, arg.kind)
+                arg.copy(
+                  meta = arg.meta.withDiagnostics(errors)
+                )
+              }
+            }) ++
+          inferredArgs
+            .drop(expectedArgKinds.length)
+            .map(arg => arg.copy(
+                meta = arg.meta.withDiagnostic(
+                  Diagnostic(
+                    loc = arg.loc,
+                    severity = Severity.Error,
+                    variant = ExtraTypeArg
+                  )
+                )
+              )
+            )
+        val k = kindOfApplication(inferredF.kind, checkedArgs.size)
+        (
+          T.TypeAnnotation.TApplication(
+            inferredF,
+            checkedArgs
+          ),
+          k
         )
+
       case N.TypeAnnotation.Error =>
-        T.TypeAnnotation.Error
+        (T.TypeAnnotation.Error, Kind.Star)
     }
     T.TypeAnnotation(
       meta = annotation.meta.typed,
+      kind = kind,
       variant
     )
   }
+
+  @tailrec private def kindOfApplication(kind: Kind, numArgs: Int): Kind = {
+    if (numArgs == 0) {
+      kind
+    } else {
+      kind match {
+        case Kind.Star => Kind.Star
+        case Kind.KFun(_, k) =>
+          kindOfApplication(k, numArgs - 1)
+      }
+    }
+  }
+
+  private def getKindParamArgs(kind: Kind): Vector[Kind] = {
+    kind match {
+      case Kind.Star => Vector.empty
+      case Kind.KFun(param, to) =>
+        param +: getKindParamArgs(to)
+    }
+  }
+
+  private def makeKFun(paramKinds: Iterable[Kind], resultKind: Kind): Kind = {
+    paramKinds.foldRight(resultKind)((current, prev) => Kind.KFun(current, prev))
+  }
+
+  private def makeForall(paramNames: Iterable[Symbol], resultType: Type): Type = {
+    paramNames.foldRight(resultType)((current, prev) => Forall(current, prev))
+  }
+
 
   private def inferKindAnnotation(annot: Named.KindAnnotation): T.KindAnnotation = {
     val variant = annot.variant match {
@@ -956,7 +1063,7 @@ final class TypeChecker(
         )
       case T.TypeAnnotation.Forall(_, params, inner) =>
         val typParams = params.map(_.ident.name)
-        Forall(typParams, annotationToType(inner))
+        makeForall(typParams, annotationToType(inner))
       case T.TypeAnnotation.TApplication(f, args) =>
         args.foldLeft(annotationToType(f))(
           (func, arg) => TApplication(func, annotationToType(arg))

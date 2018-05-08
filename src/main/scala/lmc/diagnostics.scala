@@ -31,6 +31,7 @@ object diagnostics {
   case class NoSuchParamLabel(name: String) extends Variant
   case object CyclicType extends Variant
   case class KindMismatch(expected: lmc.types.Kind, found: lmc.types.Kind) extends Variant
+  case object ExtraTypeArg extends Variant
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {
       val paramsStr = params.foldLeft("")(
