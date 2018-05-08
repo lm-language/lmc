@@ -407,9 +407,15 @@ final class TypeChecker(
     val from = inferredParams.map(param => {
       (getPatternLabel(param.pattern), param.pattern.typ)
     }).toVector
+    val innerTyp = Func(from, checkedBody.typ)
+    val typ = if (func.genericParams.isEmpty) {
+      innerTyp
+    } else {
+      Forall(func.genericParams.map(param => param.ident.name), innerTyp)
+    }
     T.Expr(
       meta = expr.meta.typed,
-      typ = Func(from, checkedBody.typ),
+      typ = typ,
       variant = T.Expr.Func(
         func.fnTok,
         func.scope,

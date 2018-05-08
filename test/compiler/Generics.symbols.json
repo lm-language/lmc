@@ -5,14 +5,11 @@
       "column" : 1
     },
     "end" : {
-      "line" : 14,
+      "line" : 15,
       "column" : 1
     }
   },
   "symbols" : {
-    "boolVal1" : {
-      "typ" : "Bool"
-    },
     "idErr" : {
       "typ" : "forall [List(X)] fn(x:Var(X))=>Var(X)"
     },
@@ -35,7 +32,7 @@
       "typ" : "forall [List(X, Y)] fn(x:Var(X),y:Var(Y))=>Var(X)"
     },
     "snd" : {
-      "typ" : "fn(a:Var(A),b:Var(B))=>Var(B)"
+      "typ" : "forall [List(A, B)] fn(a:Var(A),b:Var(B))=>Var(B)"
     },
     "boolVal" : {
       "typ" : "Bool"
@@ -43,11 +40,17 @@
     "duplicateParam" : {
       "typ" : "forall [List(A, A)] Var(A)"
     },
+    "intVal1" : {
+      "typ" : "Int"
+    },
     "idWithPatternAndLambdaAnnotation" : {
       "typ" : "forall [List(X)] fn(x:Var(X))=>Var(X)"
     },
     "fst" : {
-      "typ" : "fn(a:Var(A),b:Var(B))=>Var(A)"
+      "typ" : "forall [List(A, B)] fn(a:Var(A),b:Var(B))=>Var(A)"
+    },
+    "boolVal1" : {
+      "typ" : "Bool"
     }
   },
   "children" : [

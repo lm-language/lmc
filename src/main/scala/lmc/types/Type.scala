@@ -60,5 +60,5 @@ object Func {
 }
 case class Forall(params: Iterable[Symbol], typ: Type) extends Type {
   override def toString: String =
-    s"forall [$params] $typ"
+    s"forall [${params.toList}] $typ"
 }

@@ -11,3 +11,4 @@ let idInt: fn(Int) => Int = idAnnotated;
 let idBoolWithStrictLabel: fn(x: Bool) => Bool = idAnnotated;
 let boolVal: Bool = fail;
 let boolVal1 = idAnnotated(true);
+let intVal1 = fst(1, true);
