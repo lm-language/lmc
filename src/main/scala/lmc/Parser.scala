@@ -224,17 +224,31 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             Some(parseKindAnnotation())
           case _ => None
         }
-        expect(errors)(EQ)
-        val rhs = parseTypeAnnotation()
-        expect(errors)(SEMICOLON)
-        Declaration(
-          meta = makeMeta(
-            loc = Loc.between(startTok, rhs),
-            diagnostics = errors.toList,
-            scope = scope()
-          ),
-          variant = Declaration.TypeAlias(ident, kindAnnotation, rhs)
-        )
+        currentToken.variant match {
+          case EQ =>
+            expect(errors)(EQ)
+            val rhs = parseTypeAnnotation()
+            expect(errors)(SEMICOLON)
+            Declaration(
+              meta = makeMeta(
+                loc = Loc.between(startTok, rhs),
+                diagnostics = errors.toList,
+                scope = scope()
+              ),
+              variant = Declaration.TypeAlias(ident, kindAnnotation, rhs)
+            )
+          case _ =>
+            expect(errors)(SEMICOLON)
+            Declaration(
+              meta = makeMeta(
+                loc = Loc.between(startTok, kindAnnotation.getOrElse(ident)),
+                diagnostics = errors.toList,
+                scope = scope()
+              ),
+              variant = Declaration.Existential(ident, kindAnnotation)
+            )
+        }
+
       case _ =>
         val loc = currentToken.loc
 
@@ -469,7 +483,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   }
 
   private def parseTypeAnnotation(): TypeAnnotation = {
-     currentToken.variant match {
+     val head = currentToken.variant match {
        case LPAREN =>
          advance()
          val result = this.parseTypeAnnotation()
@@ -564,6 +578,29 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
            variant = TypeAnnotation.Error
          )
      }
+    parseTypeAnnotationTail(head)
+  }
+
+  private def parseTypeAnnotationTail(head: TypeAnnotation): TypeAnnotation = {
+    currentToken.variant match {
+      case LSQB =>
+        val errors = ListBuffer.empty[Diagnostic]
+        advance()
+        val hd = parseTypeAnnotation()
+        val tl = parseCommaSeperatedListTail(parseTypeAnnotation)
+        val args = hd::tl
+        val rsqb = expect(errors)(RSQB)
+        parseTypeAnnotationTail(
+          TypeAnnotation(
+            meta = makeMeta(
+              loc = Loc.between(head, rsqb),
+              scope = scope()
+            ),
+            variant = TypeAnnotation.TApplication(head, args)
+          )
+        )
+      case _ => head
+    }
   }
 
   private def parseParam(): Expr.Param = {

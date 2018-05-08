@@ -49,6 +49,9 @@ class Renamer(
         val namedIdent = renameTypeIdent(ident)
         val namedAnnotation = renameAnnotation(annotation)
         (N.Declaration.TypeAlias(namedIdent, kindAnnotation.map(renameKindAnnotation), namedAnnotation), List.empty)
+      case P.Declaration.Existential(ident, kindAnnotation) =>
+        val namedIdent = renameTypeIdent(ident)
+        (N.Declaration.Existential(namedIdent, kindAnnotation.map(renameKindAnnotation)), List.empty)
       case P.Declaration.Error() =>
         (N.Declaration.Error(), List.empty)
     }
@@ -65,6 +68,8 @@ class Renamer(
   private def addDeclToScope(declaration: WeakReference[N.Declaration]): Unit = {
     declaration.get.map(_.variant) match {
       case Some(N.Declaration.TypeAlias(ident, _, _)) =>
+        addDecl(ident.name, declaration)
+      case Some(N.Declaration.Existential(ident, _)) =>
         addDecl(ident.name, declaration)
       case _ => ()
     }
@@ -132,7 +137,14 @@ class Renamer(
             List.empty
           )
         })
-
+      case P.TypeAnnotation.TApplication(f, args) =>
+        (
+          N.TypeAnnotation.TApplication(
+            renameAnnotation(f),
+            args.map(renameAnnotation)
+          ),
+          List.empty
+        )
       case P.TypeAnnotation.Error =>
         (N.TypeAnnotation.Error, List.empty)
     }
@@ -162,6 +174,16 @@ class Renamer(
     annotation.variant match {
       case P.KindAnnotation.Star =>
         N.KindAnnotation(annotation.meta.named, N.KindAnnotation.Star)
+      case P.KindAnnotation.KFun(from, to) =>
+        N.KindAnnotation(
+          annotation.meta.named,
+          N.KindAnnotation.KFun(
+            from.map(renameKindAnnotation),
+            renameKindAnnotation(to)
+          )
+        )
+      case P.KindAnnotation.Error =>
+        N.KindAnnotation(annotation.meta.named, N.KindAnnotation.Error)
     }
   }
 

@@ -15,6 +15,7 @@ object Context {
     def getTypeVar(symbol: Symbol): Option[Type]
     def setTypeVar(symbol: Symbol, typ: Type): Unit
     def setKindOfSymbol(symbol: Symbol, kind: Kind): Unit
+    def getKindOfSymbol(symbol: Symbol): Option[Kind]
     def makeGenericType(name: String): Type
 
     def assignGeneric(n: Int, t: Type): Unit

@@ -27,7 +27,7 @@
     }
   },
   "types" : {
-    "CyclicForall" : "*",
+    "CyclicForall" : "([*] => *)",
     "X" : "*",
     "Y" : "*",
     "CyclicFuncType" : "*",
@@ -40,11 +40,11 @@
       "loc" : {
         "start" : {
           "line" : 15,
-          "column" : 21
+          "column" : 31
         },
         "end" : {
           "line" : 15,
-          "column" : 48
+          "column" : 58
         }
       },
       "symbols" : {

@@ -2,6 +2,7 @@ package lmc.syntax
 
 import lmc.common._
 import lmc.diagnostics.Diagnostic
+import lmc.utils
 
 import scala.ref.WeakReference
 
@@ -123,15 +124,20 @@ trait Syntax {
       params: Iterable[GenericParam],
       annotation: TypeAnnotation
     ) extends T {
-
       override def toString: String =
-        s"forall [$params] $annotation"
+        s"([$params] => $annotation)"
     }
+    case class TApplication(
+      tFunc: TypeAnnotation,
+      args: Iterable[TypeAnnotation]
+    ) extends T
     case object Error extends T
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] =
         this match {
           case Var(ident) => List(ident)
+          case TApplication(f, args) =>
+            f::args.toList
           case Func(params, returnType) =>
             params.flatMap((param) => {
               param match {
@@ -228,10 +234,15 @@ trait Syntax {
         case Let(pattern, rhs) => List(pattern, rhs)
         case Extern(name, annotation) =>
           List(name, annotation)
-        case TypeAlias(_, kindAnnotation, typeAnnotation) =>
+        case TypeAlias(ident, kindAnnotation, typeAnnotation) =>
           kindAnnotation match {
-            case Some(k) => List(k, typeAnnotation)
-            case None => List(typeAnnotation)
+            case Some(k) => List(ident, k, typeAnnotation)
+            case None => List(ident, typeAnnotation)
+          }
+        case Existential(ident, kindAnnotation) =>
+          kindAnnotation match {
+            case Some(k) => List(ident, k)
+            case None => List(ident)
           }
         case Error() => List()
       }
@@ -249,7 +260,7 @@ trait Syntax {
     ) extends T
     case class Existential(
       name: Ident,
-      kindAnnotation: KindAnnotation
+      kindAnnotation: Option[KindAnnotation]
     ) extends T
     case class Error() extends T
 

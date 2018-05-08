@@ -15,6 +15,7 @@ object Primitive {
 
 case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
+case class TApplication(tFunc: Type, arg: Type) extends Type
 
 /**
   * This type represents an as of un-inferred but

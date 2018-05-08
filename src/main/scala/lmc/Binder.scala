@@ -39,6 +39,14 @@ class Binder(
         })
       case A.Var(_) =>
         annotation
+      case A.TApplication(f, args) =>
+        annotation.copy(
+          variant =
+            A.TApplication(
+              bindAnnotation(f),
+              args.map(bindAnnotation)
+            )
+        )
       case A.Error =>
         annotation
     }
@@ -93,23 +101,20 @@ class Binder(
           meta = decl.meta,
           variant = Extern(boundIdent, newAnnotation)
         )
-      case TypeAlias(ident, kindAnnotation, annotation) =>
-        val error = currentScope.typeSymbols.get(ident.name) match {
-          case Some(_) =>
-            Some(
-              Diagnostic(
-                loc = ident.loc,
-                variant = DuplicateBinding(
-                  ident.name
-                ),
-                severity = Severity.Error
-              )
-            )
-          case None => None
+      case Existential(ident, kindAnnotation) =>
+        val (boundIdent, error) = bindTypeDeclHelper(ident)
+        val result = decl.copy(
+          meta = decl.meta,
+          variant = Existential(boundIdent, kindAnnotation)
+        )
+        error match {
+          case Some(e) =>
+            result.copy(meta = result.meta.withDiagnostic(e))
+          case None => result
         }
+      case TypeAlias(ident, kindAnnotation, annotation) =>
+        val (boundIdent, error) = bindTypeDeclHelper(ident)
         val boundAnnotation = bindAnnotation(annotation)
-        bindTypeVar(ident.name)
-        val boundIdent = ident
         val result = decl.copy(
           meta = decl.meta,
           variant = TypeAlias(boundIdent, kindAnnotation, boundAnnotation)
@@ -122,6 +127,26 @@ class Binder(
       case Error() =>
         decl
     }
+  }
+
+  private def bindTypeDeclHelper(ident: Ident) = {
+    val error = currentScope.typeSymbols.get(ident.name) match {
+      case Some(_) =>
+        Some(
+          Diagnostic(
+            loc = ident.loc,
+            variant = DuplicateBinding(
+              ident.name
+            ),
+            severity = Severity.Error
+          )
+        )
+      case None => None
+    }
+    bindTypeVar(ident.name)
+    val boundIdent = ident
+    (boundIdent, error)
+
   }
 
   private def bindExpr(expr: Expr): Expr = {

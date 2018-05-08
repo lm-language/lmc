@@ -84,7 +84,7 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
     _symbolKinds.update(symbol, kind)
   }
 
-  def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
+  override def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
     _symbolKinds.get(symbol)
   }
 
