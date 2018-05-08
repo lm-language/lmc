@@ -1,0 +1,14 @@
+extern fail: [A] => A;
+type String;
+type KindMismatch: * = List;
+type List: [*] => *;
+type L: [*] => * = [A] => List[A];
+type L1 = [T] => L[T];
+type DeepHKT: [*, [*, *] => *] => [*] => *;
+
+let kindMismatchFunc = fn[A: [*] => *](a: A): Int => 1;
+let kindMismatchRetTyp = fn[A: [*] => *](a: Int): A => fail;
+let kindAnnotatedFn = fn[A: [*] => *, B](a: A, b: B): A[B] => fail;
+
+extern emptyList: [A] => List[A];
+let intList: List[Int] = emptyList;

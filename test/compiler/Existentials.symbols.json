@@ -1,0 +1,192 @@
+{
+  "loc" : {
+    "start" : {
+      "line" : 1,
+      "column" : 1
+    },
+    "end" : {
+      "line" : 15,
+      "column" : 1
+    }
+  },
+  "symbols" : {
+    "fail" : {
+      "typ" : "([A] => Var(A))"
+    },
+    "kindMismatchFunc" : {
+      "typ" : "([A] => (fn(a:Var(A)) => Int))"
+    },
+    "emptyList" : {
+      "typ" : "([A] => TApplication(Var(List),Var(A)))"
+    },
+    "kindMismatchRetTyp" : {
+      "typ" : "([A] => (fn(a:Int) => ([A] => Var(A))))"
+    },
+    "kindAnnotatedFn" : {
+      "typ" : "([A,B] => (fn(a:Var(A), b:Var(B)) => ([A] => Var(A))))"
+    },
+    "intList" : {
+      "typ" : "TApplication(Var(List),Int)"
+    }
+  },
+  "types" : {
+    "L1" : "*",
+    "DeepHKT" : "([*] => ([([*] => ([*] => *))] => ([*] => *)))",
+    "L" : "([*] => *)",
+    "KindMismatch" : "*",
+    "List" : "([*] => *)",
+    "String" : "*"
+  },
+  "children" : [
+    {
+      "loc" : {
+        "start" : {
+          "line" : 1,
+          "column" : 14
+        },
+        "end" : {
+          "line" : 1,
+          "column" : 21
+        }
+      },
+      "symbols" : {
+        
+      },
+      "types" : {
+        "A" : "*"
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 4,
+          "column" : 20
+        },
+        "end" : {
+          "line" : 4,
+          "column" : 33
+        }
+      },
+      "symbols" : {
+        
+      },
+      "types" : {
+        "A" : "*"
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 5,
+          "column" : 11
+        },
+        "end" : {
+          "line" : 5,
+          "column" : 21
+        }
+      },
+      "symbols" : {
+        
+      },
+      "types" : {
+        "T" : "*"
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 9,
+          "column" : 24
+        },
+        "end" : {
+          "line" : 9,
+          "column" : 54
+        }
+      },
+      "symbols" : {
+        "a" : {
+          "typ" : "Var(A)"
+        }
+      },
+      "types" : {
+        "A" : "([*] => *)"
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 10,
+          "column" : 26
+        },
+        "end" : {
+          "line" : 10,
+          "column" : 59
+        }
+      },
+      "symbols" : {
+        "a" : {
+          "typ" : "Int"
+        }
+      },
+      "types" : {
+        "A" : "([*] => *)"
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 11,
+          "column" : 23
+        },
+        "end" : {
+          "line" : 11,
+          "column" : 66
+        }
+      },
+      "symbols" : {
+        "b" : {
+          "typ" : "Var(B)"
+        },
+        "a" : {
+          "typ" : "Var(A)"
+        }
+      },
+      "types" : {
+        "A" : "([*] => *)",
+        "B" : "*"
+      },
+      "children" : [
+      ]
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 13,
+          "column" : 19
+        },
+        "end" : {
+          "line" : 13,
+          "column" : 32
+        }
+      },
+      "symbols" : {
+        
+      },
+      "types" : {
+        "A" : "*"
+      },
+      "children" : [
+      ]
+    }
+  ]
+}
