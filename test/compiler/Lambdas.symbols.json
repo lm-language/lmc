@@ -11,28 +11,28 @@
   },
   "symbols" : {
     "f1" : {
-      "typ" : "fn()=>Bool"
+      "typ" : "(fn() => Bool)"
     },
     "f" : {
-      "typ" : "fn()=>Int"
+      "typ" : "(fn() => Int)"
     },
     "idInt" : {
-      "typ" : "fn(a:Int)=>Int"
+      "typ" : "(fn(a:Int) => Int)"
     },
     "withoutError" : {
-      "typ" : "fn(a:Int,b:Bool)=>Bool"
+      "typ" : "(fn(a:Int, b:Bool) => Bool)"
     },
     "withWrongRetTyp" : {
-      "typ" : "fn(a:Int)=>Bool"
+      "typ" : "(fn(a:Int) => Bool)"
     },
     "uninferred" : {
-      "typ" : "fn(a:Existential(a))=>Existential(a)"
+      "typ" : "(fn(a:Existential(a)) => Existential(a))"
     },
     "fstIntBool" : {
-      "typ" : "fn(a:Int,b:Bool)=>Int"
+      "typ" : "(fn(a:Int, b:Bool) => Int)"
     },
     "withWrongParamType" : {
-      "typ" : "fn(a:Int)=>Bool"
+      "typ" : "(fn(a:Int) => Bool)"
     }
   },
   "types" : {

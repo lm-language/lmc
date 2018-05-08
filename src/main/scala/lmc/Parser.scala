@@ -28,7 +28,7 @@ object Parser {
 
   val PATTERN_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
   val PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS
-  val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
+  val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, LSQB)
   val EXPR_PREDICTORS: Set[token.Variant] = Set(
     ID, LPAREN, FN, LBRACE, INT
   )
@@ -218,6 +218,12 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val errors = ListBuffer.empty[Diagnostic]
         val startTok = advance()
         val ident = parseIdent()
+        val kindAnnotation = currentToken.variant match {
+          case COLON =>
+            advance()
+            Some(parseKindAnnotation())
+          case _ => None
+        }
         expect(errors)(EQ)
         val rhs = parseTypeAnnotation()
         expect(errors)(SEMICOLON)
@@ -227,7 +233,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             diagnostics = errors.toList,
             scope = scope()
           ),
-          variant = Declaration.TypeAlias(ident, None, rhs)
+          variant = Declaration.TypeAlias(ident, kindAnnotation, rhs)
         )
       case _ =>
         val loc = currentToken.loc
@@ -247,6 +253,47 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             diagnostics ++ skippedDiagnostics
           ),
           variant = Declaration.Error()
+        )
+    }
+  }
+
+  private def parseKindAnnotation(): KindAnnotation = {
+    currentToken.variant match {
+      case STAR =>
+        val tok = advance()
+        KindAnnotation(
+          meta = makeMeta(loc = tok.loc, scope = scope(), List.empty),
+          variant = KindAnnotation.Star
+        )
+      case LSQB =>
+        val startTok = advance()
+        val hd = parseKindAnnotation()
+        val tl = parseCommaSeperatedListTail(parseKindAnnotation)
+        val errors = ListBuffer.empty[Diagnostic]
+        expect(errors)(RSQB)
+        expect(errors)(FATARROW)
+        val to = parseKindAnnotation()
+        KindAnnotation(
+          meta = makeMeta(loc = Loc.between(startTok, to), scope = scope(), List.empty),
+          variant = KindAnnotation.KFun(hd::tl, to)
+        )
+      case _ =>
+        val loc = currentToken.loc
+        val skippedDiagnostics = recover()
+        val diagnostics = List(Diagnostic(
+          KindExpected,
+          Severity.Error,
+          loc
+        ))
+        addDiagnostics(diagnostics)
+        addDiagnostics(skippedDiagnostics)
+        KindAnnotation(
+          meta = makeMeta(
+            loc = currentToken.loc,
+            scope(),
+            diagnostics ++ skippedDiagnostics
+          ),
+          variant = KindAnnotation.Error
         )
     }
   }
@@ -433,13 +480,13 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
              diagnostics = result.meta.diagnostics ++ errors
            )
          )
-       case FORALL =>
+       case LSQB =>
          withNewScope((scope) => {
            val errors = ListBuffer.empty[Diagnostic]
            val firstTok = advance()
-           expect(errors)(LSQB)
            val genericParams = parseGenericParamsList()
            expect(errors)(RSQB)
+           expect(errors)(FATARROW)
            val annotation = parseTypeAnnotation()
            val meta = makeMeta(
              loc = Loc.between(firstTok, annotation),
@@ -532,13 +579,19 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
 
   private def parseGenericParam(): GenericParam = {
     val ident = parseIdent()
+    val kindAnnotation = currentToken.variant match {
+      case COLON =>
+        advance()
+        Some(parseKindAnnotation())
+      case _ => None
+    }
 
     val meta = makeMeta(
       loc = ident.loc,
       diagnostics = List.empty,
       scope = scope()
     )
-    GenericParam(meta, ident, None)
+    GenericParam(meta, ident, kindAnnotation)
   }
 
   private def parseIdent(): Ident = {

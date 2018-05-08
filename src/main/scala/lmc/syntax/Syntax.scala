@@ -242,7 +242,15 @@ trait Syntax {
         s"let $pattern = $rhs"
     }
     case class Extern(name: Ident, typeAnnotation: TypeAnnotation) extends T
-    case class TypeAlias(name: Ident, kindAnnotation: Option[KindAnnotation], typeAnnotation: TypeAnnotation) extends T
+    case class TypeAlias(
+      name: Ident,
+      kindAnnotation: Option[KindAnnotation],
+      typeAnnotation: TypeAnnotation
+    ) extends T
+    case class Existential(
+      name: Ident,
+      kindAnnotation: KindAnnotation
+    ) extends T
     case class Error() extends T
 
   }
@@ -272,12 +280,12 @@ trait Syntax {
       override def children: Iterable[Node] =
         this match {
           case Star => List.empty
-          case KFun(from, to) => List(from, to)
+          case KFun(from, to) => List(from, List(to)).flatten
           case Error => List.empty
         }
     }
     case object Star extends T
-    case class KFun(from: KindAnnotation, to: KindAnnotation) extends T
+    case class KFun(from: Iterable[KindAnnotation], to: KindAnnotation) extends T
     case object Error extends T
   }
 

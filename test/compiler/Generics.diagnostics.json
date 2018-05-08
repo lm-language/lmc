@@ -4,11 +4,11 @@
       "loc" : {
         "start" : {
           "line" : 3,
-          "column" : 51
+          "column" : 47
         },
         "end" : {
           "line" : 3,
-          "column" : 54
+          "column" : 50
         }
       },
       "severity" : "Error",
@@ -18,11 +18,11 @@
       "loc" : {
         "start" : {
           "line" : 9,
-          "column" : 55
+          "column" : 52
         },
         "end" : {
           "line" : 9,
-          "column" : 55
+          "column" : 52
         }
       },
       "severity" : "Error",

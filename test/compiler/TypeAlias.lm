@@ -12,7 +12,7 @@ type Cyclic = Cyclic;
 type CyclicFuncType =
   fn() => CyclicFuncType;
 
-type CyclicForall = forall [A] fn(CyclicForall) => A;
+type CyclicForall = [A] => fn(CyclicForall) => A;
 
 type B = Int;
 type B = Bool;

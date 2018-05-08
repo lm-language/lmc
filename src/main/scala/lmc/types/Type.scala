@@ -37,23 +37,23 @@ case class Func(
   to: Type
 ) extends Type {
   override def toString: String = {
-    s"""fn(${
+    s"""(fn(${
       from.foldLeft("")((prev, current) => {
         val (symbolOpt, typ) = current
         symbolOpt match {
           case Some(symbol) =>
             prev
-              .concat(",")
+              .concat(", ")
               .concat(symbol.text)
               .concat(":")
               .concat(typ.toString)
           case None =>
             prev
-              .concat(",")
+              .concat(", ")
               .concat(typ.toString)
         }
-      }).drop(1)
-    })=>$to"""
+      }).drop(2)
+    }) => $to)"""
   }
 }
 object Func {
@@ -61,7 +61,7 @@ object Func {
 }
 case class Forall(params: Iterable[Symbol], typ: Type) extends Type {
   override def toString: String =
-    s"forall [${utils.joinIterable(params)}] $typ"
+    s"([${utils.joinIterable(params)}] => $typ)"
 }
 
 
