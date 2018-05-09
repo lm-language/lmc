@@ -241,6 +241,11 @@ trait Syntax {
             case Some(k) => List(ident, k, typeAnnotation)
             case None => List(ident, typeAnnotation)
           }
+        case ExternType(ident, kindAnnotation) =>
+          kindAnnotation match {
+            case Some(k) => List(ident, k)
+            case None => List(ident)
+          }
         case Existential(ident, kindAnnotation) =>
           kindAnnotation match {
             case Some(k) => List(ident, k)
@@ -255,6 +260,7 @@ trait Syntax {
         s"let $pattern = $rhs"
     }
     case class ExternLet(name: Ident, typeAnnotation: TypeAnnotation) extends T
+    case class ExternType(name: Ident, kindAnnotation: Option[KindAnnotation]) extends T
     case class TypeAlias(
       name: Ident,
       kindAnnotation: Option[KindAnnotation],

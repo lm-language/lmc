@@ -11,6 +11,7 @@ import better.files
 import lmc.io._
 import lmc.common._
 import lmc._
+import lmc.utils.Debug
 
 class CompilerTest {
   @Test def compileTest = {

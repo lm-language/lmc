@@ -49,6 +49,9 @@ class Renamer(
         val namedIdent = renameTypeIdent(ident)
         val namedAnnotation = renameAnnotation(annotation)
         (N.Declaration.TypeAlias(namedIdent, kindAnnotation.map(renameKindAnnotation), namedAnnotation), List.empty)
+      case P.Declaration.ExternType(ident, kindAnnotation) =>
+        val namedIdent = renameTypeIdent(ident)
+        (N.Declaration.ExternType(namedIdent, kindAnnotation.map(renameKindAnnotation)), List.empty)
       case P.Declaration.Existential(ident, kindAnnotation) =>
         val namedIdent = renameTypeIdent(ident)
         (N.Declaration.Existential(namedIdent, kindAnnotation.map(renameKindAnnotation)), List.empty)

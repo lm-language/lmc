@@ -112,6 +112,12 @@ class Binder(
             result.copy(meta = result.meta.withDiagnostic(e))
           case None => result
         }
+      case ExternType(ident, kindAnnotation) =>
+        val (boundIdent, error) = bindTypeDeclHelper(ident)
+        decl.copy(
+          meta = decl.meta.withDiagnostics(error.map({ List(_) }).getOrElse(List())),
+          variant = ExternType(boundIdent, kindAnnotation)
+        )
       case TypeAlias(ident, kindAnnotation, annotation) =>
         val (boundIdent, error) = bindTypeDeclHelper(ident)
         val boundAnnotation = bindAnnotation(annotation)

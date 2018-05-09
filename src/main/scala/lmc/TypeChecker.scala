@@ -15,6 +15,8 @@ final class TypeChecker(
 ) {
   import lmc.syntax.{Named => N, Typed => T}
 
+  private val Primitive = ctx.Primitive
+
   private val _checkedTypeAliasDecls =
     mutable.HashMap.empty[Symbol, T.Declaration]
 
@@ -46,6 +48,15 @@ final class TypeChecker(
         T.Declaration(
           decl.meta.typed,
           T.Declaration.ExternLet(inferredIdent, inferredAnnotation)
+        )
+      case N.Declaration.ExternType(ident, kindAnnotation) =>
+        inferTypeDeclHelper(ident, kindAnnotation, decl.meta, None)(
+          (inferredIdent, inferredKindAnnotation, _, errors) => {
+            T.Declaration(
+              decl.meta.typed.withDiagnostics(errors),
+              T.Declaration.ExternType(inferredIdent, inferredKindAnnotation)
+            )
+          }
         )
       case N.Declaration.Existential(ident, kindAnnotation) =>
         inferTypeDeclHelper(ident, kindAnnotation, decl.meta, None)(
@@ -166,11 +177,10 @@ final class TypeChecker(
       case Var(sym) if symbol.id == sym.id => true
       case Var(_)  => false
       case (
-        Primitive.Unit
-        | Primitive.Bool
-        | Primitive.Int
-        | ErrorType
+        ErrorType
       ) => false
+      case Constructor(sym, _) =>
+        sym.id == symbol.id
       case Func(from, to) =>
         occursIn(symbol, to) || from.exists(t => occursIn(symbol, t._2))
       case Forall(_, typ) =>
@@ -421,9 +431,7 @@ final class TypeChecker(
   private def applyEnv(typ: Type): Type = {
     typ match {
       case (
-        Primitive.Unit
-        | Primitive.Bool
-        | Primitive.Int
+        Constructor(_, _)
         | ErrorType
         ) => typ
       case ExistentialInstance(id, _) =>
@@ -747,23 +755,20 @@ final class TypeChecker(
 
   }
   private def assertSubType(meta: Named.Meta, exact: Boolean = false)(a: Type, b: Type): Iterable[Diagnostic] = {
-    _assertSubType(meta, exact, ListBuffer.empty)(a, b)
+    _assertSubType(meta, exact, ListBuffer.empty)(a, b).toVector
   }
 
   private def _assertSubType(
     meta: N.Meta, exact: Boolean = false,
     errors: ListBuffer[Diagnostic]
-  )(_a: Type, _b: Type): Iterable[Diagnostic] = {
-
+  )(_a: Type, _b: Type): ListBuffer[Diagnostic] = {
     val a = resolveForwardAlias(meta, resolveType(_a))
     val b = resolveForwardAlias(meta, resolveType(_b))
 
     Debug.log(s"checking if $a <: $b (${_a} <: ${_b})")
 
     (a, b) match {
-      case (Primitive.Int, Primitive.Int) |
-           (Primitive.Bool, Primitive.Bool) |
-           (Primitive.Unit, Primitive.Unit)
+      case (Constructor(a1, _), Constructor(b1, _)) if a1.id == b1.id
       =>
         ()
       case (Var(as), Var(bs)) if as.id == bs.id =>
@@ -800,33 +805,29 @@ final class TypeChecker(
     errors
   }
 
-  private def instantiateL(meta: N.Meta, errors: ListBuffer[Diagnostic])(existential: ExistentialInstance, t: Type): Iterable[Diagnostic] = {
+  private def instantiateL(meta: N.Meta, errors: ListBuffer[Diagnostic])(existential: ExistentialInstance, t: Type): Unit = {
     ctx.getGeneric(existential.id) match {
       case Some(a) =>
         _assertSubType(meta, errors = errors)(a, t)
       case None =>
         ctx.assignGeneric(existential.id, t)
-        List.empty
     }
   }
 
   private def instantiateR(meta: N.Meta, errors: ListBuffer[Diagnostic])
-    (a: Type, existential: ExistentialInstance): Iterable[Diagnostic] = {
+    (a: Type, existential: ExistentialInstance) = {
     ctx.getGeneric(existential.id) match {
       case Some(b) =>
         _assertSubType(meta, errors = errors)(a, b)
       case None =>
         ctx.assignGeneric(existential.id, a)
-        List.empty
     }
   }
 
   private def applySubst(t: Type, subst: collection.Map[Symbol, Type]): Type = {
     t match {
       case (
-        Primitive.Bool
-        | Primitive.Int
-        | Primitive.Unit
+        Constructor(_, _)
         | ErrorType
         | ExistentialInstance(_, _)
       ) => t

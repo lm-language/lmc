@@ -23,6 +23,14 @@ object Context {
 
     def getVars(): collection.Map[Symbol, Type]
 
+    val Primitive: Primitive
+
   }
+}
+
+abstract class Primitive {
+  val Int: Type
+  val Unit: Type
+  val Bool: Type
 }
 

@@ -6,7 +6,7 @@ import lmc.common._
 
 import scala.concurrent.Future
 import scala.collection._
-import lmc.types.{ExistentialInstance, Kind, Primitive, Type}
+import lmc.types.{ExistentialInstance, Kind, Type}
 import diagnostics._
 import io.File
 import lmc.syntax.{Parsed, Typed}
@@ -24,20 +24,36 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   private var _nextNodeId = 0
 
   override def getVars(): collection.Map[Symbol, Type] = _symbolTypes
+
+
+  private val primitiveTypes = Map(
+    "Unit" -> Kind.Star,
+    "Int" -> Kind.Star,
+    "Bool" -> Kind.Star
+  ).map((tuple) => {
+    val symbol = makeSymbol(tuple._1)
+    (tuple._1, (lmc.types.Constructor(symbol, tuple._2), tuple._2))
+  })
+
+  private def primitive(str: String): Type = {
+    primitiveTypes.get(str).map(_._1).get
+  }
+  override val Primitive: Primitive = new Primitive {
+    override val Int: Type = primitive("Int")
+    override val Bool: Type = primitive("Bool")
+    override val Unit: Type = primitive("Unit")
+  }
+
   override val PrimitiveScope: Scope = {
     val loc = Loc(
       path = Paths.get("<builtin>"),
       start = Pos(0, 0),
       end = Pos(0, 0))
+
     val entries = Map(
       "unit" -> Primitive.Unit,
       "true" -> Primitive.Bool,
       "false" -> Primitive.Bool
-    )
-    val primitiveTypes = Map(
-      "Unit" -> (Primitive.Unit, Kind.Star),
-      "Int" -> (Primitive.Int, Kind.Star),
-      "Bool" -> (Primitive.Bool, Kind.Star)
     )
 
     val scopeBuilder = ScopeBuilder(parent = None)
@@ -48,7 +64,7 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
       setTypeOfSymbol(symbol, typ)
     }
     for ((name, (t, kind)) <- primitiveTypes) {
-      val symbol = makeSymbol(name)
+      val symbol = t.symbol
       _typeVariables += symbol -> t
       scopeBuilder.setTypeVar(name, TypeEntry(symbol))
       setKindOfSymbol(symbol, kind)
@@ -112,12 +128,18 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   }
 
   def getParsedSourceFile(path: Path): Parsed.SourceFile = {
-    val chars = File(path)
-    val tokens = Lexer(path, chars)
-    val parser = new Parser(this, path, tokens)
-    val sourceFile = parser.parseSourceFile()
-    cacheParsedSourceFile(path, sourceFile)
-    sourceFile
+    _parsedSourceFiles.get(path) match {
+      case Some(p) =>
+        p
+      case None =>
+        val chars = File(path)
+        val tokens = Lexer(path, chars)
+        val parser = new Parser(this, path, tokens)
+        val sourceFile = parser.parseSourceFile()
+        cacheParsedSourceFile(path, sourceFile)
+        sourceFile
+    }
+
   }
 
   private def cacheParsedSourceFile(path: Path, sourceFile: Parsed.SourceFile) = {

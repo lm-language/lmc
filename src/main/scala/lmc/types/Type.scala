@@ -4,17 +4,14 @@ import lmc.utils
 
 sealed trait Type
 
-/**
-  * A primitive type. E.g. `Int`, `Boolean`, , etc
-  */
-object Primitive {
-  case object Int extends Type
-  case object Unit extends Type
-  case object Bool extends Type
-}
-
 case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
+
+// a type constructor; Like a type variable but is not substitutable
+// or assignable to any other type constructor
+case class Constructor(symbol: Symbol, kind: Kind) extends Type {
+  override def toString: String = symbol.text
+}
 case class TApplication(tFunc: Type, arg: Type) extends Type {
   override def toString: String = s"$tFunc[$arg]"
 }

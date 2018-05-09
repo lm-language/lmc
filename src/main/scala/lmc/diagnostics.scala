@@ -18,6 +18,7 @@ object diagnostics {
   case class UnBoundVar(name: String) extends Variant
   case class UseBeforeAssignment(name: String) extends Variant
   case class TypeMismatch(expected: Type, found: Type) extends Variant
+  case class TypeMismatchTrace(expected: Type, found: Type, trace: Iterable[Diagnostic]) extends Variant
   case class UnBoundTypeVar(name: String) extends Variant
   case class FnParamMismatch(expected: List[Type], found: List[Type]) extends Variant
   case class FuncParamLabelMismatch(name: String) extends Variant
@@ -60,5 +61,6 @@ object diagnostics {
     loc: Loc
   ) extends HasLoc {
     def message: String = variant.toString
+    override def toString: String = message
   }
 }

@@ -141,6 +141,9 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   }
 
   def parseSourceFile(): SourceFile = withNewScope((scope) => {
+    while (currentToken.variant == NEWLINE) {
+      advance()
+    }
     var declarations = Vector.empty[Declaration]
     val startToken = this.currentToken
     while (this.currentToken.variant != EOF) {
@@ -193,28 +196,40 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       case EXTERN =>
         val startTok = advance()
         val errors = ListBuffer.empty[Diagnostic]
-        expect(errors)(LET)
-        val identTokErrors = ListBuffer.empty[Diagnostic]
-        val identTok = expect(identTokErrors)(ID)
-        val ident = Ident(
-          meta = makeMeta(
-            loc = identTok.loc,
-            diagnostics = identTokErrors.toList,
-            scope = scope()
-          ),
-          name = identTok.lexeme
-        )
-        expect(errors)(COLON)
-        val annotation = parseTypeAnnotation()
-        expect(errors)(SEMICOLON)
-        Declaration(
-          meta = makeMeta(
-            loc = Loc.between(startTok, identTok),
-            diagnostics = errors.toList,
-            scope = scope()
-          ),
-          variant = Declaration.ExternLet(ident, annotation)
-        )
+        currentToken.variant match {
+          case TYPE =>
+            advance()
+            val ident = parseIdent()
+            val kindAnnotation = currentToken.variant match  {
+              case COLON =>
+                advance()
+                Some(parseKindAnnotation())
+              case _ => None
+            }
+            expect(errors)(SEMICOLON)
+            Declaration(
+              meta = makeMeta(
+                loc = Loc.between(startTok, kindAnnotation.getOrElse(ident)),
+                diagnostics = errors.toList,
+                scope = scope()
+              ),
+              variant = Declaration.ExternType(ident, kindAnnotation)
+            )
+          case _ =>
+            expect(errors)(LET)
+            val ident = parseIdent()
+            expect(errors)(COLON)
+            val annotation = parseTypeAnnotation()
+            expect(errors)(SEMICOLON)
+            Declaration(
+              meta = makeMeta(
+                loc = Loc.between(startTok, ident),
+                diagnostics = errors.toList,
+                scope = scope()
+              ),
+              variant = Declaration.ExternLet(ident, annotation)
+            )
+        }
       case TYPE =>
         val errors = ListBuffer.empty[Diagnostic]
         val startTok = advance()
@@ -249,7 +264,6 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
               variant = Declaration.Existential(ident, kindAnnotation)
             )
         }
-
       case _ =>
         val loc = currentToken.loc
 
