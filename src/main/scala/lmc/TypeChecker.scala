@@ -177,7 +177,7 @@ final class TypeChecker(
         occursIn(symbol, typ)
       case TApplication(f, arg) =>
         occursIn(symbol, f) || occursIn(symbol, arg)
-      case Existential(_, _) => false
+      case ExistentialInstance(_, _) => false
     }
   }
 
@@ -426,7 +426,7 @@ final class TypeChecker(
         | Primitive.Int
         | ErrorType
         ) => typ
-      case Existential(id, _) =>
+      case ExistentialInstance(id, _) =>
         ctx.getGeneric(id).getOrElse(typ)
       case Var(name) =>
         ctx.getTypeOfSymbol(name).getOrElse(typ)
@@ -768,9 +768,11 @@ final class TypeChecker(
         ()
       case (Var(as), Var(bs)) if as.id == bs.id =>
         ()
-      case (_, existential@Existential(_, _)) =>
+      case (ExistentialInstance(a1, _), ExistentialInstance(b1, _)) if a1 == b1 =>
+        ()
+      case (_, existential@ExistentialInstance(_, _)) =>
         instantiateR(meta, errors)(a, existential)
-      case (existential@Existential(_, _), _) =>
+      case (existential@ExistentialInstance(_, _), _) =>
         instantiateL(meta, errors)(existential, b)
       case (Func(aFrom, aTo), Func(bFrom, bTo)) =>
         // TODO: Check param types; each bFrom <: aFrom
@@ -798,7 +800,7 @@ final class TypeChecker(
     errors
   }
 
-  private def instantiateL(meta: N.Meta, errors: ListBuffer[Diagnostic])(existential: Existential, t: Type): Iterable[Diagnostic] = {
+  private def instantiateL(meta: N.Meta, errors: ListBuffer[Diagnostic])(existential: ExistentialInstance, t: Type): Iterable[Diagnostic] = {
     ctx.getGeneric(existential.id) match {
       case Some(a) =>
         _assertSubType(meta, errors = errors)(a, t)
@@ -809,7 +811,7 @@ final class TypeChecker(
   }
 
   private def instantiateR(meta: N.Meta, errors: ListBuffer[Diagnostic])
-    (a: Type, existential: Existential): Iterable[Diagnostic] = {
+    (a: Type, existential: ExistentialInstance): Iterable[Diagnostic] = {
     ctx.getGeneric(existential.id) match {
       case Some(b) =>
         _assertSubType(meta, errors = errors)(a, b)
@@ -826,7 +828,7 @@ final class TypeChecker(
         | Primitive.Int
         | Primitive.Unit
         | ErrorType
-        | Existential(_, _)
+        | ExistentialInstance(_, _)
       ) => t
       case Var(name) =>
         subst.get(name) match {

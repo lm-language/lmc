@@ -20,19 +20,25 @@ case class TApplication(tFunc: Type, arg: Type) extends Type {
 }
 
 /**
-  * This type represents an as of un-inferred but
-  * fixed type variable. This will be "instantiated"
-  * to a type on use.
-  * e.g. fn[A, B](a: A, b: B): A => A
-  * Here, during type checking, A will be assigned
-  * to Generic(n) and B to Generic(n + 1)
-  * Every A in this scope would refer to Generic(n)
-  * and that of B to Generic(n + 1).
-  * Because A and B are different generic params,
-  * Generic(n) is not assignable to Generic(n + 1)
-  * and vice-versa.
+  * This type represents an instance of an existentially quantified
+  * type variable.
+  * For example, when we're checking a type [A] => fn(A) => A against fn(Int) => Int,
+  * we first instantiate the forall type by creating new ExistentialInstance
+  * for each forall param and substituting it in the body so,
+  * after instantiation, [A] => fn(A) => A becomes
+  * fn(ExistentialInstance(n, "A")) => ExistentialInstance(n, "A"),
+  * where n is a freshly generated unique Int.
+  * Then we recursively check the two types for equality of types.
+  *
+  * When ExistentialInstance is compared with another type,
+  * if the instance hasn't yet been assigned another type in
+  * context, an assignment is made.
+  * If it is already assigned then we compare the assigned type
+  * with the other type.
+  *
+  * Two instances can only match if both their ids are equal.
   */
-case class Existential(id: Int, text: String) extends Type {
+case class ExistentialInstance(id: Int, text: String) extends Type {
   override def toString: String = s"Existential($text)"
 }
 case class Func(

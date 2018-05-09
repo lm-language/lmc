@@ -6,7 +6,7 @@ import lmc.common._
 
 import scala.concurrent.Future
 import scala.collection._
-import lmc.types.{Existential, Kind, Primitive, Type}
+import lmc.types.{ExistentialInstance, Kind, Primitive, Type}
 import diagnostics._
 import io.File
 import lmc.syntax.{Parsed, Typed}
@@ -148,6 +148,6 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
   override def makeGenericType(name: String): Type = {
     val id = _nextGenericId
     _nextGenericId += 1
-    Existential(id, name)
+    ExistentialInstance(id, name)
   }
 }
