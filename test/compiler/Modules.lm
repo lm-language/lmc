@@ -1,0 +1,12 @@
+extern type _String;
+extern let _empty: _String;
+extern let _append: fn(_String, _String): _String;
+
+let String = module {
+  type T = _String;
+
+  let append = _append;
+  let empty = _empty;
+}
+
+type String = String.T;

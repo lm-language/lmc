@@ -1,0 +1,54 @@
+{
+  "loc" : {
+    "start" : {
+      "line" : 1,
+      "column" : 1
+    },
+    "end" : {
+      "line" : 13,
+      "column" : 1
+    }
+  },
+  "symbols" : {
+	  "_empty" : {
+		  "typ" : "Var(_String)"
+	  },
+	  "_append" : {
+		  "typ" : "fn(Var(_String), Var(_String)) => Var(_String)"
+	  },
+	  "String" : {
+		  "typ" : "module"
+	  }
+  },
+  "types" : {
+    "String" : "*",
+    "_String" : "*"
+  },
+  "children" : [
+    {
+      "loc" : {
+        "start" : {
+          "line" : 5,
+          "column" : 1
+        },
+        "end" : {
+          "line" : 10,
+          "column" : 1
+        }
+      },
+      "symbols" : {
+        "empty" : {
+			"typ" : "Var(_String)"
+		},
+		"append" : {
+			"typ" : "fn(Var(_String), Var(_String)) => Var(_String)"
+		}
+      },
+      "types" : {
+        "T" : "*"
+      },
+      "children" : [
+      ]
+    }
+  ]
+}
