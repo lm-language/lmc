@@ -94,12 +94,12 @@ class Binder(
             boundExpr
           )
         )
-      case Extern(ident, annotation) =>
+      case ExternLet(ident, annotation) =>
         val newAnnotation = bindAnnotation(annotation)
         val boundIdent = bindIdent(ident)
         decl.copy(
           meta = decl.meta,
-          variant = Extern(boundIdent, newAnnotation)
+          variant = ExternLet(boundIdent, newAnnotation)
         )
       case Existential(ident, kindAnnotation) =>
         val (boundIdent, error) = bindTypeDeclHelper(ident)

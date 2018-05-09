@@ -1,4 +1,4 @@
-extern fail: [A] => A;
+extern let fail: [A] => A;
 type String;
 type KindMismatch: * = List;
 type List: [*] => *;
@@ -10,9 +10,9 @@ let kindMismatchRetTyp = fn[KFR: [*] => *](a: Int): KFR => fail;
 let kindAnnotatedFn =
   fn[A: [*] => *, B](b: B): A[B] => fail;
 
-extern emptyList: [A] => ListAlias[A];
+extern let emptyList: [A] => ListAlias[A];
 let intList: List[Int] = emptyList;
-extern cons: [Item] => fn(hd: Item, tl: List[Item]) => List[Item];
+extern let cons: [Item] => fn(hd: Item, tl: List[Item]) => List[Item];
 let consErr = cons(true, intList);
 let consInt = cons(1, intList);
 

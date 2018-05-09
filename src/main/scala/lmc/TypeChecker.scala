@@ -38,14 +38,14 @@ final class TypeChecker(
             checkedPattern, checkedRhs
           )
         )
-      case N.Declaration.Extern(ident, annotation) =>
+      case N.Declaration.ExternLet(ident, annotation) =>
         Debug.log(s"inferDecl(extern $ident: $annotation)")
         val inferredAnnotation = inferAnnotation(annotation)
         val typ = annotationToType(inferredAnnotation)
         val inferredIdent = checkIdent(ident, typ)
         T.Declaration(
           decl.meta.typed,
-          T.Declaration.Extern(inferredIdent, inferredAnnotation)
+          T.Declaration.ExternLet(inferredIdent, inferredAnnotation)
         )
       case N.Declaration.Existential(ident, kindAnnotation) =>
         inferTypeDeclHelper(ident, kindAnnotation, decl.meta, None)(

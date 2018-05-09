@@ -234,7 +234,7 @@ trait Syntax {
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] = this match {
         case Let(pattern, rhs) => List(pattern, rhs)
-        case Extern(name, annotation) =>
+        case ExternLet(name, annotation) =>
           List(name, annotation)
         case TypeAlias(ident, kindAnnotation, typeAnnotation) =>
           kindAnnotation match {
@@ -254,7 +254,7 @@ trait Syntax {
       override def toString: String =
         s"let $pattern = $rhs"
     }
-    case class Extern(name: Ident, typeAnnotation: TypeAnnotation) extends T
+    case class ExternLet(name: Ident, typeAnnotation: TypeAnnotation) extends T
     case class TypeAlias(
       name: Ident,
       kindAnnotation: Option[KindAnnotation],

@@ -1,5 +1,5 @@
-extern duplicateParam: [A, A] => A;
-extern fail: [A] => A;
+extern let duplicateParam: [A, A] => A;
+extern let fail: [A] => A;
 let idErr: [X] => (fn (x: X) => X) = fn(x) => true;
 let idAnnotated: [X] => (fn (x: X) => X) = fn(x) => x;
 let idWithPatternAndLambdaAnnotation: [X] => (fn (x: X) => X) = fn[A](x: A): A => x;

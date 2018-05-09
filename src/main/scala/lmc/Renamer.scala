@@ -41,10 +41,10 @@ class Renamer(
         val namedPattern = renamePattern(pattern)
         val namedExpr = renameExpr(expr)
         (N.Declaration.Let(namedPattern, namedExpr), List.empty)
-      case P.Declaration.Extern(ident, annotation) =>
+      case P.Declaration.ExternLet(ident, annotation) =>
         val namedIdent = renameVariableIdent(ident)
         val namedExpr = renameAnnotation(annotation)
-        (N.Declaration.Extern(namedIdent, namedExpr), List.empty)
+        (N.Declaration.ExternLet(namedIdent, namedExpr), List.empty)
       case P.Declaration.TypeAlias(ident, kindAnnotation, annotation) =>
         val namedIdent = renameTypeIdent(ident)
         val namedAnnotation = renameAnnotation(annotation)

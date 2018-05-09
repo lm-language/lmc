@@ -193,6 +193,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       case EXTERN =>
         val startTok = advance()
         val errors = ListBuffer.empty[Diagnostic]
+        expect(errors)(LET)
         val identTokErrors = ListBuffer.empty[Diagnostic]
         val identTok = expect(identTokErrors)(ID)
         val ident = Ident(
@@ -212,7 +213,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             diagnostics = errors.toList,
             scope = scope()
           ),
-          variant = Declaration.Extern(ident, annotation)
+          variant = Declaration.ExternLet(ident, annotation)
         )
       case TYPE =>
         val errors = ListBuffer.empty[Diagnostic]
