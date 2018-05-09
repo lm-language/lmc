@@ -1,0 +1,8 @@
+
+extern type Array: [*] => *;
+extern let empty: [A] => fn() => Array[A];
+let intArr: Array[Int] = empty();
+let boolArr: Array[Bool] = empty();
+let err: Array[Int] = boolArr;
+let intArr1: Array[Int] = intArr;
+let intArr2 = intArr1;
