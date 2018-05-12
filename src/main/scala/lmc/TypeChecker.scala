@@ -214,6 +214,8 @@ final class TypeChecker(
   }
 
   private def inferExpr(expr: N.Expr): T.Expr = {
+    def makeTyped(variant: T.Expr.Variant, typ: Type) =
+      T.Expr(expr.meta.typed, typ, variant)
     expr.variant match {
       case N.Expr.Var(ident) =>
         val inferredIdent = inferIdent(ident)
@@ -223,15 +225,14 @@ final class TypeChecker(
           case None =>
             ErrorType
         }
-        T.Expr(
-          meta = expr.meta.typed,
-          typ = typ,
-          variant = T.Expr.Var(inferredIdent)
+        makeTyped(
+          T.Expr.Var(inferredIdent),
+          typ
         )
-
+      case mod@N.Expr.Module(_, _) =>
+        inferModule(expr, mod)
       case N.Expr.Literal(N.Expr.LInt(value)) =>
-        T.Expr(
-          meta = expr.meta.typed,
+        makeTyped(
           typ = Primitive.Int,
           variant = T.Expr.Literal(T.Expr.LInt(value))
         )
@@ -240,12 +241,26 @@ final class TypeChecker(
       case call@N.Expr.Call(_, _, _) =>
         inferCall(expr, call)
       case N.Expr.Error() =>
-        T.Expr(
-          meta = expr.meta.typed,
+        makeTyped(
           typ = ErrorType,
           variant = T.Expr.Error()
         )
     }
+  }
+
+  private def inferModule(expr: N.Expr, module: N.Expr.Module): T.Expr = {
+    val inferredDecls = module.declarations.map(inferDeclaration)
+    val types = module.scope.typeSymbols.values
+        .map(t => t.symbol -> ctx.getKindOfSymbol(t.symbol).getOrElse(Kind.Star))
+        .toMap
+    val values = module.scope.symbols.values
+        .map(e => e.symbol -> ctx.getTypeOfSymbol(e.symbol).getOrElse(Uninferred))
+        .toMap
+    T.Expr(
+      meta = expr.meta.typed,
+      typ = Module(types, values),
+      variant = T.Expr.Module(module.scope, inferredDecls)
+    )
   }
 
   private def instantiateForall(typ: Type): Type = {

@@ -32,6 +32,9 @@ object Parser {
   val EXPR_PREDICTORS: Set[token.Variant] = Set(
     ID, LPAREN, FN, LBRACE, INT
   )
+  val DECL_PREDICTORS = Set(
+    LET, EXTERN, TYPE
+  )
   val ARG_PREDICTORS: Set[token.Variant] = EXPR_PREDICTORS
 }
 
@@ -149,7 +152,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     while (this.currentToken.variant != EOF) {
       declarations = declarations :+ this.parseDeclaration
     }
-    val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+    val errors = ListBuffer.empty[Diagnostic]
     val endToken = expect(errors)(EOF)
     val loc = Loc.between(startToken, endToken)
     val meta = makeMeta(
@@ -297,7 +300,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       case LSQB =>
         val startTok = advance()
         val hd = parseKindAnnotation()
-        val tl = parseCommaSeperatedListTail(parseKindAnnotation)
+        val tl = parseCommaSeperatedListTail(() => parseKindAnnotation())
         val errors = ListBuffer.empty[Diagnostic]
         expect(errors)(RSQB)
         expect(errors)(FATARROW)
@@ -328,19 +331,102 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   }
 
   private def parseExpr(): Expr = {
+    def parseIntLiteral() = {
+      val tok = advance()
+      val value = tok.lexeme.replaceAll("_", "").toInt
+      Expr(
+        meta = makeMeta(loc = tok.loc, scope()),
+        typ = (),
+        variant = Expr.Literal(Expr.LInt(value))
+      )
+    }
+
+    def parseFn() = {
+      val parentScope = scope()
+      withNewScope(fnScope => {
+        val startTok = advance()
+        val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+        val genericParams = currentToken.variant match {
+          case LSQB =>
+            advance()
+            val params = parseGenericParamsList()
+            expect(errors)(RSQB)
+            params
+          case _ => List()
+        }
+        expect(errors)(LPAREN)
+        val params = parseCommaSeperatedList(() => parseParam())(Parser.PATTERN_PREDICTORS)
+        expect(errors)(RPAREN)
+        val annotation = currentToken.variant match {
+          case COLON =>
+            advance()
+            Some(parseTypeAnnotation())
+          case _ => None
+        }
+        expect(errors)(FATARROW)
+        val body = parseExpr()
+        Expr(
+          meta = makeMeta(
+            loc = Loc.between(startTok, body),
+            scope = parentScope,
+            errors.toList
+          ),
+          typ = (),
+          variant = Expr.Func(
+            startTok,
+            fnScope,
+            genericParams.toVector,
+            params,
+            annotation,
+            body
+          )
+        )
+      })
+    }
+
+    def parseVar() = {
+      val tok = advance()
+      val meta = makeMeta(loc = tok.loc, scope())
+      Expr(
+        meta = meta,
+        typ = (),
+        variant = Expr.Var(Ident(meta, tok.lexeme))
+      )
+    }
+
+    def parseModule() = {
+      val tok = advance()
+      val errors = ListBuffer.empty[Diagnostic]
+      withNewScope((moduleScope) => {
+        expect(errors)(LBRACE)
+        val declarations = {
+          val buffer = ListBuffer.empty[Declaration]
+          while (Parser.DECL_PREDICTORS.contains(currentToken.variant)) {
+            buffer.append(this.parseDeclaration)
+          }
+          buffer.toVector
+        }
+        val rbrace = expect(errors)(RBRACE)
+        val meta = makeMeta(loc = Loc.between(tok, rbrace), scope = scope())
+        Expr(
+          meta = meta,
+          typ = (),
+          variant = Expr.Module(
+            moduleScope,
+            declarations
+          )
+        )
+      })
+    }
     val head = currentToken.variant match {
       case INT =>
         parseIntLiteral()
       case FN =>
-        parseFnExpr()
+        parseFn()
       case ID =>
-        val tok = advance()
-        val meta = makeMeta(loc = tok.loc, scope())
-        Expr(
-          meta = meta,
-          typ = (),
-          variant = Expr.Var(Ident(meta, tok.lexeme))
-        )
+        parseVar()
+      case MODULE =>
+        parseModule()
       case _ =>
         val loc = currentToken.loc
         val skippedDiagnostics = recover()
@@ -364,65 +450,12 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     parseExprTail(head)
   }
 
-  private def parseFnExpr() = {
-    val parentScope = scope()
-        withNewScope(fnScope => {
-          val startTok = advance()
-          val errors = collection.mutable.ListBuffer.empty[Diagnostic]
-          val genericParams = currentToken.variant match {
-            case LSQB =>
-              advance()
-              val params = parseGenericParamsList()
-              expect(errors)(RSQB)
-              params
-            case _ => List()
-          }
-          expect(errors)(LPAREN)
-          val params = parseCommaSeperatedList(parseParam)(Parser.PATTERN_PREDICTORS)
-          expect(errors)(RPAREN)
-          val annotation = currentToken.variant match {
-            case COLON =>
-              advance()
-              Some(parseTypeAnnotation())
-            case _ => None
-          }
-          expect(errors)(FATARROW)
-          val body = parseExpr()
-          Expr(
-            meta = makeMeta(
-              loc = Loc.between(startTok, body),
-              scope = parentScope,
-              errors.toList
-            ),
-            typ = (),
-            variant = Expr.Func(
-              startTok,
-              fnScope,
-              genericParams.toVector,
-              params,
-              annotation,
-              body
-            )
-          )
-        })
-  }
-
-  private def parseIntLiteral() = {
-    val tok = advance()
-    val value = tok.lexeme.replaceAll("_", "").toInt
-    Expr(
-      meta = makeMeta(loc = tok.loc, scope()),
-      typ = (),
-      variant = Expr.Literal(Expr.LInt(value))
-    )
-  }
-
   private def parseExprTail(head: Expr): Expr = {
     currentToken.variant match {
       case LPAREN =>
         val errors = ListBuffer.empty[Diagnostic]
         val lparen = advance()
-        val args = parseCommaSeperatedList(parseArg)(Parser.ARG_PREDICTORS).toVector
+        val args = parseCommaSeperatedList(() => parseArg())(Parser.ARG_PREDICTORS).toVector
         val rparen = expect(errors)(RPAREN)
         Expr(
           meta = makeMeta(
@@ -611,7 +644,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val errors = ListBuffer.empty[Diagnostic]
         advance()
         val hd = parseTypeAnnotation()
-        val tl = parseCommaSeperatedListTail(parseTypeAnnotation)
+        val tl = parseCommaSeperatedListTail(() => parseTypeAnnotation())
         val args = hd::tl
         val rsqb = expect(errors)(RSQB)
         parseTypeAnnotationTail(
@@ -635,7 +668,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
 
   private def parseGenericParamsList(): Iterable[GenericParam] = {
     val hd = parseGenericParam()
-    val tl = parseCommaSeperatedListTail(parseGenericParam)
+    val tl = parseCommaSeperatedListTail(() => parseGenericParam())
     hd::tl
   }
 

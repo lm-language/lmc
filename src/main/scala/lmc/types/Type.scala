@@ -10,7 +10,7 @@ case class Var(symbol: Symbol) extends Type
 case class Module(
   types: Map[Symbol, Kind],
   values: Map[Symbol, Type]
-)
+) extends Type
 
 // a type constructor; Like a type variable but is not substitutable
 // or assignable to any other type constructor
@@ -91,6 +91,7 @@ case class Forall(param: Symbol, typ: Type) extends Type {
     }
   }
 }
+case object Uninferred extends Type
 
 sealed trait Variance
 case object CoVariance

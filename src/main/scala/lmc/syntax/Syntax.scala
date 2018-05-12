@@ -133,6 +133,10 @@ trait Syntax {
       tFunc: TypeAnnotation,
       args: Iterable[TypeAnnotation]
     ) extends T
+    case class Prop(
+      expr: Expr,
+      prop: Ident
+    ) extends T
     case object Error extends T
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] =
@@ -149,6 +153,8 @@ trait Syntax {
                   List(annotation)
               }
             }) ++ List(returnType)
+          case Prop(expr, ident) =>
+            List(expr, ident)
           case Forall(_, params, annotation) =>
             params ++ List(annotation)
           case Error => List.empty
@@ -172,6 +178,8 @@ trait Syntax {
           List(genericParams, patterns, ret, List(body)).flatten
         case Call(_, func, args) =>
           List(func) ++ args.map(_.value)
+        case Prop(e, ident) =>
+          List(e, ident)
         case Error() => List()
       }
     }
@@ -202,8 +210,12 @@ trait Syntax {
       args: Vector[Arg]
     ) extends T
     case class Module(
-      scope: Scope,
+      scope: _Scope,
       declarations: Iterable[Declaration]
+    ) extends T
+    case class Prop(
+      expr: Expr,
+      prop: Ident
     ) extends T
     case class Error() extends T
 

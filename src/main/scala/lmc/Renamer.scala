@@ -243,20 +243,14 @@ class Renamer(
   }
 
   private def renameExpr(expr: P.Expr): N.Expr = {
-    val (namedVariant, diagnostics): (N.Expr.Variant, Iterable[Diagnostic]) = expr.variant match {
+    val namedVariant = expr.variant match {
       case P.Expr.Var(ident) =>
         val namedIdent = renameVarIdent(ident)
-        (
-          N.Expr.Var(namedIdent),
-          List.empty
-        )
+        N.Expr.Var(namedIdent)
       case P.Expr.Literal(literalVariant) =>
-        (
-          N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant]),
-          List.empty
-        )
+        N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant])
       case P.Expr.Func(tok, scope, genericParams, params, annotation, body) =>
-        val variant = withScope(scope)(() => {
+        withScope(scope)(() => {
           val namedGenericParams = genericParams.map(renameGenericParam)
           val namedParams = params.map((param) => {
             val newPattern = renamePattern(param.pattern)
@@ -273,20 +267,21 @@ class Renamer(
             namedBody
           )
         })
-        (variant, List.empty)
       case P.Expr.Call(loc, func, args) =>
         val namedFunc = renameExpr(func)
         val namedArgs = args.map((arg) => {
           N.Expr.Arg(arg.label, renameExpr(arg.value))
         })
-        (N.Expr.Call(loc, namedFunc, namedArgs), List.empty[Diagnostic])
+        N.Expr.Call(loc, namedFunc, namedArgs)
+      case P.Expr.Module(scope, declarations) =>
+        withScope(scope)(() => {
+          N.Expr.Module(scope, renameModuleDecls(declarations))
+        })
       case P.Expr.Error() =>
-        (N.Expr.Error(), List.empty[Diagnostic])
+        N.Expr.Error()
     }
     N.Expr(
-      meta = expr.meta.copy(
-        diagnostics = expr.meta.diagnostics ++ diagnostics
-      ).named,
+      meta = expr.meta.named,
       typ = (),
       variant = namedVariant
     )
