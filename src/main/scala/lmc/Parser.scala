@@ -330,15 +330,42 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   private def parseExpr(): Expr = {
     val head = currentToken.variant match {
       case INT =>
-        val tok = advance()
-        val value = tok.lexeme.replaceAll("_", "").toInt
-        Expr(
-          meta = makeMeta(loc = tok.loc, scope()),
-          typ = (),
-          variant = Expr.Literal(Expr.LInt(value))
-        )
+        parseIntLiteral()
       case FN =>
-        val parentScope = scope()
+        parseFnExpr()
+      case ID =>
+        val tok = advance()
+        val meta = makeMeta(loc = tok.loc, scope())
+        Expr(
+          meta = meta,
+          typ = (),
+          variant = Expr.Var(Ident(meta, tok.lexeme))
+        )
+      case _ =>
+        val loc = currentToken.loc
+        val skippedDiagnostics = recover()
+        val diagnostics = List(Diagnostic(
+          ExpressionExpected(),
+          Severity.Error,
+          loc
+        ))
+        addDiagnostics(diagnostics)
+        addDiagnostics(skippedDiagnostics)
+        Expr(
+          meta = makeMeta(
+            loc = currentToken.loc,
+            scope(),
+            diagnostics ++ skippedDiagnostics
+          ),
+          typ = (),
+          variant = Expr.Error()
+        )
+    }
+    parseExprTail(head)
+  }
+
+  private def parseFnExpr() = {
+    val parentScope = scope()
         withNewScope(fnScope => {
           val startTok = advance()
           val errors = collection.mutable.ListBuffer.empty[Diagnostic]
@@ -378,36 +405,16 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             )
           )
         })
-      case ID =>
-        val tok = advance()
-        val meta = makeMeta(loc = tok.loc, scope())
-        Expr(
-          meta = meta,
-          typ = (),
-          variant = Expr.Var(Ident(meta, tok.lexeme))
-        )
-      case _ =>
-        val loc = currentToken.loc
+  }
 
-        val skippedDiagnostics = recover()
-        val diagnostics = List(Diagnostic(
-          ExpressionExpected(),
-          Severity.Error,
-          loc
-        ))
-        addDiagnostics(diagnostics)
-        addDiagnostics(skippedDiagnostics)
-        Expr(
-          meta = makeMeta(
-            loc = currentToken.loc,
-            scope(),
-            diagnostics ++ skippedDiagnostics
-          ),
-          typ = (),
-          variant = Expr.Error()
-        )
-    }
-    parseExprTail(head)
+  private def parseIntLiteral() = {
+    val tok = advance()
+    val value = tok.lexeme.replaceAll("_", "").toInt
+    Expr(
+      meta = makeMeta(loc = tok.loc, scope()),
+      typ = (),
+      variant = Expr.Literal(Expr.LInt(value))
+    )
   }
 
   private def parseExprTail(head: Expr): Expr = {

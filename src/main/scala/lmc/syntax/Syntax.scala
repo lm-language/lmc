@@ -164,6 +164,7 @@ trait Syntax {
       override def children: Iterable[Node] = this match {
         case Var(ident) => List(ident)
         case Literal(_) => List()
+        case Module(_, decls) => decls
         case Func(_, _, genericParams, params, returnTypeAnnotation, body) =>
           val patterns = params.map(_.pattern)
           val ret = returnTypeAnnotation
@@ -199,6 +200,10 @@ trait Syntax {
       argsLoc: Loc,
       func: Expr,
       args: Vector[Arg]
+    ) extends T
+    case class Module(
+      scope: Scope,
+      declarations: Iterable[Declaration]
     ) extends T
     case class Error() extends T
 

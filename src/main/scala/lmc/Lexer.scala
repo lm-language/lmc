@@ -26,7 +26,7 @@ object Lexer {
     "let" -> LET,
     "fn" -> FN,
     "extern" -> EXTERN,
-    "forall" -> FORALL,
+    "module" -> MODULE,
     "type" -> TYPE
   )
   val OPERATOR_TOKENS = Map(
@@ -156,7 +156,6 @@ final class Lexer(
     val stop = Pos(_previousLine, _previousCol)
     Token(variant, Loc(path, start, stop), lexeme)
   }
-
 
   private def advance: Char = {
     val c = currentChar

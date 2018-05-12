@@ -7,6 +7,11 @@ sealed trait Type
 case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
 
+case class Module(
+  types: Map[Symbol, Kind],
+  values: Map[Symbol, Type]
+)
+
 // a type constructor; Like a type variable but is not substitutable
 // or assignable to any other type constructor
 case class Constructor(symbol: Symbol, kind: Kind) extends Type {
