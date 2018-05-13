@@ -188,6 +188,7 @@ final class TypeChecker(
       case TApplication(f, arg) =>
         occursIn(symbol, f) || occursIn(symbol, arg)
       case ExistentialInstance(_, _) => false
+      case Uninferred => false
     }
   }
 
@@ -240,6 +241,48 @@ final class TypeChecker(
         inferFunc(expr, func)
       case call@N.Expr.Call(_, _, _) =>
         inferCall(expr, call)
+      case N.Expr.Prop(e, prop) =>
+        val inferredExpr = inferExpr(e)
+        inferredExpr.typ match {
+          case mod@Module(_, _) =>
+            mod.typeOfString.get(prop) match {
+              case Some(t) =>
+                T.Expr(
+                  meta = expr.meta.typed,
+                  typ = t,
+                  variant = T.Expr.Prop(inferredExpr, prop)
+                )
+              case None =>
+                T.Expr(
+                  meta = expr.meta.typed.withDiagnostic(
+                    Diagnostic(
+                      loc = Loc.between(e, expr),
+                      severity = Severity.Error,
+                      variant = NoSuchValueProperty(prop)
+                    )
+                  ),
+                  typ = Uninferred,
+                  variant = T.Expr.Prop(
+                    inferredExpr, prop
+                  )
+                )
+            }
+          case _ =>
+            T.Expr(
+              meta = expr.meta.typed.withDiagnostic(
+                Diagnostic(
+                  loc = Loc.between(e, expr),
+                  severity = Severity.Error,
+                  variant = NotAModule
+                )
+              ),
+              typ = Uninferred,
+              variant = T.Expr.Prop(
+                inferredExpr,
+                prop
+              )
+            )
+        }
       case N.Expr.Error() =>
         makeTyped(
           typ = ErrorType,
@@ -462,6 +505,8 @@ final class TypeChecker(
         )
       case TApplication(f, arg) =>
         TApplication(applyEnv(f), applyEnv(arg))
+      case Module(types, values) =>
+        Module(types, values.mapValues(applyEnv))
       case Forall(params, inner) =>
         Forall(
           params,
@@ -574,14 +619,6 @@ final class TypeChecker(
       case _ => None
     }
   }
-  private def getPatternLabelStr(pattern: N.Pattern): Option[Symbol] = {
-    pattern.variant match {
-      case N.Pattern.Var(ident) => Some(ident.name)
-      case N.Pattern.Annotated(p, _) =>
-        getPatternLabelStr(p)
-      case _ => None
-    }
-  }
 
   private def checkExpr(expr: N.Expr, typ: Type): T.Expr = {
     (expr.variant, typ) match {
@@ -601,6 +638,13 @@ final class TypeChecker(
         checkFunc(expr, func, typ)
       case (_, Forall(_, innerTyp)) =>
         checkExpr(expr, innerTyp)
+      case (_, _) =>
+        val inferred = inferExpr(expr)
+        val errors = assertSubType(expr.meta)(inferred.typ, typ)
+        inferred.copy(
+          meta = inferred.meta.withDiagnostics(errors),
+          typ
+        )
     }
   }
 
@@ -845,6 +889,7 @@ final class TypeChecker(
         Constructor(_, _)
         | ErrorType
         | ExistentialInstance(_, _)
+        | Uninferred
       ) => t
       case Var(name) =>
         subst.get(name) match {
@@ -856,6 +901,8 @@ final class TypeChecker(
         Forall(params, applySubst(inner, subst))
       case TApplication(f, arg) =>
         TApplication(applySubst(f, subst), applySubst(arg, subst))
+      case Module(types, values) =>
+        Module(types, values.mapValues((typ) => applySubst(typ, subst)))
       case Func(from, to) =>
         Func(
           from.map(param => (param._1, applySubst(param._2, subst))),
@@ -995,7 +1042,53 @@ final class TypeChecker(
           ),
           k
         )
-
+      case N.TypeAnnotation.Prop(e, prop) =>
+        val inferredExpr = inferExpr(e)
+        inferredExpr.typ match {
+          case m@Module(_, _) =>
+            m.kindOfString.get(prop) match {
+              case Some(kind) =>
+                (
+                  T.TypeAnnotation.Prop(
+                    inferredExpr,
+                    prop
+                  ),
+                  kind
+                )
+              case None =>
+                (
+                  T.TypeAnnotation.Prop(
+                    inferredExpr.copy(
+                      meta = inferredExpr.meta.withDiagnostic(
+                        Diagnostic(
+                          loc = e.loc,
+                          severity = Severity.Error,
+                          variant = NoSuchTypeProperty(prop)
+                        )
+                      )
+                    ),
+                    prop
+                  ),
+                  Kind.Star
+                )
+            }
+          case _ =>
+            (
+              T.TypeAnnotation.Prop(
+                inferredExpr.copy(
+                  meta = inferredExpr.meta.withDiagnostic(
+                    Diagnostic(
+                      loc = e.loc,
+                      severity = Severity.Error,
+                      variant = NotAModule
+                    )
+                  )
+                ),
+                prop
+              ),
+              Kind.Star
+            )
+        }
       case N.TypeAnnotation.Error =>
         (T.TypeAnnotation.Error, Kind.Star)
     }
@@ -1086,6 +1179,17 @@ final class TypeChecker(
         args.foldLeft(annotationToType(f))(
           (func, arg) => TApplication(func, annotationToType(arg))
         )
+      case T.TypeAnnotation.Prop(e, prop) =>
+        resolveType(e.typ) match {
+          case modTyp@Module(_, _) =>
+            modTyp
+              .symbolOfString
+              .get(prop)
+              .map(sym => Var(sym))
+              .getOrElse(ErrorType)
+          case _ =>
+            Uninferred
+        }
       case T.TypeAnnotation.Error =>
         ErrorType
     })

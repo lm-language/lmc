@@ -28,10 +28,10 @@ object Parser {
 
   val PATTERN_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
   val PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS
-  val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, LSQB)
   val EXPR_PREDICTORS: Set[token.Variant] = Set(
-    ID, LPAREN, FN, LBRACE, INT
+    ID, LPAREN, FN, LBRACE, INT, MODULE
   )
+  val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, LSQB).union(EXPR_PREDICTORS)
   val DECL_PREDICTORS = Set(
     LET, EXTERN, TYPE
   )
@@ -466,6 +466,19 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           typ = (),
           variant = Expr.Call(Loc.between(lparen, rparen), head, args)
         )
+      case DOT =>
+        val errors = ListBuffer.empty[Diagnostic]
+        advance()
+        val propTok = expect(errors)(ID)
+        parseExprTail(Expr(
+          meta = makeMeta(
+            loc = Loc.between(head, propTok),
+            scope = head.meta.scope,
+            diagnostics = errors.toList
+          ),
+          typ = (),
+          variant = Expr.Prop(head, propTok.lexeme)
+        ))
       case _ => head
     }
   }
@@ -570,17 +583,6 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
              )
            )
          })
-       case ID =>
-         val tok = advance()
-         val meta = makeMeta(
-           loc = tok.loc,
-           scope = scope()
-         )
-         val ident = Ident(
-           meta = meta,
-           name = tok.lexeme
-         )
-         TypeAnnotation(meta, (), TypeAnnotation.Var(ident))
        case FN =>
          val startTok = advance()
          val errors = ListBuffer.empty[Diagnostic]
@@ -615,6 +617,39 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
            errors.toList
          )
          TypeAnnotation(meta, (), TypeAnnotation.Func(params, returnType))
+       case v if Parser.EXPR_PREDICTORS.contains(v) =>
+         val e = parseExpr()
+         e.variant match {
+           case Expr.Var(ident) =>
+             val meta = makeMeta(
+               loc = ident.loc,
+               scope = scope()
+             )
+             TypeAnnotation(meta, (), TypeAnnotation.Var(ident))
+           case Expr.Prop(e, prop) =>
+             TypeAnnotation(
+               makeMeta(
+                 loc = e.loc,
+                 scope = scope()
+               ),
+               kind = (),
+               variant = TypeAnnotation.Prop(
+                 e, prop
+               )
+             )
+           case _ =>
+             TypeAnnotation(
+               meta = e.meta.withDiagnostic(
+                 Diagnostic(
+                   variant = TypeExpected(),
+                   severity = Severity.Error,
+                   loc = e.loc
+                 )
+               ),
+               kind = (),
+               variant = TypeAnnotation.Error
+             )
+         }
        case _ =>
          val loc = currentToken.loc
          val skippedDiagnostics = recover()

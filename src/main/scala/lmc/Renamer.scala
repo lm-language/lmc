@@ -4,6 +4,7 @@ import lmc.syntax.{Named => N, Parsed => P}
 import lmc.common.{ScopeBuilder, ScopeEntry, Symbol}
 import lmc.diagnostics._
 
+import scala.collection.mutable.ListBuffer
 import scala.ref.WeakReference
 
 class Renamer(
@@ -105,55 +106,51 @@ class Renamer(
   }
 
   private def renameAnnotation(annotation: P.TypeAnnotation): N.TypeAnnotation = {
-    val (
-      variant: N.TypeAnnotation.Variant,
-      diagnostics: Iterable[Diagnostic]
-    ) = annotation.variant match {
+    val errors = ListBuffer.empty[Diagnostic]
+    val variant: N.TypeAnnotation.Variant = annotation.variant match {
       case P.TypeAnnotation.Var(ident) =>
         resolveTypeVar(ident.name) match {
           case Some(tVar) =>
             val namedIdent = N.Ident(meta = ident.meta.named, tVar)
-            (N.TypeAnnotation.Var(namedIdent),  List.empty)
+            N.TypeAnnotation.Var(namedIdent)
           case None =>
-            (N.TypeAnnotation.Var(
-              N.Ident(meta = ident.meta.named, ctx.makeSymbol(ident.name))
-            ),
-              List(
-                Diagnostic(
+            errors.append(
+              Diagnostic(
                   loc = ident.loc,
                   severity = Severity.Error,
                   variant = UnBoundTypeVar(ident.name)
                 )
-              )
+            )
+            N.TypeAnnotation.Var(
+              N.Ident(meta = ident.meta.named, ctx.makeSymbol(ident.name))
             )
         }
       case P.TypeAnnotation.Func(params, returnType) =>
         val namedParams = params.map(renameAnnotationParam)
         val namedReturnType = renameAnnotation(returnType)
-        (N.TypeAnnotation.Func(namedParams, namedReturnType), List.empty)
+        N.TypeAnnotation.Func(namedParams, namedReturnType)
       case P.TypeAnnotation.Forall(scope, params, typeAnnotation) =>
         withScope(scope)(() => {
           val namedParams = renameGenericParams(params)
           val namedAnnotation = renameAnnotation(typeAnnotation)
-          (
-            N.TypeAnnotation.Forall(scope, namedParams, namedAnnotation),
-            List.empty
-          )
+          N.TypeAnnotation.Forall(scope, namedParams, namedAnnotation)
         })
       case P.TypeAnnotation.TApplication(f, args) =>
-        (
-          N.TypeAnnotation.TApplication(
-            renameAnnotation(f),
-            args.map(renameAnnotation)
-          ),
-          List.empty
+        N.TypeAnnotation.TApplication(
+          renameAnnotation(f),
+          args.map(renameAnnotation)
+        )
+      case P.TypeAnnotation.Prop(e, prop) =>
+        N.TypeAnnotation.Prop(
+          renameExpr(e),
+          prop
         )
       case P.TypeAnnotation.Error =>
-        (N.TypeAnnotation.Error, List.empty)
+        N.TypeAnnotation.Error
     }
     N.TypeAnnotation(
       meta = annotation.meta.copy(
-        diagnostics = annotation.meta.diagnostics ++ diagnostics
+        diagnostics = annotation.meta.diagnostics ++ errors.toVector
       ).named,
       (),
       variant = variant
@@ -277,6 +274,11 @@ class Renamer(
         withScope(scope)(() => {
           N.Expr.Module(scope, renameModuleDecls(declarations))
         })
+      case P.Expr.Prop(e, prop) =>
+        N.Expr.Prop(
+          renameExpr(e),
+          prop
+        )
       case P.Expr.Error() =>
         N.Expr.Error()
     }

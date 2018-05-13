@@ -7,7 +7,18 @@ let String = module {
 
   let append = _append;
   let empty = _empty;
-}
+};
 
+type Err1 = _empty.X;
+type Err2 = String.Y;
 type String = String.T;
-let s = String.append(String.empty, String.empty);
+
+let notModule = _empty.x;
+let noSuchProp = String.xyz;
+
+let empty: String.T = String.empty;
+let emptyInferred = String.empty;
+let append = String.append;
+
+let s: String = String.append(String.empty, empty);
+let sInferred = String.append(String.empty, String.empty);

@@ -46,7 +46,8 @@ object Lexer {
     ':' -> COLON,
     ',' -> COMMA,
     '[' -> LSQB,
-    ']' -> RSQB
+    ']' -> RSQB,
+    '.' -> DOT
   )
 
   val PUNCTUATION_CHARS: Set[Char] =

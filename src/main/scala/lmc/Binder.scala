@@ -47,6 +47,14 @@ class Binder(
               args.map(bindAnnotation)
             )
         )
+      case A.Prop(e, prop) =>
+        annotation.copy(
+          variant =
+            A.Prop(
+              bindExpr(e),
+              prop
+            )
+        )
       case A.Error =>
         annotation
     }
@@ -177,6 +185,8 @@ class Binder(
         })
       case Expr.Literal(_) => expr.variant
       case Expr.Var(_) => expr.variant
+      case Expr.Prop(e, prop) =>
+        Expr.Prop(bindExpr(e), prop)
       case Expr.Error() => expr.variant
     }
     expr.copy(variant = boundVariant)

@@ -1,0 +1,60 @@
+{
+  "diagnostics" : [
+    {
+      "loc" : {
+        "start" : {
+          "line" : 12,
+          "column" : 13
+        },
+        "end" : {
+          "line" : 12,
+          "column" : 18
+        }
+      },
+      "severity" : "Error",
+      "message" : "NotAModule"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 13,
+          "column" : 13
+        },
+        "end" : {
+          "line" : 13,
+          "column" : 18
+        }
+      },
+      "severity" : "Error",
+      "message" : "NoSuchTypeProperty(Y)"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 16,
+          "column" : 17
+        },
+        "end" : {
+          "line" : 16,
+          "column" : 24
+        }
+      },
+      "severity" : "Error",
+      "message" : "NotAModule"
+    },
+    {
+      "loc" : {
+        "start" : {
+          "line" : 17,
+          "column" : 18
+        },
+        "end" : {
+          "line" : 17,
+          "column" : 27
+        }
+      },
+      "severity" : "Error",
+      "message" : "NoSuchValueProperty(xyz)"
+    }
+  ]
+}

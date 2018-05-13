@@ -10,7 +10,15 @@ case class Var(symbol: Symbol) extends Type
 case class Module(
   types: Map[Symbol, Kind],
   values: Map[Symbol, Type]
-) extends Type
+) extends Type {
+  val kindOfString: Map[String, Kind] =
+    types.map(entry => entry._1.text -> entry._2)
+  val typeOfString: Map[String, Type] =
+    values.map(entry => entry._1.text -> entry._2)
+  val symbolOfString: Map[String, Symbol] =
+    types.map(entry => entry._1.text -> entry._1) ++
+    values.map(entry => entry._1.text -> entry._1)
+}
 
 // a type constructor; Like a type variable but is not substitutable
 // or assignable to any other type constructor

@@ -5,31 +5,54 @@
       "column" : 1
     },
     "end" : {
-      "line" : 13,
+      "line" : 25,
       "column" : 1
     }
   },
   "symbols" : {
-	  "_empty" : {
-		  "typ" : "Var(_String)"
-	  },
-	  "_append" : {
-		  "typ" : "fn(Var(_String), Var(_String)) => Var(_String)"
-	  },
-	  "String" : {
-		  "typ" : "module"
-	  }
+    "s" : {
+      "typ" : "Var(_String)"
+    },
+    "empty" : {
+      "typ" : "Var(_String)"
+    },
+    "sInferred" : {
+      "typ" : "Var(_String)"
+    },
+    "emptyInferred" : {
+      "typ" : "Var(_String)"
+    },
+    "_append" : {
+      "typ" : "(fn(Var(_String), Var(_String)) => Var(_String))"
+    },
+    "noSuchProp" : {
+      "typ" : "Uninferred"
+    },
+    "_empty" : {
+      "typ" : "Var(_String)"
+    },
+    "notModule" : {
+      "typ" : "Uninferred"
+    },
+    "String" : {
+      "typ" : "Module(Map(T -> *),Map(empty -> Var(_String), append -> (fn(Var(_String), Var(_String)) => Var(_String))))"
+    },
+    "append" : {
+      "typ" : "(fn(Var(_String), Var(_String)) => Var(_String))"
+    }
   },
   "types" : {
+    "Err1" : "*",
+    "_String" : "*",
     "String" : "*",
-    "_String" : "*"
+    "Err2" : "*"
   },
   "children" : [
     {
       "loc" : {
         "start" : {
           "line" : 5,
-          "column" : 1
+          "column" : 21
         },
         "end" : {
           "line" : 10,
@@ -38,11 +61,11 @@
       },
       "symbols" : {
         "empty" : {
-			"typ" : "Var(_String)"
-		},
-		"append" : {
-			"typ" : "fn(Var(_String), Var(_String)) => Var(_String)"
-		}
+          "typ" : "Var(_String)"
+        },
+        "append" : {
+          "typ" : "(fn(Var(_String), Var(_String)) => Var(_String))"
+        }
       },
       "types" : {
         "T" : "*"

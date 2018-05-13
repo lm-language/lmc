@@ -135,7 +135,7 @@ trait Syntax {
     ) extends T
     case class Prop(
       expr: Expr,
-      prop: Ident
+      prop: String
     ) extends T
     case object Error extends T
     sealed trait Variant extends HasChildren {
@@ -153,8 +153,8 @@ trait Syntax {
                   List(annotation)
               }
             }) ++ List(returnType)
-          case Prop(expr, ident) =>
-            List(expr, ident)
+          case Prop(expr, _) =>
+            List(expr)
           case Forall(_, params, annotation) =>
             params ++ List(annotation)
           case Error => List.empty
@@ -178,8 +178,8 @@ trait Syntax {
           List(genericParams, patterns, ret, List(body)).flatten
         case Call(_, func, args) =>
           List(func) ++ args.map(_.value)
-        case Prop(e, ident) =>
-          List(e, ident)
+        case Prop(e, _) =>
+          List(e)
         case Error() => List()
       }
     }
@@ -215,7 +215,7 @@ trait Syntax {
     ) extends T
     case class Prop(
       expr: Expr,
-      prop: Ident
+      prop: String
     ) extends T
     case class Error() extends T
 
