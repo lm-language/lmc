@@ -1,6 +1,6 @@
 package lmc.types
 
-sealed class Kind {
+sealed trait Kind {
   override def toString: String = this match {
     case Kind.Star => "*"
     case Kind.KFun(from, to) => s"([$from] => $to)"

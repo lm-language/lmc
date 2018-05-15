@@ -3,15 +3,14 @@ import java.io.{File => JFile}
 import java.io.{BufferedReader, InputStreamReader}
 
 import org.junit.Test
-import org.scalatest.Assertions._
 import better.files
 import lmc.io._
-import lmc.common._
 import lmc._
 import net.liftweb.{json => json}
+import lmc.common._
 
 class CompilerTest {
-  implicit val formats = json.DefaultFormats
+  implicit val formats: json.DefaultFormats = json.DefaultFormats
 
   @Test def compileTest = {
     val envDiff = System.getenv("DIFF")
@@ -41,43 +40,41 @@ class CompilerTest {
       val diagnosticsFile = File(diagnosticsFilePath)
       val diagnosticsJSONStr = diagnosticsFile.readAllChars
       val parsedDiagnosticsJSON = json.parse(diagnosticsJSONStr)
-      val diagnosticsJSON = parsedDiagnosticsJSON.extract[DiagnosticsJSON]
       //      println(diagnosticsJSON)
       //      val diagnosticsJSON = decode[DiagnosticsJSON](diagnosticsJSONStr)
       val diagnostics = compiler.getSourceFileDiagnostics(filePath)
       val compiledDiagnosticsJSON = DiagnosticsJSON.fromDiagnostics(diagnostics)
       val outputDiagnosticFile = testOutPath.resolve(diagnosticsFileName)
       val compiledDiagnosticsJSONStr = json.Serialization.writePretty(compiledDiagnosticsJSON)
+      val compiledDiagnosticsJSONV = json.parse(json.Serialization.writePretty(compiledDiagnosticsJSON))
       files.File(outputDiagnosticFile).writeText(compiledDiagnosticsJSONStr)
 
-      try {
-        assertResult(diagnosticsJSON)(compiledDiagnosticsJSON)
-      } catch {
-        case _: org.scalatest.exceptions.TestFailedException =>
-          println(s"""Errors don't match for $filePath""")
-          showDiff(parsedDiagnosticsJSON, json.parse(compiledDiagnosticsJSONStr))
+      if (parsedDiagnosticsJSON != compiledDiagnosticsJSONV) {
+        println(Console.RED)
+        println(s"""Errors don't match for $filePath""")
+        println(Console.RESET)
+        showDiff(parsedDiagnosticsJSON, compiledDiagnosticsJSONV)
       }
 
       val symbolFileName = filePath.getFileName.toString dropRight 3 concat ".symbols.json"
       val symbolPath = filePath.resolveSibling(symbolFileName)
       val symbolFile = File(symbolPath)
       val symbolJSONStr = symbolFile.readAllChars
-      val expectedScopeParsed = json.parse(symbolJSONStr)
-      val expectedScopeJSON = expectedScopeParsed.extract[ScopeJSON]
+      val parsedExpectedScope = json.parse(symbolJSONStr)
       val sourceFile = compiler.getCheckedSourceFile(filePath)
       val compiledScopeJSON = ScopeJSON.fromScope(compiler)(sourceFile.scope)
       val outputScopeFile = testOutPath.resolve(symbolFileName)
       val compiledScopeJSONString = json.Serialization.writePretty(compiledScopeJSON)
+      val compiledScopeJSONV = json.parse(compiledScopeJSONString)
       files.File(outputScopeFile).writeText(compiledScopeJSONString)
-      try {
-        assertResult(expectedScopeJSON)(compiledScopeJSON)
-      } catch {
-        case _: org.scalatest.exceptions.TestFailedException =>
-          println(s"""Symbols don't match for $symbolPath and $outputScopeFile""")
-          showDiff(
-            expectedScopeParsed,
-            json.parse(compiledScopeJSONString)
-          )
+      if (parsedExpectedScope != compiledScopeJSONV) {
+        println(Console.RED)
+        println(s"""Symbols don't match for $symbolPath and $outputScopeFile""")
+        println(Console.RESET)
+        showDiff(
+          parsedExpectedScope,
+          json.parse(compiledScopeJSONString)
+        )
       }
     }
   }
@@ -132,7 +129,6 @@ class CompilerTest {
     }
   }
 }
-
 case class PosJSON(
   line: Int,
   column: Int

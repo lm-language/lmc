@@ -2,3 +2,4 @@
 target
 project/target
 .ensime_cache
+.dotty-ide.json

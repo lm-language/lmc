@@ -244,8 +244,8 @@ class Renamer(
       case P.Expr.Var(ident) =>
         val namedIdent = renameVarIdent(ident)
         N.Expr.Var(namedIdent)
-      case P.Expr.Literal(literalVariant) =>
-        N.Expr.Literal(literalVariant.asInstanceOf[N.Expr.LiteralVariant])
+      case P.Expr.Literal(P.Expr.LInt(v)) =>
+        N.Expr.Literal(N.Expr.LInt(v))
       case P.Expr.Func(tok, scope, genericParams, params, annotation, body) =>
         withScope(scope)(() => {
           val namedGenericParams = genericParams.map(renameGenericParam)
