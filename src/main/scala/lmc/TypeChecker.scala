@@ -491,6 +491,7 @@ final class TypeChecker(
       case (
         Constructor(_, _)
         | ErrorType
+        | Uninferred
         ) => typ
       case ExistentialInstance(id, _) =>
         ctx.getGeneric(id).getOrElse(typ)

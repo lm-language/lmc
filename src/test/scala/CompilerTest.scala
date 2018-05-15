@@ -3,17 +3,16 @@ import java.io.{File => JFile}
 import java.io.{BufferedReader, InputStreamReader}
 
 import org.junit.Test
-import io.circe.parser._
-import io.circe.syntax._
-import io.circe.generic.auto._
 import org.scalatest.Assertions._
 import better.files
 import lmc.io._
 import lmc.common._
 import lmc._
-import lmc.utils.Debug
+import net.liftweb.{json => json}
 
 class CompilerTest {
+  implicit val formats = json.DefaultFormats
+
   @Test def compileTest = {
     val envDiff = System.getenv("DIFF")
     val diff =
@@ -31,7 +30,9 @@ class CompilerTest {
 
     val compiler = new Compiler(paths = List(suitePath))
     for (path <- suiteDir.listFiles()
-      filter { _.getName endsWith ".lm" }
+      filter {
+      _.getName endsWith ".lm"
+    }
     ) {
       val filePath = Paths.get(path.getAbsolutePath)
       println(s"Checking $filePath")
@@ -39,125 +40,71 @@ class CompilerTest {
       val diagnosticsFilePath = filePath.resolveSibling(diagnosticsFileName)
       val diagnosticsFile = File(diagnosticsFilePath)
       val diagnosticsJSONStr = diagnosticsFile.readAllChars
-      val diagnosticsJSON = decode[DiagnosticsJSON](diagnosticsJSONStr)
+      val parsedDiagnosticsJSON = json.parse(diagnosticsJSONStr)
+      val diagnosticsJSON = parsedDiagnosticsJSON.extract[DiagnosticsJSON]
+      //      println(diagnosticsJSON)
+      //      val diagnosticsJSON = decode[DiagnosticsJSON](diagnosticsJSONStr)
       val diagnostics = compiler.getSourceFileDiagnostics(filePath)
       val compiledDiagnosticsJSON = DiagnosticsJSON.fromDiagnostics(diagnostics)
       val outputDiagnosticFile = testOutPath.resolve(diagnosticsFileName)
-      val compiledDiagnosticsJSONStr = compiledDiagnosticsJSON.asJson.spaces2
+      val compiledDiagnosticsJSONStr = json.Serialization.writePretty(compiledDiagnosticsJSON)
       files.File(outputDiagnosticFile).writeText(compiledDiagnosticsJSONStr)
 
       try {
-        assertResult(diagnosticsJSON)(Right(compiledDiagnosticsJSON))
+        assertResult(diagnosticsJSON)(compiledDiagnosticsJSON)
       } catch {
         case _: org.scalatest.exceptions.TestFailedException =>
           println(s"""Errors don't match for $filePath""")
-          runCommand(s"""$diff $diagnosticsFilePath $outputDiagnosticFile""")
+          showDiff(parsedDiagnosticsJSON, json.parse(compiledDiagnosticsJSONStr))
       }
 
       val symbolFileName = filePath.getFileName.toString dropRight 3 concat ".symbols.json"
       val symbolPath = filePath.resolveSibling(symbolFileName)
       val symbolFile = File(symbolPath)
       val symbolJSONStr = symbolFile.readAllChars
-      val expectedScopeJSON = decode[ScopeJSON](symbolJSONStr)
+      val expectedScopeParsed = json.parse(symbolJSONStr)
+      val expectedScopeJSON = expectedScopeParsed.extract[ScopeJSON]
       val sourceFile = compiler.getCheckedSourceFile(filePath)
       val compiledScopeJSON = ScopeJSON.fromScope(compiler)(sourceFile.scope)
       val outputScopeFile = testOutPath.resolve(symbolFileName)
-
-      files.File(outputScopeFile).writeText(compiledScopeJSON.asJson.spaces2)
-
+      val compiledScopeJSONString = json.Serialization.writePretty(compiledScopeJSON)
+      files.File(outputScopeFile).writeText(compiledScopeJSONString)
       try {
-        assertResult(expectedScopeJSON)(Right(compiledScopeJSON))
+        assertResult(expectedScopeJSON)(compiledScopeJSON)
       } catch {
         case _: org.scalatest.exceptions.TestFailedException =>
           println(s"""Symbols don't match for $symbolPath and $outputScopeFile""")
-          runCommand(s"""$diff $symbolPath $outputScopeFile""")
+          showDiff(
+            expectedScopeParsed,
+            json.parse(compiledScopeJSONString)
+          )
       }
     }
   }
 
-  case class PosJSON(
-    line: Int,
-    column: Int
-  )
-  object PosJSON {
-    def fromPos(pos: Pos): PosJSON = {
-      PosJSON(pos.line, pos.column)
+  private def showDiff(expected: json.JValue, found: json.JValue): Unit = {
+    val json.Diff(changed, added, deleted) =
+      expected.diff(json.parse(json.Serialization.write(found)))
+    changed match {
+      case json.JNothing => ()
+      case _ =>
+        println(Console.BLUE)
+        println(s"Changed: ${json.prettyRender(changed)}")
     }
-  }
-  case class LocJSON(
-    start: PosJSON,
-    end: PosJSON
-  )
-  object LocJSON {
-    def fromLoc(loc: Loc): LocJSON = {
-      LocJSON(PosJSON.fromPos(loc.start), PosJSON.fromPos(loc.end))
+    added match {
+      case json.JNothing => ()
+      case _ =>
+        println(Console.GREEN)
+        println(s"Added: ${json.prettyRender(added)}")
     }
-  }
-  case class SymbolEntryJSON(
-    typ: String
-  )
-  case class ScopeJSON(
-    loc: LocJSON,
-    symbols: scala.collection.Map[String, SymbolEntryJSON],
-    types: scala.collection.Map[String, String],
-    children: List[ScopeJSON]
-  )
-  object ScopeJSON {
-    def fromScope(compiler: Compiler)(scope: Scope): ScopeJSON = {
-      val symbols = scope.symbols
-      ScopeJSON(
-        loc = LocJSON.fromLoc(scope.loc),
-        symbols = symbols
-          .mapValues(e => {
-            compiler.getType(e.symbol) match {
-              case Some(t) => t.toString
-              case None =>
-                throw new Error(s"""CompilerBug: No type for symbol ${e.symbol.text}""")
-            }
-          })
-          .mapValues(SymbolEntryJSON),
-        types = scope.typeSymbols.mapValues(sym => {
-          compiler.getKindOfSymbol(sym.symbol) match {
-            case Some(t) => t.toString
-           case None =>
-             throw new Error(s"""CompilerBug: No kind for symbol ${sym.symbol.text}""")
-          }
-        }),
-        children = scope.children
-          .map(_.get)
-          .map(_.orNull)
-          .filter(_ != null)
-          .map(fromScope(compiler))
-          .toList
-          .reverse
-      )
+    deleted match {
+      case json.JNothing => ()
+      case _ =>
+        println(Console.RED)
+        println(s"Deleted: ${json.prettyRender(deleted)}")
     }
-  }
-
-
-  case class DiagnosticsJSON(
-    diagnostics: List[DiagnosticJSON]
-  )
-
-  object DiagnosticsJSON {
-    def fromDiagnostics(diagnostics: Iterable[lmc.diagnostics.Diagnostic]): DiagnosticsJSON =
-      DiagnosticsJSON(
-        diagnostics = diagnostics
-          .toList
-          .sortWith((a, b) => a.loc.start.lt(b.loc.start))
-          .map((d) => DiagnosticJSON(
-            loc = LocJSON.fromLoc(d.loc),
-            severity = d.severity.toString,
-            message = d.message
-          )).toList
-      )
-
-  }
-  case class DiagnosticJSON(
-    loc: LocJSON,
-    severity: String,
-    message: String
-  )
+    println(Console.RESET)
+}
 
   def runCommand(command: String): Unit = {
     val proc = Runtime.getRuntime.exec(command)
@@ -185,3 +132,89 @@ class CompilerTest {
     }
   }
 }
+
+case class PosJSON(
+  line: Int,
+  column: Int
+)
+object PosJSON {
+  def fromPos(pos: Pos): PosJSON = {
+    PosJSON(pos.line, pos.column)
+  }
+}
+case class LocJSON(
+  start: PosJSON,
+  end: PosJSON
+)
+object LocJSON {
+  def fromLoc(loc: Loc): LocJSON = {
+    LocJSON(PosJSON.fromPos(loc.start), PosJSON.fromPos(loc.end))
+  }
+}
+case class SymbolEntryJSON(
+  typ: String
+)
+case class ScopeJSON(
+  loc: LocJSON,
+  symbols: Map[String, SymbolEntryJSON],
+  types: Map[String, String],
+  children: List[ScopeJSON]
+)
+object ScopeJSON {
+  def fromScope(compiler: Compiler)(scope: Scope): ScopeJSON = {
+    val symbols = scope.symbols
+    ScopeJSON(
+      loc = LocJSON.fromLoc(scope.loc),
+      symbols = symbols
+        .mapValues(e => {
+          compiler.getType(e.symbol) match {
+            case Some(t) => t.toString
+            case None =>
+              throw new Error(s"""CompilerBug: No type for symbol ${e.symbol.text}""")
+          }
+        })
+        .mapValues(SymbolEntryJSON)
+        .toMap,
+      types = scope.typeSymbols.mapValues(sym => {
+        compiler.getKindOfSymbol(sym.symbol) match {
+          case Some(t) => t.toString
+          case None =>
+            throw new Error(s"""CompilerBug: No kind for symbol ${sym.symbol.text}""")
+        }
+      })
+        .toMap,
+      children = scope.children
+        .map(_.get)
+        .map(_.orNull)
+        .filter(_ != null)
+        .map(fromScope(compiler))
+        .toList
+        .reverse
+    )
+  }
+}
+
+
+case class DiagnosticsJSON(
+  diagnostics: List[DiagnosticJSON]
+)
+
+object DiagnosticsJSON {
+  def fromDiagnostics(diagnostics: Iterable[lmc.diagnostics.Diagnostic]): DiagnosticsJSON =
+    DiagnosticsJSON(
+      diagnostics = diagnostics
+        .toList
+        .sortWith((a, b) => a.loc.start.lt(b.loc.start))
+        .map((d) => DiagnosticJSON(
+          loc = LocJSON.fromLoc(d.loc),
+          severity = d.severity.toString,
+          message = d.message
+        )).toList
+    )
+
+}
+case class DiagnosticJSON(
+  loc: LocJSON,
+  severity: String,
+  message: String
+)
