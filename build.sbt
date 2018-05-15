@@ -2,8 +2,9 @@ name := "lmc-scala"
 
 version := "0.1"
 
-//scalaVersion := "2.12.5"
-scalaVersion := "0.8.0-RC1"
+val useDotty = true
+
+scalaVersion := { if (useDotty) "0.8.0-RC1" else "2.12.5" }
 
 scalacOptions ++= { if (isDotty.value) Seq("-language:Scala2") else Nil }
 
@@ -17,14 +18,18 @@ val dependencies = Seq(
   )
 ).flatten
 
-libraryDependencies ++= dependencies
-   .map(_.withDottyCompat(scalaVersion.value))
+libraryDependencies ++= {
+  if (useDotty)
+    dependencies
+      .map(_.withDottyCompat(scalaVersion.value))
+  else
+    dependencies
+}
 
 enablePlugins(PackPlugin)
 packMain := Map("lmc" -> "lmc.Main")
 
-//enablePlugins(ScalaJSPlugin)
-//scalaJSUseMainModuleInitializer := true
-
-//enablePlugins(ScalaNativePlugin)
+// Settings for JS build
+// enablePlugins(ScalaJSPlugin)
+// scalaJSUseMainModuleInitializer := true
 
