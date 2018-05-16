@@ -11,7 +11,7 @@ import diagnostics._
 import io.File
 import lmc.syntax.{Parsed, Typed}
 
-class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
+class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) extends Context with Context.TC {
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
 
@@ -123,8 +123,17 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
     getCheckedSourceFile(path).scope
   }
 
-  def getSourceFileDiagnostics(path: Path): Iterable[Diagnostic] = {
-    getCheckedSourceFile(path).errors.toSet union getParsedSourceFile(path).errors.toSet
+  def getSourceFileDiagnostics(
+    path: Path, refresh: Boolean = false
+  ): Iterable[Diagnostic] = {
+    if (refresh) {
+      this._parsedSourceFiles.remove(path)
+      this._typedSourceFiles.remove(path)
+    }
+    val result = getCheckedSourceFile(path)
+      .errors.toSet union getParsedSourceFile(path).errors.toSet
+
+    result
   }
 
   def getParsedSourceFile(path: Path): Parsed.SourceFile = {
@@ -171,5 +180,10 @@ class Compiler(paths: Iterable[Path]) extends Context with Context.TC {
     val id = _nextGenericId
     _nextGenericId += 1
     ExistentialInstance(id, name)
+  }
+
+  def getHoverInfo(file: Path, pos: Pos): String = {
+    // TODO: Implement hover functionality
+    return null
   }
 }

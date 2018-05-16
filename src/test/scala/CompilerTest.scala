@@ -6,7 +6,7 @@ import org.junit.Test
 import better.files
 import lmc.io._
 import lmc._
-import net.liftweb.{json => json}
+import net.liftweb.json
 import lmc.common._
 
 class CompilerTest {

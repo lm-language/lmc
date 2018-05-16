@@ -16,7 +16,6 @@ object Main {
     } else {
       args(0) match {
         case "server" =>
-          println("Starting up language server...")
           val server = new Server()
           server.listen()
         case c =>
