@@ -847,6 +847,11 @@ final class TypeChecker(
         subst.put(param, ctx.makeGenericType(param.text))
         val substituted = applySubst(innerTyp, subst)
         _assertSubType(meta, exact, errors)(substituted, b)
+      case (_, Forall(param, innerTyp)) =>
+        val subst = mutable.Map.empty[Symbol, Type]
+        subst.put(param, ctx.makeGenericType(param.text))
+        val substituted = applySubst(innerTyp, subst)
+        _assertSubType(meta, exact, errors)(a, substituted)
       case (TApplication(aF, aArg), TApplication(bF, bArg)) =>
         _assertSubType(meta, errors = errors)(aF, bF)
         // Type application is invariant; i.e.

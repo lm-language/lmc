@@ -1,0 +1,12 @@
+extern type Pair: [*, *] => *;
+extern type List: [*] => *;
+extern let pair: [A, B] => fn(A, B) => Pair[A, B];
+extern let lst: [A] => fn(A, A) => List[A];
+
+let f: fn([A] => fn(List[A]) => List[A]) => Pair[List[Bool], List[Int]]
+ = fn(x) => pair(lst(true, false), lst(1, 2));
+
+extern let reverse: [A] => (fn(List[A]) => List[A]);
+
+let foo : Pair[List[Bool], List[Int]] =
+  f(reverse);
