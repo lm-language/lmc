@@ -40,7 +40,7 @@ In order to focus on the aforementioned goals, I've decided to give up on the fo
   lead to misleading type errors.
   
 ## Quick start
-TODO
+https://github.com/lm-language/lmc/wiki/Quickstart
 
 ## Development
 Development is on going and right now, only the frontend of the compiler is implemented.
