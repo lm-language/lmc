@@ -8,4 +8,9 @@ case class Pos(line: Int, column: Int) {
       this.line < other.line
     }
   }
+
+  def <(that: Pos): Boolean = lt(that)
+  def <=(that: Pos): Boolean = that == this || lt(that)
+  def >(that: Pos): Boolean = !(this <= that)
+  def >=(that: Pos): Boolean = that == this || this > that
 }

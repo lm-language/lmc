@@ -196,8 +196,48 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) ext
     ExistentialInstance(id, name)
   }
 
-  def getHoverInfo(file: Path, pos: Pos): String = {
-    // TODO: Implement hover functionality
-    return null
+  def getHoverInfo(path: Path, pos: Pos): Option[String] = {
+    debug("getHoverInfo")
+    val node = findNodeAtPos(path, pos)
+    node match {
+      case Some(Typed.Ident(_, symbol, _)) =>
+        getHoverInfoForSymbol(symbol)
+      case Some(Typed.Expr(_, typ, _)) =>
+        Some(typ.toString)
+      case _ =>
+        None
+    }
+  }
+
+  private def getHoverInfoForSymbol(symbol: Symbol): Option[String] = {
+    this.getTypeOfSymbol(symbol).map(_.toString) match {
+      case Some(s) => Some(s)
+      case None =>
+        this.getTypeVar(symbol).map(_.toString)
+    }
+  }
+
+  private def findNodeAtPos(path: Path, pos: Pos): Option[Typed.Node] = {
+    findDeclAtPos(path, pos).flatMap(d => findNodeInNode(d, pos))
+  }
+
+  private def findDeclAtPos(path: Path, pos: Pos): Option[Typed.Declaration] = {
+    val sourceFile = getCheckedSourceFile(path)
+    sourceFile.declarations.find(
+      d => d.loc.start <= pos && d.loc.end >= pos
+    )
+  }
+
+  private def findNodeInNode(node: Typed.Node, pos: Pos): Option[Typed.Node] = {
+    for (child <- node.children) {
+      if (child.loc.start <= pos && child.loc.end >= pos) {
+        return findNodeInNode(child, pos)
+      }
+    }
+    if (node.loc.start <= pos && node.loc.end >= pos) {
+      Some(node)
+    } else {
+      None
+    }
   }
 }

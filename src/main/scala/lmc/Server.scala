@@ -347,7 +347,7 @@ object LSP {
         val JInt(character) = json \ "params" \ "position" \ "character"
         Right(Hover(
           textDocument = TextDocumentIdentifier(uri),
-          position = Pos(line.toInt, character.toInt)
+          position = Pos(line.toInt + 1, character.toInt + 1)
         ))
       }
     }
