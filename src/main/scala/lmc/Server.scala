@@ -122,9 +122,11 @@ class Server {
     case msg@LSP.TextDocument.DidOpen(_, _, _, _) => for {
         path <- resolveUri(msg.uri)
       } yield syncDiagnostics(msg.uri, Paths.get(path))
-    case msg@LSP.TextDocument.DidChange(_, _) => for {
-        path <- resolveUri(msg.uri)
-      } yield syncDiagnostics(msg.uri, Paths.get(path))
+    case msg@LSP.TextDocument.DidChange(_, _, _) => for {
+        pathStr <- resolveUri(msg.uri)
+        path = Paths.get(pathStr)
+        _ = this.compiler.updateCharStream(path, msg.text)
+      } yield syncDiagnostics(msg.uri, path)
     case LSP.TextDocument.Hover(file, pos) => for {
         path <- resolveUri(file.uri)
         hoverInfo = compiler.getHoverInfo(Paths.get(path), pos)
@@ -154,7 +156,7 @@ class Server {
   }
 
   def syncDiagnostics(uri: String, path: java.nio.file.Path): Unit = {
-    val errors = compiler.getSourceFileDiagnostics(path, true)
+    val errors = compiler.getSourceFileDiagnostics(path)
     respond((
       ("jsonrpc" -> "2.0") ~
       ("method" -> "textDocument/publishDiagnostics") ~
@@ -312,16 +314,21 @@ object LSP {
 
     case class DidChange(
       uri: String,
-      version: Int
+      version: Int,
+      text: String
     ) extends LSPParams
     object DidChange {
       def fromJSON(j: JValue): Either[Error, DidChange] = {
         val params = j \ "params" \ "textDocument"
         val JString(uri) = params \ "uri"
         val JInt(version) = params \ "version"
+
+        val JArray(contentChanges) = j \ "params" \ "contentChanges"
+        val JString(text) = contentChanges.head \ "text"
         Right(DidChange(
           uri,
-          version.toInt
+          version.toInt,
+          text
         ))
       }
     }

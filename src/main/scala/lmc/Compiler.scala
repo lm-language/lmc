@@ -8,10 +8,11 @@ import scala.concurrent.Future
 import scala.collection._
 import lmc.types.{ExistentialInstance, Kind, Type}
 import diagnostics._
-import io.File
+import io.{File, Stream, StringStream}
 import lmc.syntax.{Parsed, Typed}
 
 class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) extends Context with Context.TC {
+  private val _charStreams = mutable.Map.empty[Path, Stream[Char]]
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
 
@@ -124,12 +125,8 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) ext
   }
 
   def getSourceFileDiagnostics(
-    path: Path, refresh: Boolean = false
+    path: Path
   ): Iterable[Diagnostic] = {
-    if (refresh) {
-      this._parsedSourceFiles.remove(path)
-      this._typedSourceFiles.remove(path)
-    }
     val result = getCheckedSourceFile(path)
       .errors.toSet union getParsedSourceFile(path).errors.toSet
 
@@ -141,14 +138,31 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) ext
       case Some(p) =>
         p
       case None =>
-        val chars = File(path)
+        val chars = getCharStream(path)
         val tokens = Lexer(path, chars)
         val parser = new Parser(this, path, tokens)
         val sourceFile = parser.parseSourceFile()
         cacheParsedSourceFile(path, sourceFile)
         sourceFile
     }
+  }
 
+  def getCharStream(path: Path): Stream[Char] = {
+    _charStreams.get(path) match {
+      case Some(stream) =>
+        debug(s"from cache: ${stream}")
+        stream
+      case None =>
+        val stream = File(path)
+        _charStreams.put(path, stream)
+        stream
+    }
+  }
+
+  def updateCharStream(path: Path, text: String): Unit = {
+    _charStreams.update(path, StringStream(text))
+    _parsedSourceFiles.remove(path)
+    _typedSourceFiles.remove(path)
   }
 
   private def cacheParsedSourceFile(path: Path, sourceFile: Parsed.SourceFile) = {

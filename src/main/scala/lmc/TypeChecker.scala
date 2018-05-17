@@ -188,6 +188,8 @@ final class TypeChecker(
       case TApplication(f, arg) =>
         occursIn(symbol, f) || occursIn(symbol, arg)
       case ExistentialInstance(_, _) => false
+      case Module(_, values) =>
+        values.values.exists(t => occursIn(symbol, t))
       case Uninferred => false
     }
   }
