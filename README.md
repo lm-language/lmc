@@ -74,6 +74,9 @@ cd ~/.vscode/extensions
 # or ~/.vscode-insiders for insiders release
 
 git clone https://github.com/lm-language/lmc-vscode
+cd lmc-vscode
+# requires nodejs to be installed
+npm install
 ```
 
 Now, when you open any `.lm` file in VS code, you'll
