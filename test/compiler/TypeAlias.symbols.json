@@ -1,60 +1,57 @@
 {
-  "loc" : {
-    "start" : {
-      "line" : 1,
-      "column" : 1
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
     },
-    "end" : {
-      "line" : 19,
-      "column" : 1
+    "end":{
+      "line":19,
+      "column":1
     }
   },
-  "symbols" : {
-    "x" : {
-      "typ" : "Var(Y)"
+  "symbols":{
+    "x":{
+      "typ":"Var(Y)"
     },
-    "a" : {
-      "typ" : "Int"
+    "a":{
+      "typ":"Int"
     },
-    "b" : {
-      "typ" : "Int"
+    "b":{
+      "typ":"Int"
     },
-    "c" : {
-      "typ" : "Int"
+    "c":{
+      "typ":"Int"
     },
-    "d" : {
-      "typ" : "Int"
+    "d":{
+      "typ":"Int"
     }
   },
-  "types" : {
-    "CyclicForall" : "([*] => *)",
-    "X" : "*",
-    "Y" : "*",
-    "CyclicFuncType" : "*",
-    "A" : "*",
-    "B" : "*",
-    "Cyclic" : "*"
+  "types":{
+    "CyclicForall":"*",
+    "X":"*",
+    "Y":"*",
+    "CyclicFuncType":"*",
+    "A":"*",
+    "B":"*",
+    "Cyclic":"*"
   },
-  "children" : [
+  "children":[
     {
-      "loc" : {
-        "start" : {
-          "line" : 15,
-          "column" : 31
+      "loc":{
+        "start":{
+          "line":15,
+          "column":24
         },
-        "end" : {
-          "line" : 15,
-          "column" : 58
+        "end":{
+          "line":15,
+          "column":51
         }
       },
-      "symbols" : {
-        
+      "symbols":{},
+      "types":{
+        "A":"*"
       },
-      "types" : {
-        "A" : "*"
-      },
-      "children" : [
-      ]
+      "children":[]
     }
   ]
 }
