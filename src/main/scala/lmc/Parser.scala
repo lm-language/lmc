@@ -33,9 +33,13 @@ object Parser {
   )
   val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, LSQB).union(EXPR_PREDICTORS)
   val DECL_PREDICTORS = Set(
-    LET, EXTERN, TYPE
+    LET, EXTERN, TYPE, EXTERN, ABSTRACT
   )
   val ARG_PREDICTORS: Set[token.Variant] = EXPR_PREDICTORS
+  val DECL_MODIFIERS: Map[token.Variant, Declaration.Modifier] = Map(
+    EXTERN -> Declaration.Modifier.Extern,
+    ABSTRACT -> Declaration.Modifier.Abstract
+  )
 }
 
 final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
@@ -181,6 +185,9 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     )
 
   def parseDeclaration: Declaration = {
+
+    val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+    val modifiers = parseModifiers(errors)
     currentToken.variant match {
       case SEMICOLON =>
         advance()
@@ -188,57 +195,24 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       case LET =>
         val startTok = advance()
         val pattern = parsePattern()
-        val errors = collection.mutable.ListBuffer.empty[Diagnostic]
-        expect(errors)(EQ)
-        val expr = parseExpr()
+        val rhs = currentToken.variant match {
+          case EQ =>
+            expect(errors)(EQ)
+            val expr = parseExpr()
+            Some(expr)
+          case _ => None
+        }
         expect(errors)(SEMICOLON)
         Declaration(
           meta = makeMeta(
-            loc = Loc.between(startTok, expr),
+            loc = Loc.between(startTok, rhs.getOrElse(pattern)),
             scope = scope(),
             diagnostics = errors.toList
           ),
-          variant = Declaration.Let(pattern, expr)
+          variant = Declaration.Let(pattern, rhs),
+          modifiers
         )
-      case EXTERN =>
-        val startTok = advance()
-        val errors = ListBuffer.empty[Diagnostic]
-        currentToken.variant match {
-          case TYPE =>
-            advance()
-            val ident = parseIdent()
-            val kindAnnotation = currentToken.variant match  {
-              case COLON =>
-                advance()
-                Some(parseKindAnnotation())
-              case _ => None
-            }
-            expect(errors)(SEMICOLON)
-            Declaration(
-              meta = makeMeta(
-                loc = Loc.between(startTok, kindAnnotation.getOrElse(ident)),
-                diagnostics = errors.toList,
-                scope = scope()
-              ),
-              variant = Declaration.ExternType(ident, kindAnnotation)
-            )
-          case _ =>
-            expect(errors)(LET)
-            val ident = parseIdent()
-            expect(errors)(COLON)
-            val annotation = parseTypeAnnotation()
-            expect(errors)(SEMICOLON)
-            Declaration(
-              meta = makeMeta(
-                loc = Loc.between(startTok, ident),
-                diagnostics = errors.toList,
-                scope = scope()
-              ),
-              variant = Declaration.ExternLet(ident, annotation)
-            )
-        }
       case TYPE =>
-        val errors = ListBuffer.empty[Diagnostic]
         val startTok = advance()
         val ident = parseIdent()
         val kindAnnotation = currentToken.variant match {
@@ -247,30 +221,23 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             Some(parseKindAnnotation())
           case _ => None
         }
-        currentToken.variant match {
+        val rhs = currentToken.variant match {
           case EQ =>
             expect(errors)(EQ)
-            val rhs = parseTypeAnnotation()
-            expect(errors)(SEMICOLON)
-            Declaration(
-              meta = makeMeta(
-                loc = Loc.between(startTok, rhs),
-                diagnostics = errors.toList,
-                scope = scope()
-              ),
-              variant = Declaration.TypeAlias(ident, kindAnnotation, rhs)
-            )
-          case _ =>
-            expect(errors)(SEMICOLON)
-            Declaration(
-              meta = makeMeta(
-                loc = Loc.between(startTok, kindAnnotation.getOrElse(ident)),
-                diagnostics = errors.toList,
-                scope = scope()
-              ),
-              variant = Declaration.Existential(ident, kindAnnotation)
-            )
+            val typ = parseTypeAnnotation()
+            Some(typ)
+          case _ => None
         }
+        val semicolon = expect(errors)(SEMICOLON)
+        Declaration(
+          meta = makeMeta(
+            loc = Loc.between(startTok, semicolon),
+            diagnostics = errors.toList,
+            scope = scope()
+          ),
+          variant = Declaration.TypeAlias(ident, kindAnnotation, rhs),
+          modifiers
+        )
       case _ =>
         val loc = currentToken.loc
 
@@ -288,8 +255,32 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             scope(),
             diagnostics ++ skippedDiagnostics
           ),
-          variant = Declaration.Error()
+          variant = Declaration.Error(),
+          modifiers
         )
+    }
+  }
+
+  private def parseModifiers(
+    errors: ListBuffer[Diagnostic],
+    modifiers: Set[Declaration.Modifier] = Set()
+  ): Set[Declaration.Modifier] = {
+    Parser.DECL_MODIFIERS.get(currentToken.variant) match {
+      case Some(modifier) =>
+        val tok = advance()
+        if (modifiers.contains(modifier)) {
+          errors.append(
+            Diagnostic(
+              loc = tok.loc,
+              severity = Severity.Error,
+              variant = DuplicateModifier(tok.lexeme)
+            )
+          )
+          modifiers
+        } else {
+          modifiers + modifier
+        }
+      case _ => modifiers
     }
   }
 

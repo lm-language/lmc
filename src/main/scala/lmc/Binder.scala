@@ -3,6 +3,7 @@ package lmc
 import lmc.common.{Pos, ScopeBuilder, ScopeEntry, Scope, TypeEntry}
 import lmc.syntax.Parsed._
 import lmc.diagnostics._
+import scala.collection.mutable.ListBuffer
 
 /**
   * Adds String -> Symbol mappings in scopes
@@ -91,44 +92,86 @@ class Binder(
   }
 
   def bindDeclaration(decl: Declaration): Declaration = {
+    val errors = ListBuffer.empty[Diagnostic]
     import Declaration._
     decl.variant match {
       case Let(pattern, expr) =>
         val newPattern = bindPattern(pattern)
-        val boundExpr = bindExpr(expr)
+        val boundExpr = expr.map(bindExpr)
+        if (
+          decl.modifiers.contains(Modifier.Extern) ||
+          decl.modifiers.contains(Modifier.Abstract)
+        ) {
+          expr match {
+            case Some(e) =>
+              errors.append(
+                Diagnostic(
+                  loc = e.loc,
+                  severity = Severity.Error,
+                  variant = UnexpectedBodyInAbstract
+                )
+              )
+            case None => ()
+          }
+
+          pattern.variant match {
+            case Pattern.Var(_) =>
+              errors.append(
+                Diagnostic(
+                  loc = pattern.loc,
+                  severity = Severity.Error,
+                  variant = MissingTypeAnnotationInAbstract
+                )
+              )
+            case Pattern.Annotated(inner, _) =>
+              inner.variant match {
+                case Pattern.Var(_) => ()
+                case _ =>
+                  errors.append(
+                    Diagnostic(
+                      loc = pattern.loc,
+                      severity = Severity.Error,
+                      variant = ComplexPatternInAbstract
+                    )
+                  )
+              }
+            case _ =>
+              errors.append(
+                Diagnostic(
+                  loc = pattern.loc,
+                  severity = Severity.Error,
+                  variant = ComplexPatternInAbstract
+                ),
+                Diagnostic(
+                  loc = pattern.loc,
+                  severity = Severity.Error,
+                  variant = MissingTypeAnnotationInAbstract
+                )
+              )
+          }
+        } else {
+          expr match {
+            case Some(_) => ()
+            case None =>
+              errors.append(
+                Diagnostic(
+                  loc = decl.loc,
+                  severity = Severity.Error,
+                  variant = MissingBodyInNonAbstract
+                )
+              )
+          }
+        }
         decl.copy(
           variant = Let(
             pattern = newPattern,
             boundExpr
-          )
-        )
-      case ExternLet(ident, annotation) =>
-        val newAnnotation = bindAnnotation(annotation)
-        val boundIdent = bindIdent(ident)
-        decl.copy(
-          meta = decl.meta,
-          variant = ExternLet(boundIdent, newAnnotation)
-        )
-      case Existential(ident, kindAnnotation) =>
-        val (boundIdent, error) = bindTypeDeclHelper(ident)
-        val result = decl.copy(
-          meta = decl.meta,
-          variant = Existential(boundIdent, kindAnnotation)
-        )
-        error match {
-          case Some(e) =>
-            result.copy(meta = result.meta.withDiagnostic(e))
-          case None => result
-        }
-      case ExternType(ident, kindAnnotation) =>
-        val (boundIdent, error) = bindTypeDeclHelper(ident)
-        decl.copy(
-          meta = decl.meta.withDiagnostics(error.map({ List(_) }).getOrElse(List())),
-          variant = ExternType(boundIdent, kindAnnotation)
+          ),
+          meta = decl.meta.withDiagnostics(errors)
         )
       case TypeAlias(ident, kindAnnotation, annotation) =>
         val (boundIdent, error) = bindTypeDeclHelper(ident)
-        val boundAnnotation = bindAnnotation(annotation)
+        val boundAnnotation = annotation.map(bindAnnotation)
         val result = decl.copy(
           meta = decl.meta,
           variant = TypeAlias(boundIdent, kindAnnotation, boundAnnotation)

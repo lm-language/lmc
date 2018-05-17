@@ -2,7 +2,7 @@ name := "lmc-scala"
 
 version := "0.1"
 
-val useDotty = true
+val useDotty = false
 
 scalaVersion := { if (useDotty) "0.8.0-RC1" else "2.12.5" }
 

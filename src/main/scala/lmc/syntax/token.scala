@@ -9,7 +9,7 @@ object token {
       ID, INT, EOF,
       // keywords
       LET, IF, ELSE, FN, EXTERN,
-      TYPE, MODULE,
+      TYPE, MODULE, ABSTRACT, OVERRIDE,
 
       // Punctuation
       VBAR, LPAREN, RPAREN, LBRACE, RBRACE, SEMICOLON,

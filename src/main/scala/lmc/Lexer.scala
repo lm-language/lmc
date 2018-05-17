@@ -26,6 +26,8 @@ object Lexer {
     "let" -> LET,
     "fn" -> FN,
     "extern" -> EXTERN,
+    "abstract" -> ABSTRACT,
+    "override" -> OVERRIDE,
     "module" -> MODULE,
     "type" -> TYPE
   )

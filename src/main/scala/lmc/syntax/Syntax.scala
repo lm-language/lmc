@@ -250,42 +250,45 @@ trait Syntax {
   object Declaration {
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] = this match {
-        case Let(pattern, rhs) => List(pattern, rhs)
-        case ExternLet(name, annotation) =>
-          List(name, annotation)
+        case Let(pattern, rhs) => rhs match {
+          case Some(rhs) => List(pattern, rhs)
+          case None => List(pattern)
+        }
         case TypeAlias(ident, kindAnnotation, typeAnnotation) =>
-          kindAnnotation match {
-            case Some(k) => List(ident, k, typeAnnotation)
-            case None => List(ident, typeAnnotation)
-          }
-        case ExternType(ident, kindAnnotation) =>
-          kindAnnotation match {
-            case Some(k) => List(ident, k)
-            case None => List(ident)
-          }
-        case Existential(ident, kindAnnotation) =>
-          kindAnnotation match {
-            case Some(k) => List(ident, k)
-            case None => List(ident)
-          }
+          List(ident, kindAnnotation.getOrElse(null), typeAnnotation.getOrElse(null))
+            .filter(_ != null)
         case Error() => List()
       }
     }
     type T = Variant
-    case class Let(pattern: Pattern, rhs: Expr) extends T {
+
+    sealed trait Modifier
+
+    object Modifier {
+      case object Extern extends Modifier
+      case object Abstract extends Modifier
+
+      def named(m: Declaration.Modifier): Named.Declaration.Modifier =
+        m match {
+          case Modifier.Extern => Named.Declaration.Modifier.Extern
+          case Modifier.Abstract => Named.Declaration.Modifier.Abstract
+        }
+      def typed(m: Declaration.Modifier): Typed.Declaration.Modifier =
+        m match {
+          case Modifier.Extern => Typed.Declaration.Modifier.Extern
+          case Modifier.Abstract => Typed.Declaration.Modifier.Abstract
+        }
+    }
+
+
+    case class Let(pattern: Pattern, rhs: Option[Expr]) extends T {
       override def toString: String =
         s"let $pattern = $rhs"
     }
-    case class ExternLet(name: Ident, typeAnnotation: TypeAnnotation) extends T
-    case class ExternType(name: Ident, kindAnnotation: Option[KindAnnotation]) extends T
     case class TypeAlias(
       name: Ident,
       kindAnnotation: Option[KindAnnotation],
-      typeAnnotation: TypeAnnotation
-    ) extends T
-    case class Existential(
-      name: Ident,
-      kindAnnotation: Option[KindAnnotation]
+      rhs: Option[TypeAnnotation]
     ) extends T
     case class Error() extends T
 
@@ -328,7 +331,8 @@ trait Syntax {
 
   case class Declaration(
     meta: Meta,
-    variant: Declaration.Variant
+    variant: Declaration.Variant,
+    modifiers: Set[Declaration.Modifier]
   ) extends NodeOps(meta) with Node with HasVariant[Declaration.Variant] {
     override def children: Iterable[Node] = variant.children
     override def toString: String = variant.toString

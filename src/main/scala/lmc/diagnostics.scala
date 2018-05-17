@@ -36,6 +36,12 @@ object diagnostics {
   case object NotAModule extends Variant
   case class NoSuchTypeProperty(name: String) extends Variant
   case class NoSuchValueProperty(name: String) extends Variant
+  case class DuplicateModifier(modifier: String) extends Variant
+  case object MissingBodyInNonAbstract extends Variant
+  case object UnexpectedBodyInAbstract extends Variant
+  case object ComplexPatternInAbstract extends Variant
+  case object MissingTypeAnnotationInAbstract extends Variant
+
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {
       val paramsStr = params.foldLeft("")(

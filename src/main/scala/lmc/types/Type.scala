@@ -20,6 +20,12 @@ case class Module(
     values.map(entry => entry._1.text -> entry._1)
 }
 
+case class Abstract(
+  abstractTypes: Map[Symbol, Kind],
+  abstractValues: Map[Symbol, Type],
+  innerType: Type
+) extends Type
+
 // a type constructor; Like a type variable but is not substitutable
 // or assignable to any other type constructor
 case class Constructor(symbol: Symbol, kind: Kind) extends Type {

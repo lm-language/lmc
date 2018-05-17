@@ -40,22 +40,16 @@ class Renamer(
     val (variant, diagnostics) = decl.variant match {
       case P.Declaration.Let(pattern, expr) =>
         val namedPattern = renamePattern(pattern)
-        val namedExpr = renameExpr(expr)
+        val namedExpr = expr.map(renameExpr)
         (N.Declaration.Let(namedPattern, namedExpr), List.empty)
-      case P.Declaration.ExternLet(ident, annotation) =>
-        val namedIdent = renameVariableIdent(ident)
-        val namedExpr = renameAnnotation(annotation)
-        (N.Declaration.ExternLet(namedIdent, namedExpr), List.empty)
       case P.Declaration.TypeAlias(ident, kindAnnotation, annotation) =>
         val namedIdent = renameTypeIdent(ident)
-        val namedAnnotation = renameAnnotation(annotation)
-        (N.Declaration.TypeAlias(namedIdent, kindAnnotation.map(renameKindAnnotation), namedAnnotation), List.empty)
-      case P.Declaration.ExternType(ident, kindAnnotation) =>
-        val namedIdent = renameTypeIdent(ident)
-        (N.Declaration.ExternType(namedIdent, kindAnnotation.map(renameKindAnnotation)), List.empty)
-      case P.Declaration.Existential(ident, kindAnnotation) =>
-        val namedIdent = renameTypeIdent(ident)
-        (N.Declaration.Existential(namedIdent, kindAnnotation.map(renameKindAnnotation)), List.empty)
+        val namedAnnotation = annotation.map(renameAnnotation)
+        (N.Declaration.TypeAlias(
+          namedIdent,
+          kindAnnotation.map(renameKindAnnotation),
+          namedAnnotation
+        ), List.empty)
       case P.Declaration.Error() =>
         (N.Declaration.Error(), List.empty)
     }
@@ -63,7 +57,8 @@ class Renamer(
       meta = decl.meta.copy(
         diagnostics = decl.meta.diagnostics ++ diagnostics
       ).named,
-      variant = variant
+      variant = variant,
+      decl.modifiers.map(P.Declaration.Modifier.named)
     )
     addDeclToScope(WeakReference(result))
     result
@@ -72,8 +67,6 @@ class Renamer(
   private def addDeclToScope(declaration: WeakReference[N.Declaration]): Unit = {
     declaration.get.map(_.variant) match {
       case Some(N.Declaration.TypeAlias(ident, _, _)) =>
-        addDecl(ident.name, declaration)
-      case Some(N.Declaration.Existential(ident, _)) =>
         addDecl(ident.name, declaration)
       case _ => ()
     }

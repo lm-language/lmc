@@ -1,8 +1,8 @@
 extern let fail: [A] => A;
-type String;
+abstract type String;
 type KindMismatch: * = List;
 type List: [*] => *;
-type ListAlias: [*] => * = [I] => List[I];
+type ListAlias: [*] => * = List;
 type DeepHKT: [*, [*, *] => *] => [*] => *;
 
 let kindMismatchFunc = fn[A: [*] => *](a: A): Int => 1;
