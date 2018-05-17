@@ -19,7 +19,7 @@ object Parser {
   def apply(ctx: Context, path: Path, tokens: Stream[Token]) =
     new Parser(ctx, path, tokens)
   val RECOVERY_TOKENS = Set(
-    NEWLINE, EOF, RPAREN, RBRACE
+    NEWLINE, EOF, RPAREN, RBRACE, SEMICOLON
   )
 
   def isRecoveryToken(variant: token.Variant): Boolean = {
@@ -130,6 +130,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         advance()
       case _ =>
         val loc = currentToken.loc.copy(end = currentToken.loc.start)
+        advance()
         errors.append(
           Diagnostic(
             severity = diagnostics.Severity.Error,
@@ -181,6 +182,9 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
 
   def parseDeclaration: Declaration = {
     currentToken.variant match {
+      case SEMICOLON =>
+        advance()
+        parseDeclaration
       case LET =>
         val startTok = advance()
         val pattern = parsePattern()
