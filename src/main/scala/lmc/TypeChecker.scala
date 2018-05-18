@@ -74,6 +74,16 @@ final class TypeChecker(
                   ))
                 case None => None
               }
+            } else {
+              if (inferredRHS.isEmpty) {
+                  errors.append(
+                    Diagnostic(
+                      loc = decl.loc,
+                      severity = Severity.Error,
+                      variant = MissingBodyInNonAbstract
+                    )
+                  )
+              }
             }
             val typ = inferredRHS.map(annotationToType)
             setTypeVar(ident.loc, errors)(inferredIdent.name, inferredKindAnnotation, typ)

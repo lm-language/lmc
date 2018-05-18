@@ -1,9 +1,9 @@
 extern let fail: [A] => A;
 abstract type String;
 type KindMismatch: * = List;
-type List: [*] => *;
+extern type List: [*] => *;
 type ListAlias: [*] => * = List;
-type DeepHKT: [*, [*, *] => *] => [*] => *;
+extern type DeepHKT: [*, [*, *] => *] => [*] => *;
 
 let kindMismatchFunc = fn[A: [*] => *](a: A): Int => 1;
 let kindMismatchRetTyp = fn[KFR: [*] => *](a: Int): KFR => fail;

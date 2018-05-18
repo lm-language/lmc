@@ -87,11 +87,11 @@
       "loc":{
         "start":{
           "line":7,
-          "column":4
+          "column":5
         },
         "end":{
           "line":7,
-          "column":45
+          "column":46
         }
       },
       "symbols":{

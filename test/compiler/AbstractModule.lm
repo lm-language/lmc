@@ -9,7 +9,7 @@ type NonAbstractWithoutBody;
 
 let Collection = module {
 	type This: [*] => *;
-	let empty: [A] => This[A];
+	abstract let empty: [A] => This[A];
 };
 
 let Array = module {
