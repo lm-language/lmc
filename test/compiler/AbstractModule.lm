@@ -1,0 +1,27 @@
+abstract extern let multipleModifiers: Int;
+abstract let abstractWithValue = 23;
+abstract let ((a: Int): Int);
+let nonAbstractWithoutValue;
+abstract let abstractWithoutAnnotation;
+
+abstract type AbstractWithBody = Int;
+type NonAbstractWithoutBody;
+
+let Collection = module {
+	type This: [*] => *;
+	let empty: [A] => This[A];
+};
+
+let Array = module {
+	extern type Array: [*] => *;
+	override type This = Array;
+	override extern let empty: [A] => This[A];
+};
+
+let ArrayWithoutEmpty = module {
+
+	override type Self = Array.Self;
+};
+
+let e = ArrayWithoutEmpty.empty;
+

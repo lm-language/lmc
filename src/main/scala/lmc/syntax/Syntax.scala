@@ -267,16 +267,19 @@ trait Syntax {
     object Modifier {
       case object Extern extends Modifier
       case object Abstract extends Modifier
+      case object Override extends Modifier
 
       def named(m: Declaration.Modifier): Named.Declaration.Modifier =
         m match {
           case Modifier.Extern => Named.Declaration.Modifier.Extern
           case Modifier.Abstract => Named.Declaration.Modifier.Abstract
+          case Modifier.Override => Named.Declaration.Modifier.Override
         }
       def typed(m: Declaration.Modifier): Typed.Declaration.Modifier =
         m match {
           case Modifier.Extern => Typed.Declaration.Modifier.Extern
           case Modifier.Abstract => Typed.Declaration.Modifier.Abstract
+          case Modifier.Override => Typed.Declaration.Modifier.Override
         }
     }
 
@@ -336,6 +339,9 @@ trait Syntax {
   ) extends NodeOps(meta) with Node with HasVariant[Declaration.Variant] {
     override def children: Iterable[Node] = variant.children
     override def toString: String = variant.toString
+    def isAbstract: Boolean = modifiers.contains(Declaration.Modifier.Abstract)
+    def isOverride: Boolean = modifiers.contains(Declaration.Modifier.Override)
+    def isExtern: Boolean = modifiers.contains(Declaration.Modifier.Extern)
   }
 
   case class SourceFile(

@@ -53,20 +53,29 @@ final class TypeChecker(
           case Some(d) if d.meta.id == decl.meta.id =>
             d
           case _ =>
+            val errors = ListBuffer.empty[Diagnostic]
             val inferredIdent = inferIdent(ident)
             val inferredKindAnnotation = kindAnnotation.map(inferKindAnnotation)
             val expectedKind = inferredKindAnnotation
               .map(kindAnnotationToKind)
               .getOrElse(Kind.Star)
-            val inferredRHS = rhs.map(annot => checkTypeAnnotation(annot, expectedKind))
+            var inferredRHS = rhs.map(annot => checkTypeAnnotation(annot, expectedKind))
+            if (decl.isAbstract || decl.isExtern) {
+              inferredRHS = inferredRHS match {
+                case Some(r) =>
+                  Some(r.copy(
+                    meta = r.meta.withDiagnostic(
+                      Diagnostic(
+                        loc = r.meta.loc,
+                        severity = Severity.Error,
+                        variant = UnexpectedBodyInAbstract
+                      )
+                    )
+                  ))
+                case None => None
+              }
+            }
             val typ = inferredRHS.map(annotationToType)
-            val errors = ListBuffer.empty[Diagnostic]
-//            for {
-//              rhs <- inferredRHS
-//              rhsKind = rhs.kind
-//            } yield {
-//              errors.appendAll(assertKindMatch(rhs.loc, expectedKind, rhsKind))
-//            }
             setTypeVar(ident.loc, errors)(inferredIdent.name, inferredKindAnnotation, typ)
             T.Declaration(
               decl.meta.typed.withDiagnostics(errors),

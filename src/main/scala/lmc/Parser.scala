@@ -32,14 +32,16 @@ object Parser {
     ID, LPAREN, FN, LBRACE, INT, MODULE
   )
   val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, LSQB).union(EXPR_PREDICTORS)
-  val DECL_PREDICTORS = Set(
-    LET, EXTERN, TYPE, EXTERN, ABSTRACT
-  )
+
   val ARG_PREDICTORS: Set[token.Variant] = EXPR_PREDICTORS
   val DECL_MODIFIERS: Map[token.Variant, Declaration.Modifier] = Map(
     EXTERN -> Declaration.Modifier.Extern,
-    ABSTRACT -> Declaration.Modifier.Abstract
+    ABSTRACT -> Declaration.Modifier.Abstract,
+    OVERRIDE -> Declaration.Modifier.Override
   )
+  val DECL_PREDICTORS: Set[token.Variant] = Set(
+    LET, EXTERN, TYPE
+  ) union DECL_MODIFIERS.keySet
 }
 
 final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
@@ -276,9 +278,9 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
               variant = DuplicateModifier(tok.lexeme)
             )
           )
-          modifiers
+          parseModifiers(errors, modifiers)
         } else {
-          modifiers + modifier
+          parseModifiers(errors, modifiers + modifier)
         }
       case _ => modifiers
     }
