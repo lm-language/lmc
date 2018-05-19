@@ -40,7 +40,7 @@ object Parser {
     OVERRIDE -> Declaration.Modifier.Override
   )
   val DECL_PREDICTORS: Set[token.Variant] = Set(
-    LET, EXTERN, TYPE
+    LET, EXTERN, TYPE, INCLUDE
   ) union DECL_MODIFIERS.keySet
 }
 
@@ -189,13 +189,16 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   def parseDeclaration: Declaration = {
 
     val errors = collection.mutable.ListBuffer.empty[Diagnostic]
-    val modifiers = parseModifiers(errors)
+    val modifiersWithTokens = parseModifiers(errors)
+    val modifiers = modifiersWithTokens.map(_._2).toSet
+    val modifierTokens = modifiersWithTokens.map(_._1)
+    val startLocNode = modifierTokens.headOption.getOrElse(currentToken)
     currentToken.variant match {
       case SEMICOLON =>
         advance()
         parseDeclaration
       case LET =>
-        val startTok = advance()
+        advance()
         val pattern = parsePattern()
         val rhs = currentToken.variant match {
           case EQ =>
@@ -207,15 +210,37 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         expect(errors)(SEMICOLON)
         Declaration(
           meta = makeMeta(
-            loc = Loc.between(startTok, rhs.getOrElse(pattern)),
+            loc = Loc.between(startLocNode, rhs.getOrElse(pattern)),
             scope = scope(),
             diagnostics = errors.toList
           ),
           variant = Declaration.Let(pattern, rhs),
           modifiers
         )
+      case INCLUDE =>
+        advance()
+        val e = parseExpr()
+        expect(errors)(SEMICOLON)
+        for (modifierTok <- modifierTokens) {
+          errors.append(
+            Diagnostic(
+              loc = modifierTok.loc,
+              severity = Severity.Error,
+              variant = ModifierOnInclude
+            )
+          )
+        }
+        Declaration(
+          meta = makeMeta(
+            loc = Loc.between(startLocNode, e),
+            scope = scope(),
+            diagnostics = errors.toList
+          ),
+          variant = Declaration.Include(e),
+          modifiers
+        )
       case TYPE =>
-        val startTok = advance()
+        advance()
         val ident = parseIdent()
         val kindAnnotation = currentToken.variant match {
           case COLON =>
@@ -233,7 +258,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val semicolon = expect(errors)(SEMICOLON)
         Declaration(
           meta = makeMeta(
-            loc = Loc.between(startTok, semicolon),
+            loc = Loc.between(startLocNode, semicolon),
             diagnostics = errors.toList,
             scope = scope()
           ),
@@ -241,19 +266,22 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           modifiers
         )
       case _ =>
-        val loc = currentToken.loc
+        val startTok = currentToken
 
         val skippedDiagnostics = recover()
         val diagnostics = List(Diagnostic(
           DeclarationExpected(),
           Severity.Error,
-          loc
+          startTok.loc
         ))
         addDiagnostics(diagnostics)
         addDiagnostics(skippedDiagnostics)
         Declaration(
           meta = makeMeta(
-            loc = currentToken.loc,
+            loc = Loc.between(
+              modifierTokens.headOption.getOrElse(startTok),
+              currentToken
+            ),
             scope(),
             diagnostics ++ skippedDiagnostics
           ),
@@ -265,8 +293,8 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
 
   private def parseModifiers(
     errors: ListBuffer[Diagnostic],
-    modifiers: Set[Declaration.Modifier] = Set()
-  ): Set[Declaration.Modifier] = {
+    modifiers: Vector[(Token, Declaration.Modifier)] = Vector()
+  ): Vector[(Token, Declaration.Modifier)] = {
     Parser.DECL_MODIFIERS.get(currentToken.variant) match {
       case Some(modifier) =>
         val tok = advance()
@@ -280,7 +308,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           )
           parseModifiers(errors, modifiers)
         } else {
-          parseModifiers(errors, modifiers + modifier)
+          parseModifiers(errors, modifiers ++ Vector(tok -> modifier))
         }
       case _ => modifiers
     }

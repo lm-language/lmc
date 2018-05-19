@@ -181,6 +181,10 @@ class Binder(
             result.copy(meta = result.meta.withDiagnostic(e))
           case None => result
         }
+      case Include(e) =>
+        decl.copy(
+          variant = Include(bindExpr(e))
+        )
       case Error() =>
         decl
     }
@@ -266,7 +270,6 @@ class Binder(
           ScopeEntry(symbol, validAfter)
         )
         ident
-
     }
   }
 

@@ -3,12 +3,13 @@ package lmc
 import lmc.syntax.{Named => N, Parsed => P}
 import lmc.common.{ScopeBuilder, ScopeEntry, Symbol}
 import lmc.diagnostics._
+import lmc.utils.Debug
 
 import scala.collection.mutable.ListBuffer
 import scala.ref.WeakReference
 
 class Renamer(
-  ctx: Context
+  ctx: Context.Renamer
 ) {
   var _scopes = List.empty[ScopeBuilder]
   def renameSourceFile(_sourceFile: P.SourceFile): N.SourceFile = {
@@ -50,6 +51,30 @@ class Renamer(
           kindAnnotation.map(renameKindAnnotation),
           namedAnnotation
         ), List.empty)
+      case P.Declaration.Include(e) =>
+        val namedExpr = renameExpr(e)
+        val checkedExpr = ctx.getTypedExpr(namedExpr)
+        // we can detect here if someone tried to include
+        // something that's not a module but it seems like
+        // a type error so we don't add it here.
+        // Type checker should add that.
+        checkedExpr.typ match {
+          case lmc.types.Module(types, values) =>
+            for ((name, _) <- types) {
+              _scopes.head.setTypeVar(
+                name.text,
+                lmc.common.TypeEntry(name)
+              )
+            }
+            for ((name, _) <- values) {
+              _scopes.head.setSymbol(
+                name.text,
+                lmc.common.ScopeEntry(name)
+              )
+            }
+          case _ => ()
+        }
+        (N.Declaration.Include(namedExpr), List.empty)
       case P.Declaration.Error() =>
         (N.Declaration.Error(), List.empty)
     }
@@ -60,15 +85,30 @@ class Renamer(
       variant = variant,
       decl.modifiers.map(P.Declaration.Modifier.named)
     )
-    addDeclToScope(WeakReference(result))
+    addDeclToScope(result)
     result
   }
 
-  private def addDeclToScope(declaration: WeakReference[N.Declaration]): Unit = {
-    declaration.get.map(_.variant) match {
-      case Some(N.Declaration.TypeAlias(ident, _, _)) =>
-        addDecl(ident.name, declaration)
+  private def addDeclToScope(declaration: N.Declaration): Unit = {
+    declaration.variant match {
+      case N.Declaration.Let(pattern, _) =>
+        addPatternDeclToScope(pattern, declaration)
+      case N.Declaration.TypeAlias(ident, _, _) =>
+        addDecl(ident.name, WeakReference(declaration))
       case _ => ()
+    }
+  }
+
+
+  private def addPatternDeclToScope(pattern: N.Pattern, declaration: N.Declaration): Unit = {
+    import N.{Pattern => P}
+    pattern.variant match {
+      case P.Var(ident) =>
+        ctx.setDeclOfSymbol(ident.name, declaration)
+      case P.Annotated(inner, _) =>
+        addPatternDeclToScope(inner, declaration)
+      case P.Error =>
+        ()
     }
   }
 

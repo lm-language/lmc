@@ -250,13 +250,15 @@ trait Syntax {
   object Declaration {
     sealed trait Variant extends HasChildren {
       override def children: Iterable[Node] = this match {
-        case Let(pattern, rhs) => rhs match {
+        case Let(pattern, rhsOpt) => rhsOpt match {
           case Some(rhs) => List(pattern, rhs)
           case None => List(pattern)
         }
         case TypeAlias(ident, kindAnnotation, typeAnnotation) =>
-          List(ident, kindAnnotation.getOrElse(null), typeAnnotation.getOrElse(null))
+          List(ident, kindAnnotation.orNull, typeAnnotation.orNull)
             .filter(_ != null)
+        case Include(e) =>
+          List(e)
         case Error() => List()
       }
     }
@@ -292,6 +294,9 @@ trait Syntax {
       name: Ident,
       kindAnnotation: Option[KindAnnotation],
       rhs: Option[TypeAnnotation]
+    ) extends T
+    case class Include(
+      expr: Expr
     ) extends T
     case class Error() extends T
 

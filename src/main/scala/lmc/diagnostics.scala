@@ -10,6 +10,7 @@ object diagnostics {
   case class ExpressionExpected() extends Variant
   case class PatternExpected() extends Variant
   case class TypeExpected() extends Variant
+  case object ModifierOnInclude extends Variant
   case object KindExpected extends Variant
   case class UnexpectedChar(c: String) extends Variant
   case class InvalidOperator(c: String) extends Variant

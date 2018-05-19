@@ -29,7 +29,8 @@ object Lexer {
     "abstract" -> ABSTRACT,
     "override" -> OVERRIDE,
     "module" -> MODULE,
-    "type" -> TYPE
+    "type" -> TYPE,
+    "include" -> INCLUDE
   )
   val OPERATOR_TOKENS = Map(
     "==" -> EQEQ,

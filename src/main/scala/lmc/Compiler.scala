@@ -9,9 +9,12 @@ import scala.collection._
 import lmc.types.{ExistentialInstance, Kind, Type}
 import diagnostics._
 import io.{File, Stream, StringStream}
-import lmc.syntax.{Parsed, Typed}
+import lmc.syntax.{Named, Parsed, Typed}
 
-class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) extends Context with Context.TC {
+import scala.ref.WeakReference
+
+class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
+  extends Context with Context.TC with Context.Renamer {
   private val _charStreams = mutable.Map.empty[Path, Stream[Char]]
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
@@ -24,8 +27,9 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) ext
   private val _generics = mutable.Map.empty[Int, Type]
   private var _nextNodeId = 0
 
-  override def getVars(): collection.Map[Symbol, Type] = _symbolTypes
+  private var _declOfSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
 
+  override def getVars(): collection.Map[Symbol, Type] = _symbolTypes
 
   private val primitiveTypes = Map(
     "Unit" -> Kind.Star,
@@ -39,6 +43,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) ext
   private def primitive(str: String): Type = {
     primitiveTypes.get(str).map(_._1).get
   }
+
   override val Primitive: Primitive = new Primitive {
     override val Int: Type = primitive("Int")
     override val Bool: Type = primitive("Bool")
@@ -74,6 +79,8 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) ext
     scopeBuilder
   }
 
+  val checker = new TypeChecker(this)
+
   def compile(): Future[Unit] = {
     Future.unit
   }
@@ -90,11 +97,14 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) ext
         sf
       case None =>
         val parsed = getParsedSourceFile(path)
-        val checker = new TypeChecker(this)
         val checkedSourceFile = checker.inferSourceFile(parsed)
         cacheCheckedSourceFile(path, checkedSourceFile)
         checkedSourceFile
     }
+  }
+
+  override def getTypedExpr(e: Named.Expr): Typed.Expr = {
+    checker.getInferredExpr(e)
   }
 
   override def setKindOfSymbol(symbol: Symbol, kind: Kind): Unit = {
@@ -226,6 +236,14 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = ((_) => {})) ext
     sourceFile.declarations.find(
       d => d.loc.start <= pos && d.loc.end >= pos
     )
+  }
+
+  override def getDeclOfSymbol(name: Symbol): Option[Named.Declaration] = {
+    _declOfSymbol.get(name).flatMap(_.get)
+  }
+
+  override def setDeclOfSymbol(name: Symbol, decl: Named.Declaration): Unit = {
+    _declOfSymbol.update(name, WeakReference(decl))
   }
 
   private def findNodeInNode(node: Typed.Node, pos: Pos): Option[Typed.Node] = {

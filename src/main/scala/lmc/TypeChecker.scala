@@ -9,6 +9,7 @@ import lmc.utils.Debug
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
+import scala.ref.WeakReference
 
 final class TypeChecker(
   private val ctx: Context.TC
@@ -18,10 +19,15 @@ final class TypeChecker(
   private val Primitive = ctx.Primitive
 
   private val _checkedTypeAliasDecls =
-    mutable.HashMap.empty[Symbol, T.Declaration]
+    mutable.HashMap.empty[Symbol, WeakReference[T.Declaration]]
+
+  private val _checkedDecls = mutable.HashMap.empty[Int, WeakReference[T.Declaration]]
+
+  private val _checkedExprs =
+    mutable.HashMap.empty[Int, WeakReference[T.Expr]]
 
   def inferSourceFile(parsed: Parsed.SourceFile): T.SourceFile = {
-    val named = new Renamer(ctx).renameSourceFile(parsed)
+    val named = new Renamer(ctx.asInstanceOf[Context.Renamer]).renameSourceFile(parsed)
     val inferredDeclarations = named.declarations.map(inferDeclaration)
     T.SourceFile(
       meta = parsed.meta.typed,
@@ -31,6 +37,17 @@ final class TypeChecker(
   }
 
   private def inferDeclaration(decl: N.Declaration): T.Declaration = {
+    _checkedDecls.get(decl.meta.id).flatMap(_.get) match {
+      case Some(d) =>
+        d
+      case None =>
+        val inferred = inferDeclarationHelper(decl)
+        _checkedDecls.update(decl.meta.id, WeakReference(inferred))
+        inferred
+    }
+  }
+
+  private def inferDeclarationHelper(decl: N.Declaration): T.Declaration = {
     val modifiers = decl.modifiers.map(N.Declaration.Modifier.typed)
     val result = decl.variant match {
       case N.Declaration.Let(pattern, rhs) =>
@@ -48,8 +65,17 @@ final class TypeChecker(
           ),
           modifiers
         )
+      case N.Declaration.Include(expr) =>
+        val inferredExpr = inferExpr(expr)
+        T.Declaration(
+          decl.meta.typed,
+          T.Declaration.Include(
+            inferredExpr
+          ),
+          modifiers
+        )
       case N.Declaration.TypeAlias(ident, kindAnnotation, rhs) =>
-        _checkedTypeAliasDecls.get(ident.name) match {
+        _checkedTypeAliasDecls.get(ident.name).flatMap(_.get) match {
           case Some(d) if d.meta.id == decl.meta.id =>
             d
           case _ =>
@@ -170,7 +196,6 @@ final class TypeChecker(
         val expectedType = annotationToType(inferredAnnotation)
         val checkedPattern = checkPattern(pat, expectedType)
         val checkedExpr = checkExpr(expr, expectedType)
-//        val errors = assertKindMatch(annotation.loc, Kind.Star, inferredAnnotation.kind)
         (T.Pattern(
           pattern.meta.typed,
           typ = checkedPattern.typ,
@@ -180,24 +205,41 @@ final class TypeChecker(
           )
         ), checkedExpr)
       case _ =>
-        val inferredExpr = inferExpr(expr)
+        val inferredExpr = getInferredExpr(expr)
         val checkedPattern = checkPattern(pattern, inferredExpr.typ)
         (checkedPattern, inferredExpr)
     }
   }
 
-  private def inferExpr(expr: N.Expr): T.Expr = {
+  def getInferredExpr(expr: Named.Expr): T.Expr = {
+    _checkedExprs.get(expr.meta.id).flatMap(_.get) match {
+      case Some(e) => e
+      case None =>
+        val inferred = inferExpr(expr)
+        _checkedExprs.update(expr.meta.id, WeakReference(inferred))
+        inferred
+    }
+  }
+
+  def getTypeOfIdent(ident: N.Ident): Type = {
+
+    ctx.getTypeOfSymbol(ident.name) match {
+      case Some(t) => t
+      case _ =>
+        val namedDecl = ctx.getDeclOfSymbol(ident.name)
+        namedDecl.map(inferDeclaration)
+        ctx.getTypeOfSymbol(ident.name).getOrElse(ErrorType)
+    }
+  }
+
+  def inferExpr(expr: N.Expr): T.Expr = {
     def makeTyped(variant: T.Expr.Variant, typ: Type) =
       T.Expr(expr.meta.typed, typ, variant)
+
     expr.variant match {
       case N.Expr.Var(ident) =>
         val inferredIdent = inferIdent(ident)
-        val typ = ctx.getTypeOfSymbol(inferredIdent.name) match {
-          case Some(t) =>
-            t
-          case None =>
-            ErrorType
-        }
+        val typ = getTypeOfIdent(ident)
         makeTyped(
           T.Expr.Var(inferredIdent),
           typ
@@ -214,7 +256,7 @@ final class TypeChecker(
       case call@N.Expr.Call(_, _, _) =>
         inferCall(expr, call)
       case N.Expr.Prop(e, prop) =>
-        val inferredExpr = inferExpr(e)
+        val inferredExpr = getInferredExpr(e)
         inferredExpr.typ match {
           case mod@Module(_, _) =>
             mod.typeOfString.get(prop) match {
@@ -289,7 +331,7 @@ final class TypeChecker(
   }
 
   private def inferCall(expr: N.Expr, call: N.Expr.Call): T.Expr = {
-    val inferredFunc = inferExpr(call.func)
+    val inferredFunc = getInferredExpr(call.func)
     val typ = instantiateForall(inferredFunc.typ)
     val inferredExpr = typ match {
       case Func(from, to) =>
@@ -351,7 +393,7 @@ final class TypeChecker(
               labelEncountered = true
               labeledArgsToCheck.append(label -> arg.value)
             case None =>
-              var inferredExpr = inferExpr(arg.value)
+              var inferredExpr = getInferredExpr(arg.value)
               inferredExpr = inferredExpr.copy(
                 meta = inferredExpr.meta.withDiagnostic(
                   Diagnostic(
@@ -390,7 +432,7 @@ final class TypeChecker(
               checkedArgs.append(checkedArg)
               labelChecked += name
             case None =>
-              var inferredExpr = inferExpr(expr)
+              var inferredExpr = getInferredExpr(expr)
               inferredExpr = inferredExpr.copy(
                 meta = inferredExpr.meta.withDiagnostic(
                   Diagnostic(
@@ -496,7 +538,7 @@ final class TypeChecker(
 
   private def inferArgs(args: Vector[Named.Expr.Arg]): Vector[T.Expr.Arg] = {
     args.map(arg => {
-      T.Expr.Arg(label = arg.label, value = inferExpr(arg.value))
+      T.Expr.Arg(label = arg.label, value = getInferredExpr(arg.value))
     })
   }
 
@@ -530,7 +572,7 @@ final class TypeChecker(
         val expectedRetTyp = annotationToType(checkedRetTypAnnotation)
         (checkExpr(func.body, expectedRetTyp), Some(checkedRetTypAnnotation))
       case None =>
-        (inferExpr(func.body), None)
+        (getInferredExpr(func.body), None)
     }
     val from = inferredParams.map(param => {
       (getPatternLabel(param.pattern), param.pattern.typ)
@@ -609,7 +651,7 @@ final class TypeChecker(
         | N.Expr.Var(_),
         _
       )=>
-        val inferredExpr = inferExpr(expr)
+        val inferredExpr = getInferredExpr(expr)
         val errors = assertSubType(expr.meta)(inferredExpr.typ, typ)
         inferredExpr.copy(
           meta = inferredExpr.meta.withDiagnostics(errors)
@@ -619,7 +661,7 @@ final class TypeChecker(
       case (_, Forall(_, innerTyp)) =>
         checkExpr(expr, innerTyp)
       case (_, _) =>
-        val inferred = inferExpr(expr)
+        val inferred = getInferredExpr(expr)
         val errors = assertSubType(expr.meta)(inferred.typ, typ)
         inferred.copy(
           meta = inferred.meta.withDiagnostics(errors),
@@ -722,7 +764,7 @@ final class TypeChecker(
           )
         )
       case _ =>
-        val e = inferExpr(expr)
+        val e = getInferredExpr(expr)
         e.copy(
           meta = e.meta.withDiagnostic(
             Diagnostic(
@@ -999,7 +1041,7 @@ final class TypeChecker(
           Kind.Star
         )
       case N.TypeAnnotation.Prop(e, prop) =>
-        val inferredExpr = inferExpr(e)
+        val inferredExpr = getInferredExpr(e)
         inferredExpr.typ match {
           case m@Module(_, _) =>
             m.kindOfString.get(prop) match {
