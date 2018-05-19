@@ -1,0 +1,18 @@
+
+let M1 = module {
+	type A = Int;
+	let b = 23;
+};
+
+let notAModule = 3;
+
+let M2 = module {
+	include M1;
+	include notAModule;
+	let x = b;
+};
+
+let int1 = M2.x;
+let int2 = M2.b;
+type B = M1.A;
+

@@ -42,6 +42,7 @@ object diagnostics {
   case object UnexpectedBodyInAbstract extends Variant
   case object ComplexPatternInAbstract extends Variant
   case object MissingTypeAnnotationInAbstract extends Variant
+  case class TriedToIncludeNonModule(typ: Type) extends Variant
 
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {

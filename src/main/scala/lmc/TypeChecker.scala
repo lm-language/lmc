@@ -67,8 +67,18 @@ final class TypeChecker(
         )
       case N.Declaration.Include(expr) =>
         val inferredExpr = inferExpr(expr)
+        val errors = resolveType(inferredExpr.typ) match {
+          case Module(_, _) => List()
+          case _ => List(
+            Diagnostic(
+              loc = expr.loc,
+              severity = Severity.Error,
+              variant = TriedToIncludeNonModule(inferredExpr.typ)
+            )
+          )
+        }
         T.Declaration(
-          decl.meta.typed,
+          decl.meta.typed.withDiagnostics(errors),
           T.Declaration.Include(
             inferredExpr
           ),
