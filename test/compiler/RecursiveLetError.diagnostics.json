@@ -1,0 +1,32 @@
+{
+  "diagnostics":[
+    {
+      "loc":{
+        "start":{
+          "line":2,
+          "column":11
+        },
+        "end":{
+          "line":2,
+          "column":19
+        }
+      },
+      "severity":"Error",
+      "message":"UseBeforeAssignment(Recursive)"
+    },
+    {
+      "loc":{
+        "start":{
+          "line":5,
+          "column":18
+        },
+        "end":{
+          "line":5,
+          "column":27
+        }
+      },
+      "severity":"Error",
+      "message":"UseBeforeAssignment(Recursive1)"
+    }
+  ]
+}

@@ -96,7 +96,7 @@ class Binder(
     import Declaration._
     decl.variant match {
       case Let(pattern, expr) =>
-        val newPattern = bindPattern(pattern)
+        val newPattern = bindPattern(pattern, decl.loc.end)
         val boundExpr = expr.map(bindExpr)
         if (
           decl.modifiers.contains(Modifier.Extern) ||
@@ -215,7 +215,9 @@ class Binder(
       case Expr.Func(tok, scope, genericParams, params, returnTypeAnnotation, body) =>
         withScope(scope)(() => {
           val boundGenericParams = genericParams.map(bindGenericParam(scope))
-          val boundParams = params.map(bindFuncParam)
+          val boundParams = params.map(
+            param => bindFuncParam(param, validAfter = param.pattern.loc.end)
+          )
           val boundAnnotation = returnTypeAnnotation.map(bindAnnotation)
           val boundBody = bindExpr(body)
           Expr.Func(tok, scope, boundGenericParams, boundParams, boundAnnotation, boundBody)
@@ -246,8 +248,8 @@ class Binder(
     )
   }
 
-  private def bindFuncParam(param: Expr.Param): Expr.Param = {
-    Expr.Param(bindPattern(param.pattern))
+  private def bindFuncParam(param: Expr.Param, validAfter: Pos): Expr.Param = {
+    Expr.Param(bindPattern(param.pattern, validAfter))
   }
 
   def bindIdent(ident: Ident, validAfter: Option[Pos] = None): Ident = {
@@ -273,14 +275,14 @@ class Binder(
     }
   }
 
-  def bindPattern(pattern: Pattern): Pattern = {
+  def bindPattern(pattern: Pattern, validAfter: Pos): Pattern = {
     import Pattern._
     pattern.variant match {
       case Pattern.Var(ident) =>
-        val boundIdent = bindIdent(ident, Some(pattern.loc.end))
+        val boundIdent = bindIdent(ident, Some(validAfter))
         pattern.copy(variant = Pattern.Var(boundIdent))
       case Pattern.Annotated(pat, annotation) =>
-        val newPattern = bindPattern(pat)
+        val newPattern = bindPattern(pat, validAfter)
         val boundAnnotation = bindAnnotation(annotation)
         pattern.copy(
           variant = Pattern.Annotated(newPattern, boundAnnotation)

@@ -1,0 +1,5 @@
+let Recursive = module {
+	let m2 = Recursive;
+};
+
+let Recursive1 = Recursive1;

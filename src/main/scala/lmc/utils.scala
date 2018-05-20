@@ -6,17 +6,19 @@ object utils {
   }
 
   object Debug {
-    private var isDebugging = false
+    private var _isDebugging = false
     def start(): Unit = {
-      isDebugging = true
+      _isDebugging = true
     }
 
     def stop(): Unit = {
-      isDebugging = false
+      _isDebugging = false
     }
 
+    def isDebugging: Boolean = _isDebugging
+
     def log(x: Any): Unit = {
-      if (isDebugging) {
+      if (_isDebugging) {
         println(x)
       }
     }

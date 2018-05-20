@@ -2,7 +2,7 @@ package lmc
 
 import scala.collection.mutable
 import lmc.syntax._
-import lmc.common.{Loc, Symbol}
+import lmc.common.{Loc, ScopeEntry, Symbol}
 import lmc.diagnostics._
 import lmc.types._
 import lmc.utils.Debug
@@ -231,14 +231,24 @@ final class TypeChecker(
     }
   }
 
-  def getTypeOfIdent(ident: N.Ident): Type = {
-
+  private def getTypeOfIdent(ident: N.Ident): (Type, Iterable[Diagnostic]) = {
     ctx.getTypeOfSymbol(ident.name) match {
-      case Some(t) => t
+      case Some(t) => (t, List.empty)
       case _ =>
-        val namedDecl = ctx.getDeclOfSymbol(ident.name)
-        namedDecl.map(inferDeclaration)
-        ctx.getTypeOfSymbol(ident.name).getOrElse(ErrorType)
+        ident.getScope.resolveEntry(ident.name.text) match {
+          case Some(ScopeEntry(_, Some(pos))) if ident.loc.start < pos =>
+            (Uninferred, List(
+              Diagnostic(
+                loc = ident.loc,
+                severity = Severity.Error,
+                variant = UseBeforeAssignment(ident.name.text)
+              )
+            ))
+          case _ =>
+            val namedDecl = ctx.getDeclOfSymbol(ident.name)
+            namedDecl.map(inferDeclaration)
+            (ctx.getTypeOfSymbol(ident.name).getOrElse(ErrorType), List.empty)
+        }
     }
   }
 
@@ -249,10 +259,11 @@ final class TypeChecker(
     expr.variant match {
       case N.Expr.Var(ident) =>
         val inferredIdent = inferIdent(ident)
-        val typ = getTypeOfIdent(ident)
-        makeTyped(
-          T.Expr.Var(inferredIdent),
-          typ
+        val (typ, errors) = getTypeOfIdent(ident)
+        T.Expr(
+          meta = expr.meta.withDiagnostics(errors).typed,
+          typ = typ,
+          variant = T.Expr.Var(inferredIdent)
         )
       case mod@N.Expr.Module(_, _) =>
         inferModule(expr, mod)
