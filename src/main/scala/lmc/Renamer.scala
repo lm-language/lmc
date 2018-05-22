@@ -1,7 +1,7 @@
 package lmc
 
 import lmc.syntax.{Named => N, Parsed => P}
-import lmc.common.{ScopeBuilder, ScopeEntry, Symbol}
+import lmc.common.{ScopeBuilder, ScopeEntry, Symbol, TypeEntry}
 import lmc.diagnostics._
 import lmc.utils.Debug
 
@@ -95,6 +95,7 @@ class Renamer(
         addPatternDeclToScope(pattern, declaration)
       case N.Declaration.TypeAlias(ident, _, _) =>
         addDecl(ident.name, WeakReference(declaration))
+        ctx.setDeclOfTypeSymbol(ident.name, declaration)
       case _ => ()
     }
   }
@@ -311,6 +312,11 @@ class Renamer(
         N.Expr.Prop(
           renameExpr(e),
           prop
+        )
+      case P.Expr.WithExpression(e1, e2) =>
+        N.Expr.WithExpression(
+          renameExpr(e1),
+          renameExpr(e2)
         )
       case P.Expr.Error() =>
         N.Expr.Error()

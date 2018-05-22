@@ -27,7 +27,14 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private val _generics = mutable.Map.empty[Int, Type]
   private var _nextNodeId = 0
 
-  private var _declOfSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
+  private val _declOfSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
+  private val _declOfTypeSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
+  private val _symbolSubst = mutable.Map.empty[Symbol, WeakReference[Symbol]]
+
+  override def getSubstSymbol(sym: Symbol): Symbol = _symbolSubst.get(sym).flatMap(_.get) match {
+    case Some(s) => getSubstSymbol(s)
+    case None => sym
+  }
 
   override def getVars(): collection.Map[Symbol, Type] = _symbolTypes
 
@@ -244,6 +251,14 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
 
   override def setDeclOfSymbol(name: Symbol, decl: Named.Declaration): Unit = {
     _declOfSymbol.update(name, WeakReference(decl))
+  }
+
+  override def getDeclOfTypeSymbol(name: Symbol): Option[Named.Declaration] = {
+    _declOfTypeSymbol.get(name).flatMap(_.get)
+  }
+
+  override def setDeclOfTypeSymbol(name: Symbol, decl: Named.Declaration): Unit = {
+    _declOfTypeSymbol.update(name, WeakReference(decl))
   }
 
   private def findNodeInNode(node: Typed.Node, pos: Pos): Option[Typed.Node] = {

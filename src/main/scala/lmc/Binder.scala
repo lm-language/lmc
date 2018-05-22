@@ -232,6 +232,11 @@ class Binder(
         withScope(scope)(() => {
           Expr.Module(scope, declarations.map(bindDeclaration))
         })
+      case Expr.WithExpression(e1, e2) =>
+        Expr.WithExpression(
+          bindExpr(e1),
+          bindExpr(e2)
+        )
       case Expr.Literal(_) => expr.variant
       case Expr.Var(_) => expr.variant
       case Expr.Prop(e, prop) =>

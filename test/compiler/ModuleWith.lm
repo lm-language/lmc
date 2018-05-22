@@ -1,0 +1,25 @@
+
+let M1 = module {
+	type T = Int;
+	let i: T = 3;
+	let b = true;
+};
+
+let M2 = M1 with module {
+	let b1 = false;
+	type T1 = Bool;
+};
+
+let ExtendingNotAModule = 23 with module {
+	let x = 42;
+};
+
+let ExtendWithNotAModule = M1 with 1;
+
+let MWithConflict =  M1 with module {
+	type T = Int;
+};
+
+let MWithValueConflict = M1 with module {
+	let i = 34;
+};

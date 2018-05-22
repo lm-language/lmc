@@ -180,6 +180,8 @@ trait Syntax {
           List(func) ++ args.map(_.value)
         case Prop(e, _) =>
           List(e)
+        case WithExpression(e1, e2) =>
+          Vector(e1, e2)
         case Error() => List()
       }
     }
@@ -216,6 +218,10 @@ trait Syntax {
     case class Prop(
       expr: Expr,
       prop: String
+    ) extends T
+    case class WithExpression(
+      e1: Expr,
+      e2: Expr
     ) extends T
     case class Error() extends T
 

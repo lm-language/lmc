@@ -318,6 +318,8 @@ final class TypeChecker(
               )
             )
         }
+      case w@N.Expr.WithExpression(_, _) =>
+        inferWith(expr, w)
       case N.Expr.Error() =>
         makeTyped(
           typ = ErrorType,
@@ -326,19 +328,131 @@ final class TypeChecker(
     }
   }
 
+  private def getDeclBinders(decl: T.Declaration): Iterable[Symbol] = {
+    decl.variant match {
+      case T.Declaration.Let(pattern, _) => getPatternLabel(pattern)
+        .map({ List(_) }).getOrElse(Nil)
+      case T.Declaration.TypeAlias(name, _, _) => List(name.name)
+      case T.Declaration.Include(_) => Nil
+      case T.Declaration.Error() => Nil
+    }
+  }
+
   private def inferModule(expr: N.Expr, module: N.Expr.Module): T.Expr = {
     val inferredDecls = module.declarations.map(inferDeclaration)
+    val abstractNames = inferredDecls
+      .filter(_.isAbstract).flatMap(getDeclBinders)
+      .toSet
     val types = module.scope.typeSymbols.values
+      .filter(t => !(abstractNames contains t.symbol))
+      .map(t => t.symbol -> ctx.getKindOfSymbol(t.symbol).getOrElse(Kind.Star))
+      .toMap
+    val values = module.scope.symbols.values
+      .filter(t => !(abstractNames contains t.symbol))
+      .map(e => e.symbol -> ctx.getTypeOfSymbol(e.symbol).getOrElse(Uninferred))
+      .toMap
+    val modTyp = Module(types, values)
+    val typ = if (abstractNames.isEmpty) {
+      modTyp
+    } else {
+      val abstractTypes = module.scope.typeSymbols.values
+        .filter(abstractNames contains _.symbol)
         .map(t => t.symbol -> ctx.getKindOfSymbol(t.symbol).getOrElse(Kind.Star))
         .toMap
-    val values = module.scope.symbols.values
-        .map(e => e.symbol -> ctx.getTypeOfSymbol(e.symbol).getOrElse(Uninferred))
-        .toMap
+      val abstractValues = module.scope.symbols.values
+          .filter(abstractNames contains _.symbol)
+          .map(e => e.symbol ->
+            ctx.getTypeOfSymbol(e.symbol).getOrElse(Uninferred))
+          .toMap
+      Abstract(
+        abstractTypes,
+        abstractValues,
+        Module(
+          modTyp.types ++ abstractTypes,
+          modTyp.values ++ abstractValues
+        )
+      )
+    }
     T.Expr(
       meta = expr.meta.typed,
-      typ = Module(types, values),
+      typ = typ,
       variant = T.Expr.Module(module.scope, inferredDecls)
     )
+  }
+
+  private def inferWith(
+    e: Named.Expr, variant: Named.Expr.WithExpression
+  ): T.Expr = {
+    val e1 = variant.e1
+    val e2 = variant.e2
+    val inferredE1 = inferExpr(e1)
+    val inferredE2 = inferExpr(e2)
+    (inferredE1.typ, inferredE2.typ) match {
+      case (Module(types1, values1), Module(types2, values2)) =>
+        val errors = ListBuffer.empty[Diagnostic]
+        val types2Str = types2.map(t => t._1.text -> t._1)
+        val values2Str = values2.map(t => t._1.text -> t._1)
+        for (typeSymbol1 <- types1.keySet) {
+          types2Str.get(typeSymbol1.text) match {
+            case Some(s) =>
+              val loc = ctx.getDeclOfTypeSymbol(s).map(_.loc).getOrElse(inferredE2.loc)
+              errors.append(
+                Diagnostic(
+                  loc = loc,
+                  severity = Severity.Error,
+                  variant = ConflictingDecls(typeSymbol1.text)
+                )
+              )
+            case None => ()
+          }
+        }
+        for (symbol1 <- values1.keySet) {
+          values2Str.get(symbol1.text) match {
+            case Some(sym) =>
+              val loc = ctx.getDeclOfSymbol(sym).map(_.loc).getOrElse(inferredE2.loc)
+              errors.append(
+                Diagnostic(
+                  loc = loc,
+                  severity = Severity.Error,
+                  variant = ConflictingDecls(symbol1.text)
+                )
+              )
+            case None => ()
+          }
+        }
+        T.Expr(
+          meta = e.meta.typed.withDiagnostics(errors.toVector),
+          typ = Module(types1 ++ types2, values1 ++ values2),
+          variant = T.Expr.WithExpression(inferredE1, inferredE2)
+        )
+      case _ =>
+        val errors = ListBuffer.empty[Diagnostic]
+        inferredE1.typ match {
+          case Module(_, _) => ()
+          case _ =>
+            errors.append(Diagnostic(
+              loc = e1.loc,
+              severity = Severity.Error,
+              variant = NotAModule
+            ))
+        }
+        inferredE2.typ match {
+          case Module(_, _) => ()
+          case _ =>
+            errors.append(Diagnostic(
+              loc = e2.loc,
+              severity = Severity.Error,
+              variant = NotAModule
+            ))
+        }
+        T.Expr(
+          meta = e.meta.typed.withDiagnostics(
+            errors.toVector
+          ),
+          typ = ErrorType,
+          variant = T.Expr.WithExpression(inferredE1, inferredE2)
+        )
+    }
   }
 
   private def instantiateForall(typ: Type): Type = {

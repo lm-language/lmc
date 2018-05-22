@@ -8,7 +8,7 @@ object token {
     val
       ID, INT, EOF,
       // keywords
-      LET, IF, ELSE, FN, EXTERN,
+      LET, IF, ELSE, FN, EXTERN, WITH,
       TYPE, MODULE, ABSTRACT, OVERRIDE, INCLUDE,
 
       // Punctuation

@@ -504,6 +504,18 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           typ = (),
           variant = Expr.Prop(head, propTok.lexeme)
         ))
+      case WITH =>
+        val errors = ListBuffer.empty[Diagnostic]
+        advance()
+        val e2 = parseExpr()
+        parseExprTail(Expr(
+          meta = makeMeta(
+            loc = Loc.between(head, e2),
+            scope = scope()
+          ),
+          typ = (),
+          variant = Expr.WithExpression(head, e2)
+        ))
       case _ => head
     }
   }

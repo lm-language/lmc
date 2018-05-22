@@ -9,12 +9,15 @@ trait Context {
   def nextMetaId(): Int
   def getTypedExpr(e: syntax.Named.Expr): syntax.Typed.Expr
   def getDeclOfSymbol(name: Symbol): Option[syntax.Named.Declaration]
+  def getSubstSymbol(sym: Symbol): Symbol
+  def getDeclOfTypeSymbol(sym: Symbol): Option[syntax.Named.Declaration]
 }
 
 object Context {
   trait Binder extends Context {}
   trait Renamer extends Context {
     def setDeclOfSymbol(name: Symbol, decl: syntax.Named.Declaration): Unit
+    def setDeclOfTypeSymbol(name: Symbol, decl: syntax.Named.Declaration): Unit
   }
 
   trait TC extends Context {

@@ -1,0 +1,51 @@
+abstract extern let multipleModifiers: Int;
+abstract let abstractWithValue = 23;
+abstract let ((a: Int): Int);
+let nonAbstractWithoutValue;
+abstract let abstractWithoutAnnotation;
+
+abstract type AbstractWithBody = Int;
+type NonAbstractWithoutBody;
+let Collection = module {
+	abstract type This: [*] => *;
+	abstract let empty: [A] => This[A];
+};
+
+let ModuleAppWithTypeError = Collection with {
+	extern type This: *;
+	let empty = 3;
+};
+
+let ModuleAppWithTypeAnnotationError = Collection with {
+	extern type This: [*] => *;
+	let empty: Int = 3;
+};
+
+let ConflictingIncludes = module {
+	extern type Array: [*] => *;
+	extern type List: [*] => *;
+	include Collection with {
+		type This = Array;
+		extern let empty: [A] => This[A];
+	};
+	include Collection with {
+		type This = List;
+		extern let empty: [A] => This[A];
+	};
+};
+
+let Array = module {
+	extern type Array: [*] => *;
+	include Collection with {
+		type This = Array;
+		extern let empty: [A] => This[A];
+	};
+};
+
+let ArrayWithoutEmpty = module {
+	include Collection {
+		type This = Array.This;
+	};
+};
+
+let e = ArrayWithoutEmpty.empty;
