@@ -90,8 +90,8 @@ If this list is out of sync, `.lm` files in test/compiler will
 contain all the features implemented (except for IDE ones).
 
 * Basic let declarations
-* Lambdas, calls (including labeled arguments)
-* Modules (including ones with abstract members)
+* Lambdas, calls (including labeled arguments), blocks
+* Modules
 * Generics with universal quantification (forall types)
 * Type aliases
 * Higher kinded types
@@ -111,7 +111,6 @@ contain all the features implemented (except for IDE ones).
 * Pattern matching over ADTs
 * Implicits
 * if/else
-* blocks
 * fn declarations (for recursive functions)
 * module declarations (
   modules can be declared using let declarations; module expressions
