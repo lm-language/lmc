@@ -11,7 +11,7 @@
   },
   "symbols" : {
     "x" : {
-      "typ" : "Int"
+      "typ" : "Uninferred"
     },
     "someVar" : {
       "typ" : "Int"

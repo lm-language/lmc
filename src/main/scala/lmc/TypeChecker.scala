@@ -367,10 +367,7 @@ final class TypeChecker(
       Abstract(
         abstractTypes,
         abstractValues,
-        Module(
-          modTyp.types ++ abstractTypes,
-          modTyp.values ++ abstractValues
-        )
+        modTyp
       )
     }
     T.Expr(
@@ -387,15 +384,28 @@ final class TypeChecker(
     val e2 = variant.e2
     val inferredE1 = inferExpr(e1)
     val inferredE2 = inferExpr(e2)
-    (inferredE1.typ, inferredE2.typ) match {
+    val (errors, typ) = inferWithHelper(inferredE1.typ, inferredE2.typ, e1.meta, e2.meta)
+    T.Expr(
+      meta = e.meta.typed.withDiagnostics(errors),
+      typ = typ,
+      variant = T.Expr.WithExpression(inferredE1, inferredE2)
+    )
+  }
+
+  private def inferWithHelper(
+    t1: Type, t2: Type,
+    meta1: N.Meta, meta2: N.Meta,
+    abstractTypes: Map[String, (Kind, Symbol)] = Map.empty,
+    abstractValues: Map[String, (Type, Symbol)] = Map.empty
+  ): (Vector[Diagnostic], Type) = (t1, t2) match {
       case (Module(types1, values1), Module(types2, values2)) =>
         val errors = ListBuffer.empty[Diagnostic]
-        val types2Str = types2.map(t => t._1.text -> t._1)
+        val types2Str = types2.map(t => t._1.text -> (t._1, t._2))
         val values2Str = values2.map(t => t._1.text -> t._1)
         for (typeSymbol1 <- types1.keySet) {
           types2Str.get(typeSymbol1.text) match {
-            case Some(s) =>
-              val loc = ctx.getDeclOfTypeSymbol(s).map(_.loc).getOrElse(inferredE2.loc)
+            case Some((s, _)) =>
+              val loc = ctx.getDeclOfTypeSymbol(s).map(_.loc).getOrElse(meta2.loc)
               errors.append(
                 Diagnostic(
                   loc = loc,
@@ -409,7 +419,7 @@ final class TypeChecker(
         for (symbol1 <- values1.keySet) {
           values2Str.get(symbol1.text) match {
             case Some(sym) =>
-              val loc = ctx.getDeclOfSymbol(sym).map(_.loc).getOrElse(inferredE2.loc)
+              val loc = ctx.getDeclOfSymbol(sym).map(_.loc).getOrElse(meta2.loc)
               errors.append(
                 Diagnostic(
                   loc = loc,
@@ -420,40 +430,88 @@ final class TypeChecker(
             case None => ()
           }
         }
-        T.Expr(
-          meta = e.meta.typed.withDiagnostics(errors.toVector),
-          typ = Module(types1 ++ types2, values1 ++ values2),
-          variant = T.Expr.WithExpression(inferredE1, inferredE2)
+        val missingAbsTypes = mutable.HashMap.empty[Symbol, Kind]
+        val missingAbsValues = mutable.HashMap.empty[Symbol, Type]
+
+        val abstractTypSubst = mutable.HashMap.empty[Symbol, Type]
+        for ((absTyName, (absTypKind, absTypSymbol)) <- abstractTypes) {
+          types2Str.get(absTyName) match {
+            case None => missingAbsTypes.update(absTypSymbol, absTypKind)
+            case Some((sym, kind)) =>
+              abstractTypSubst.put(absTypSymbol, Var(sym))
+              if (kind != absTypKind) {
+                errors.append(
+                  Diagnostic(
+                    loc = ctx.getDeclOfTypeSymbol(sym).map(_.loc).getOrElse(meta2.loc),
+                    severity = Severity.Error,
+                    variant = InvalidTypeOverride(absTypKind, kind)
+                  )
+                )
+              }
+          }
+        }
+
+        for ((absValName, (absValTyp, absValSymbol)) <- abstractValues) {
+          values2Str.get(absValName) match {
+            case None => missingAbsValues.update(absValSymbol, absValTyp)
+            case Some(symbol) =>
+              val substAbstractTyp = applySubst(absValTyp, abstractTypSubst)
+              val symTyp = applySubst(
+                ctx.getTypeOfSymbol(symbol).getOrElse(Uninferred),
+                abstractTypSubst
+              )
+              val meta = ctx.getDeclOfSymbol(symbol).map(_.meta).getOrElse(meta2)
+              val errs = assertSubType(meta, exact = true)(symTyp, substAbstractTyp)
+              if (errs.nonEmpty) {
+                errors.append(
+                  Diagnostic(
+                    loc = meta.loc,
+                    severity = Severity.Error,
+                    variant = InvalidValueOverride(substAbstractTyp, symTyp)
+                  )
+                )
+                errors.appendAll(errs)
+              }
+          }
+        }
+        val modTyp = Module(types1 ++ types2, values1 ++ values2)
+        val typ = if (missingAbsTypes.isEmpty && missingAbsValues.isEmpty)
+          modTyp
+        else
+          Abstract(
+            missingAbsTypes.toMap,
+            missingAbsValues.toMap,
+            modTyp
+          )
+        (errors.toVector, typ)
+      case (Abstract(absTypes, absValues, innerType), _) =>
+        inferWithHelper(
+          innerType, t2, meta1, meta2,
+          absTypes.map(entry => entry._1.text -> (entry._2, entry._1)),
+          absValues.map(entry => entry._1.text -> (entry._2, entry._1))
         )
       case _ =>
         val errors = ListBuffer.empty[Diagnostic]
-        inferredE1.typ match {
+        t1 match {
           case Module(_, _) => ()
           case _ =>
             errors.append(Diagnostic(
-              loc = e1.loc,
+              loc = meta1.loc,
               severity = Severity.Error,
               variant = NotAModule
             ))
         }
-        inferredE2.typ match {
+        t2 match {
           case Module(_, _) => ()
           case _ =>
             errors.append(Diagnostic(
-              loc = e2.loc,
+              loc = meta2.loc,
               severity = Severity.Error,
               variant = NotAModule
             ))
         }
-        T.Expr(
-          meta = e.meta.typed.withDiagnostics(
-            errors.toVector
-          ),
-          typ = ErrorType,
-          variant = T.Expr.WithExpression(inferredE1, inferredE2)
-        )
+        (errors.toVector, ErrorType)
     }
-  }
 
   private def instantiateForall(typ: Type): Type = {
     typ match {

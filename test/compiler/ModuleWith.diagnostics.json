@@ -27,6 +27,34 @@
       },
       "severity":"Error",
       "message":"NotAModule"
+    },
+    {
+      "loc":{
+        "start":{
+          "line":20,
+          "column":2
+        },
+        "end":{
+          "line":20,
+          "column":14
+        }
+      },
+      "severity":"Error",
+      "message":"ConflictingDecls(T)"
+    },
+    {
+      "loc":{
+        "start":{
+          "line":24,
+          "column":2
+        },
+        "end":{
+          "line":24,
+          "column":11
+        }
+      },
+      "severity":"Error",
+      "message":"ConflictingDecls(i)"
     }
   ]
 }

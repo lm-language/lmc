@@ -11,16 +11,16 @@
   },
   "symbols":{
     "M2":{
-      "typ":"Module(Map(T -> *),Map(b -> Bool, i -> Int))"
+      "typ":"Module(Map(T -> *, T1 -> *),Map(b -> Bool, i -> Int, b1 -> Bool))"
     },
     "MWithConflict":{
-      "typ":"Module(Map(T -> *),Map(b -> Bool, i -> Int))"
+      "typ":"Module(Map(T -> *, T -> *),Map(b -> Bool, i -> Int))"
     },
     "ExtendingNotAModule":{
       "typ":"ErrorType"
     },
     "MWithValueConflict":{
-      "typ":"Module(Map(T -> *),Map(b -> Bool, i -> Int))"
+      "typ":"Module(Map(T -> *),Map(b -> Bool, i -> Int, i -> Int))"
     },
     "ExtendWithNotAModule":{
       "typ":"ErrorType"
@@ -108,7 +108,7 @@
       },
       "symbols":{},
       "types":{
-        "T2":"*"
+        "T":"*"
       },
       "children":[]
     },

@@ -45,6 +45,8 @@ object diagnostics {
   case class TriedToIncludeNonModule(typ: Type) extends Variant
   case class TriedToExtendNonAbstract(typ: Type) extends Variant
   case class ConflictingDecls(name: String) extends Variant
+  case class InvalidTypeOverride(expectedKind: lmc.types.Kind, kind: lmc.types.Kind) extends Variant
+  case class InvalidValueOverride(expectedType: lmc.types.Type, kind: lmc.types.Type) extends Variant
 
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {
