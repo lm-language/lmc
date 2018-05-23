@@ -17,48 +17,46 @@ import java.nio.file.Paths
 
 object ErrorCodes {
 	// Defined by JSON RPC
-	val ParseError = -32700;
-	val InvalidRequest = -32600;
-	val MethodNotFound = -32601;
-	val InvalidParams = -32602;
-	val InternalError = -32603;
-	val serverErrorStart = -32099;
-	val serverErrorEnd = -32000;
-	val ServerNotInitialized = -32002;
-	val UnknownErrorCode = -32001;
+	val ParseError = -32700
+	val InvalidRequest = -32600
+	val MethodNotFound = -32601
+	val InvalidParams = -32602
+	val InternalError = -32603
+	val serverErrorStart = -32099
+	val serverErrorEnd = -32000
+	val ServerNotInitialized = -32002
+	val UnknownErrorCode = -32001
 
 	// Defined by the protocol.
-	val RequestCancelled = -32800;
+	val RequestCancelled = -32800
 }
 
 object MessageType {
 	/**
 	 * An error message.
 	 */
-	val Error = 1;
+	val Error = 1
 	/**
 	 * A warning message.
 	 */
-	val Warning = 2;
+	val Warning = 2
 	/**
 	 * An information message.
 	 */
-	val Info = 3;
+	val Info = 3
 	/**
 	 * A log message.
 	 */
-	val Log = 4;
+	val Log = 4
 }
 
 class Server {
   private val in = new BufferedReader(new InputStreamReader(System.in))
   private val out = new OutputStreamWriter(System.out)
   private val err = new OutputStreamWriter(System.err)
-  private var compiler: Compiler = null
+  private var compiler: Compiler = _
   def listen(): Unit = {
-    var done = false
-    while (!done) {
-        
+    while (true) {
       val header = in.readLine()
       val headerRegex = "Content-Length:\\s*(\\d+)".r
       val matches = headerRegex.findFirstMatchIn(header)
@@ -74,11 +72,9 @@ class Server {
             case Right(message) =>
               handleMessage(message)
             case Left(error) =>
-              respond((
-                (
-                  ("error" -> error.toJValue)
-                )
-              ))
+              respond(
+                "error" -> error.toJValue
+              )
           }
         case None =>
           throw new Error(s"Invalid header $header")
@@ -95,29 +91,29 @@ class Server {
           out.write("Shutting down server")
           Runtime.getRuntime.exit(0)
         })
-      case LSP.Initialize(rootUri) => (for {
+      case LSP.Initialize(rootUri) => for {
         path <- resolveUri(rootUri)
         id = message.id
         _ = {
           this.compiler = new Compiler(List(Paths.get(path)), (msg) => {
-            respond((
-              ("debug" -> msg)
-            ))
+            respond(
+              "debug" -> msg
+            )
           })
         }
-      } yield respond((
+      } yield respond(
         ("id" -> id) ~
         ("jsonrpc" -> "2.0") ~
-        ("result" -> (
+        ("result" ->
           ("capabilities" ->
             ("hoverProvider" -> true) ~
+            ("definitionProvider" -> true) ~
             ("textDocumentSync" -> (
               ("openClose" -> true) ~
               ("change" -> 1)
             ))
-          )
-        ))
-      )))
+        )
+      ))
     case msg@LSP.TextDocument.DidOpen(_, _, _, _) => for {
         path <- resolveUri(msg.uri)
       } yield syncDiagnostics(msg.uri, Paths.get(path))
@@ -126,16 +122,24 @@ class Server {
         path = Paths.get(pathStr)
         _ = this.compiler.updateCharStream(path, msg.text)
       } yield syncDiagnostics(msg.uri, path)
+    case LSP.TextDocument.Definition(uri, pos) => for {
+      path <- resolveUri(uri)
+      locOpt = this.compiler.goToDefinition(Paths.get(path), pos)
+    } yield respond(
+      ("id" -> message.id) ~
+      ("jsonrpc" -> "2.0") ~
+      ("result" -> locOpt.map(locToJson).orNull)
+    )
     case LSP.TextDocument.Hover(file, pos) => for {
         path <- resolveUri(file.uri)
         hoverInfo = compiler.getHoverInfo(Paths.get(path), pos)
-      } yield respond((
+      } yield respond(
           ("id" -> message.id) ~
           ("jsonrpc" -> "2.0") ~
           ("result" -> (
             "contents" -> hoverInfo
           ))
-        ))
+        )
       case LSP.Workspace.DidChangeConfiguration =>
         Right(())
       case LSP.Initialized =>
@@ -143,47 +147,57 @@ class Server {
     }
   } yield ()) match {
     case Left(err) =>
-      respond((
+      respond(
         ("jsonrpc" -> "2.0") ~
         ("error" -> (
           ("message" -> err.message) ~
           ("data" -> err.data) ~
           ("code" -> ErrorCodes.ParseError)
         ))
-      ))
+      )
     case Right(()) => ()
   }
 
+  def locToJson(loc: Loc): JValue =
+    ("uri" -> s"file://${loc.path}") ~
+    ("range" ->
+      ("start" ->
+        ("line" -> (loc.start.line - 1)) ~
+        ("character" -> (loc.start.column - 1))
+      ) ~
+      ("end" ->
+        ("line" -> (loc.end.line - 1)) ~
+        ("character" -> loc.end.column))
+      )
+
   def syncDiagnostics(uri: String, path: java.nio.file.Path): Unit = {
     val errors = compiler.getSourceFileDiagnostics(path)
-    respond((
+    respond(
       ("jsonrpc" -> "2.0") ~
       ("method" -> "textDocument/publishDiagnostics") ~
       ("params" -> (
         ("uri" -> uri) ~
         ("diagnostics" -> errors.map(renderDiagnostic).toList)
       ))
-    ))
+    )
   }
 
   def renderDiagnostic(error: diagnostics.Diagnostic): JValue = {
-    return (
-      ("message" -> error.message) ~
-      ("range" -> (
-        ("start" -> (
-          (
-            ("line" -> (error.loc.start.line - 1)) ~
-            ("character" -> (error.loc.start.column - 1))
-          )
-        )) ~
-        ("end" -> (
-          (
-            ("line" -> (error.loc.end.line - 1)) ~
-            ("character" -> (error.loc.end.column))
-          )
-        ))
-      ))
-    )
+    ("message" -> error.message) ~
+    ("range" -> (
+      ("start" ->
+        (
+          ("line" -> (error.loc.start.line - 1)) ~
+          ("character" -> (error.loc.start.column - 1))
+        )
+      ) ~
+      ("end" ->
+        (
+          ("line" -> (error.loc.end.line - 1)) ~
+          ("character" -> error.loc.end.column)
+        )
+      )
+    ))
   }
 
   def resolveUri(uri: String): Either[LSP.Error, String] = {
@@ -225,13 +239,12 @@ object LSP {
     code: Int,
     data: Option[JValue] = None
   ) {
-    def toJValue: JValue = (
-      ("error" -> (
+    def toJValue: JValue =
+      "error" -> (
         ("message" -> message) ~
         ("code" -> code) ~
         ("data" -> data)
-      ))
-    )
+      )
   }
   object LSPMessage {
     def fromJSON(json: JValue): Either[Error, LSPMessage] = {
@@ -252,6 +265,8 @@ object LSP {
         case "shutdown" => Right(Shutdown)
         case "textDocument/hover" =>
           TextDocument.Hover.fromJSON(json)
+        case "textDocument/definition" =>
+          TextDocument.Definition.fromJSON(json)
         case "workspace/didChangeConfiguration" =>
           Right(Workspace.DidChangeConfiguration)
         case "textDocument/didOpen" =>
@@ -333,6 +348,23 @@ object LSP {
     }
 
 
+    case class Definition(
+      uri: String,
+      pos: Pos
+    ) extends LSPParams
+    object Definition {
+      def fromJSON(j: JValue): Either[Error, Definition] = {
+        val textDocument = j \ "params" \ "textDocument"
+        val JString(uri) = textDocument \ "uri"
+
+        val JInt(line) = j \ "params" \ "position" \ "line"
+        val JInt(character) = j \ "params" \ "position" \ "character"
+        Right(Definition(
+          uri,
+          Pos(line.toInt + 1, character.toInt + 1)
+        ))
+      }
+    }
 
     case class Hover(
       textDocument: TextDocumentIdentifier,

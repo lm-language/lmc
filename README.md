@@ -90,7 +90,8 @@ If this list is out of sync, `.lm` files in test/compiler will
 contain all the features implemented (except for IDE ones).
 
 * Basic let declarations
-* Lambdas, calls (including labeled arguments), simple modules
+* Lambdas, calls (including labeled arguments)
+* Modules (including ones with abstract members)
 * Generics with universal quantification (forall types)
 * Type aliases
 * Higher kinded types
@@ -100,6 +101,7 @@ contain all the features implemented (except for IDE ones).
   but still usable.)
   * Show type on hover
   * Error highlighting (showing exact errors as the command line compiler)
+  * Go to definition
 
 ## To be implemented
 * imports
@@ -116,7 +118,6 @@ contain all the features implemented (except for IDE ones).
   are done).
 * A backend so that something can actually run.
 * IDE features
-  * Go to definition
   * Auto complete
   
 

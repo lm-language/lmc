@@ -273,4 +273,17 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
       None
     }
   }
+
+  def goToDefinition(path: Path, pos: Pos): Option[Loc] = {
+    val node = findNodeAtPos(path, pos)
+    node match {
+      case Some(Typed.Ident(_, symbol, _)) =>
+        this.getDeclOfSymbol(symbol) match {
+          case Some(d) => Some(d.loc)
+          case None =>
+            this.getDeclOfTypeSymbol(symbol).map(_.loc)
+        }
+      case _ => None
+    }
+  }
 }
