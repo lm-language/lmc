@@ -251,6 +251,12 @@ class Binder(
             })
           )
         })
+      case Expr.If(c, t, f) =>
+        Expr.If(
+          bindExpr(c),
+          bindExpr(t),
+          f.map(bindExpr)
+        )
       case Expr.Error() => expr.variant
     }
     expr.copy(variant = boundVariant)

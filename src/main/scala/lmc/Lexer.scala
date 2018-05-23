@@ -31,7 +31,9 @@ object Lexer {
     "module" -> MODULE,
     "type" -> TYPE,
     "include" -> INCLUDE,
-    "with" -> WITH
+    "with" -> WITH,
+    "if" -> IF,
+    "else" -> ELSE
   )
   val OPERATOR_TOKENS = Map(
     "==" -> EQEQ,

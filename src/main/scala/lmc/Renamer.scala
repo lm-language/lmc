@@ -327,6 +327,12 @@ class Renamer(
             })
           )
         })
+      case P.Expr.If(p, t, f) =>
+        N.Expr.If(
+          renameExpr(p),
+          renameExpr(t),
+          f.map(renameExpr)
+        )
       case P.Expr.Error() =>
         N.Expr.Error()
     }

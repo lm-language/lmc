@@ -91,6 +91,7 @@ contain all the features implemented (except for IDE ones).
 
 * Basic let declarations
 * Lambdas, calls (including labeled arguments)
+* if expressions
 * Modules (including ones with abstract members)
 * Generics with universal quantification (forall types)
 * Type aliases
@@ -110,7 +111,6 @@ contain all the features implemented (except for IDE ones).
 * Algebraic data types
 * Pattern matching over ADTs
 * Implicits
-* if/else
 * blocks
 * fn declarations (for recursive functions)
 * module declarations (

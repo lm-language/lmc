@@ -184,6 +184,8 @@ trait Syntax {
         case WithExpression(e1, e2) =>
           Vector(e1, e2)
         case Block(_, members) => members
+        case If(p, t, Some(f)) => Vector(p, t, f)
+        case If(p, t, None) => Vector(p, t)
         case Error() => List()
       }
     }
@@ -228,6 +230,11 @@ trait Syntax {
     case class Block(
       scope: _Scope,
       members: Vector[BlockMember]
+    ) extends T
+    case class If(
+      predicate: Expr,
+      trueBranch: Expr,
+      falseBranch: Option[Expr]
     ) extends T
     case class Error() extends T
 

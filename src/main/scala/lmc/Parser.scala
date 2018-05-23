@@ -470,6 +470,31 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         )
       )
     })
+
+    def parseIf() = {
+      val ifTok = advance()
+      val errors = ListBuffer.empty[Diagnostic]
+      expect(errors)(LPAREN)
+      val predicate = parseExpr()
+      expect(errors)(RPAREN)
+      val trueBranch = parseExpr()
+      val falseBranch = currentToken.variant match {
+        case ELSE =>
+          advance()
+          Some(parseExpr())
+        case _ => None
+      }
+      val variant = Expr.If(
+        predicate, trueBranch, falseBranch
+      )
+      val meta = makeMeta(
+        Loc.between(ifTok, falseBranch.getOrElse(trueBranch)),
+        scope()
+      )
+      Expr(
+        meta, (), variant
+      )
+    }
     val head = currentToken.variant match {
       case INT =>
         parseIntLiteral()
@@ -481,6 +506,8 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         parseModule()
       case LBRACE =>
         parseBlock()
+      case IF =>
+        parseIf()
       case _ =>
         val loc = currentToken.loc
         val skippedDiagnostics = recover()

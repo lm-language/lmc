@@ -335,6 +335,25 @@ final class TypeChecker(
             s, inferredMembers
           )
         )
+      case N.Expr.If(p, t, Some(f)) =>
+        val checkedP = checkExpr(p, Primitive.Bool)
+        val inferredT = inferExpr(t)
+        val checkedF = checkExpr(f, inferredT.typ)
+        makeTyped(
+          typ = inferredT.typ,
+          variant = T.Expr.If(
+            checkedP, inferredT, Some(checkedF)
+          )
+        )
+      case N.Expr.If(p, t, None) =>
+        val checkedP = checkExpr(p, Primitive.Bool)
+        val inferredT = inferExpr(t)
+        makeTyped(
+          typ = Primitive.Unit,
+          variant = T.Expr.If(
+            checkedP, inferredT, None
+          )
+        )
       case N.Expr.Error() =>
         makeTyped(
           typ = ErrorType,
@@ -1368,11 +1387,9 @@ final class TypeChecker(
     }
   }
 
-
   private def makeForall(paramNames: Iterable[Symbol], resultType: Type): Type = {
     paramNames.foldRight(resultType)((current, prev) => Forall(current, prev))
   }
-
 
   private def inferKindAnnotation(annot: Named.KindAnnotation): T.KindAnnotation = {
     val variant = annot.variant match {

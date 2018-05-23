@@ -1,0 +1,12 @@
+
+let i = if (true) 3 else 4;
+
+let predTypeError = if (1) 3 else 4;
+
+let branchTypeError = if (true) 3 else false;
+
+let withoutElse = fn(a: Bool) => {
+	if (a) {
+		1;
+	};
+};
