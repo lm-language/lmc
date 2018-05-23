@@ -320,6 +320,21 @@ final class TypeChecker(
         }
       case w@N.Expr.WithExpression(_, _) =>
         inferWith(expr, w)
+      case N.Expr.Block(s, members) =>
+        val inferredMembers = members.map({
+          case e@N.Expr(_, _, _) => inferExpr(e)
+          case d@N.Declaration(_, _, _) => inferDeclaration(d)
+        })
+        val typ = inferredMembers.lastOption.map({
+          case e@T.Expr(_, _, _) => e.typ
+          case T.Declaration(_, _, _) => Primitive.Unit
+        }).getOrElse(Primitive.Unit)
+        makeTyped(
+          typ = typ,
+          variant = T.Expr.Block(
+            s, inferredMembers
+          )
+        )
       case N.Expr.Error() =>
         makeTyped(
           typ = ErrorType,

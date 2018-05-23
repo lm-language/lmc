@@ -241,6 +241,16 @@ class Binder(
       case Expr.Var(_) => expr.variant
       case Expr.Prop(e, prop) =>
         Expr.Prop(bindExpr(e), prop)
+      case Expr.Block(s, members) =>
+        withScope(s)(() => {
+          Expr.Block(
+            s,
+            members.map({
+              case e@Expr(_, _, _) => bindExpr(e)
+              case d@Declaration(_, _, _) => bindDeclaration(d)
+            })
+          )
+        })
       case Expr.Error() => expr.variant
     }
     expr.copy(variant = boundVariant)

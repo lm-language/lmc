@@ -2,7 +2,6 @@ package lmc.syntax
 
 import lmc.common._
 import lmc.diagnostics.Diagnostic
-import lmc.utils
 
 import scala.ref.WeakReference
 
@@ -53,6 +52,8 @@ trait Syntax {
       }
     }
   }
+
+  sealed trait BlockMember extends Node
 
   implicit class NodeOps(m: Meta) extends HasMeta with HasLoc {
     def getMeta: Meta = m
@@ -182,6 +183,7 @@ trait Syntax {
           List(e)
         case WithExpression(e1, e2) =>
           Vector(e1, e2)
+        case Block(_, members) => members
         case Error() => List()
       }
     }
@@ -223,6 +225,10 @@ trait Syntax {
       e1: Expr,
       e2: Expr
     ) extends T
+    case class Block(
+      scope: _Scope,
+      members: Vector[BlockMember]
+    ) extends T
     case class Error() extends T
 
     case class Arg(
@@ -247,7 +253,7 @@ trait Syntax {
     meta: Meta,
     typ: _Type,
     variant: Expr.Variant
-  ) extends NodeOps(meta) with Node with HasVariant[Expr.Variant] {
+  ) extends NodeOps(meta) with Node with HasVariant[Expr.Variant] with BlockMember {
     override def children: Iterable[Node] = variant.children
 
     override def toString: String = variant.toString
@@ -347,7 +353,7 @@ trait Syntax {
     meta: Meta,
     variant: Declaration.Variant,
     modifiers: Set[Declaration.Modifier]
-  ) extends NodeOps(meta) with Node with HasVariant[Declaration.Variant] {
+  ) extends NodeOps(meta) with Node with HasVariant[Declaration.Variant] with BlockMember {
     override def children: Iterable[Node] = variant.children
     override def toString: String = variant.toString
     def isAbstract: Boolean = modifiers.contains(Declaration.Modifier.Abstract)

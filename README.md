@@ -18,7 +18,7 @@ LM is a statically typed, multi-paradigm language language with focus on:
   * Higher kinded types
   * Higher rank types
   * Scala like implicits
-  
+
 * A good deal of type safety
 
 * Modern yet familiar syntax.

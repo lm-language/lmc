@@ -1,0 +1,18 @@
+{
+  "diagnostics":[
+    {
+      "loc":{
+        "start":{
+          "line":12,
+          "column":20
+        },
+        "end":{
+          "line":15,
+          "column":1
+        }
+      },
+      "severity":"Error",
+      "message":"TypeMismatch(Int,Bool)"
+    }
+  ]
+}

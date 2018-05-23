@@ -1,0 +1,15 @@
+
+let x = {
+  let y = 42;
+  y;
+};
+
+let u = {};
+let u1 = {
+  type A = Unit;
+};
+
+let typeErr: Int = {
+  let y = true;
+  y;
+};

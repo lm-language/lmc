@@ -443,6 +443,33 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         )
       })
     }
+
+    def parseBlock() = withNewScope(blockScope => {
+      val errors = ListBuffer.empty[Diagnostic]
+      var members = Vector.empty[BlockMember]
+      val lbrace = advance()
+      while (currentToken.variant != RBRACE && currentToken.variant != EOF) {
+        val member = if (Parser.DECL_PREDICTORS.contains(currentToken.variant)) {
+          parseDeclaration
+        } else {
+          val e = parseExpr()
+          expect(errors)(SEMICOLON)
+          e
+        }
+        members = members.:+(member)
+      }
+      val rbrace = expect(errors)(RBRACE)
+
+      val meta = makeMeta(Loc.between(lbrace, rbrace), scope(), errors.toVector)
+      Expr(
+        meta,
+        typ = (),
+        Expr.Block(
+          blockScope,
+          members
+        )
+      )
+    })
     val head = currentToken.variant match {
       case INT =>
         parseIntLiteral()
@@ -452,6 +479,8 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         parseVar()
       case MODULE =>
         parseModule()
+      case LBRACE =>
+        parseBlock()
       case _ =>
         val loc = currentToken.loc
         val skippedDiagnostics = recover()

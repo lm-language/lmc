@@ -1,9 +1,8 @@
 package lmc
 
 import lmc.syntax.{Named => N, Parsed => P}
-import lmc.common.{ScopeBuilder, ScopeEntry, Symbol, TypeEntry}
+import lmc.common.{ScopeBuilder, ScopeEntry, Symbol}
 import lmc.diagnostics._
-import lmc.utils.Debug
 
 import scala.collection.mutable.ListBuffer
 import scala.ref.WeakReference
@@ -318,6 +317,16 @@ class Renamer(
           renameExpr(e1),
           renameExpr(e2)
         )
+      case P.Expr.Block(s, members) =>
+        withScope(s)(() => {
+          N.Expr.Block(
+            s,
+            members.map({
+              case e@P.Expr(_, _, _) => renameExpr(e)
+              case d@P.Declaration(_, _, _) => renameDecl(d)
+            })
+          )
+        })
       case P.Expr.Error() =>
         N.Expr.Error()
     }
