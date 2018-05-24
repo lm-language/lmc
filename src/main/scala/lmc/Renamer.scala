@@ -74,6 +74,27 @@ class Renamer(
           case _ => ()
         }
         (N.Declaration.Include(namedExpr), List.empty)
+      case P.Declaration.Enum(scope, ident, genericParams, cases) =>
+        val namedIdent = renameVarIdent(ident)
+        withScope(scope)(() => {
+          val namedGenericParams = renameGenericParams(genericParams).toVector
+          val namedCases = cases.map(c => {
+            N.EnumCase(
+              c.meta.named,
+              renameVarIdent(c.name),
+              c.args.map({
+                case (label, annotation) =>
+                  (label, renameAnnotation(annotation))
+              })
+            )
+          })
+          (
+            N.Declaration.Enum(
+              scope, namedIdent, namedGenericParams, namedCases
+            ),
+            List.empty
+          )
+        })
       case P.Declaration.Error() =>
         (N.Declaration.Error(), List.empty)
     }

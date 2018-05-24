@@ -40,7 +40,7 @@ object Parser {
     OVERRIDE -> Declaration.Modifier.Override
   )
   val DECL_PREDICTORS: Set[token.Variant] = Set(
-    LET, EXTERN, TYPE, INCLUDE
+    LET, EXTERN, TYPE, INCLUDE, ENUM
   ) union DECL_MODIFIERS.keySet
 }
 
@@ -265,6 +265,39 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           variant = Declaration.TypeAlias(ident, kindAnnotation, rhs),
           modifiers
         )
+      case ENUM =>
+        val outerScope = scope()
+        withNewScope((enumScope) => {
+          val errors = ListBuffer.empty[Diagnostic]
+          val firstTok = advance()
+          val ident = parseIdent()
+          val genericParams = currentToken.variant match {
+            case LSQB =>
+              advance()
+              val params = parseGenericParamsList().toVector
+              expect(errors)(RSQB)
+              params
+            case _ => Vector.empty
+          }
+          expect(errors)(LBRACE)
+          val cases = ListBuffer.empty[EnumCase]
+          while (!(Set(EOF, RBRACE) contains currentToken.variant)) {
+            cases.append(parseEnumCase())
+          }
+          val rbrace = expect(errors)(RBRACE)
+          expect(errors)(SEMICOLON)
+          Declaration(
+            meta = makeMeta(
+              Loc.between(firstTok, rbrace),
+              scope = outerScope,
+              errors.toVector
+            ),
+            modifiers = modifiers,
+            variant = Declaration.Enum(
+              enumScope, ident, genericParams, cases.toVector
+            )
+          )
+        })
       case _ =>
         val startTok = currentToken
 
@@ -289,6 +322,40 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           modifiers
         )
     }
+  }
+
+  private def parseEnumCase(): EnumCase = {
+    val errors = ListBuffer.empty[Diagnostic]
+    val name = parseIdent()
+    val params: Vector[(Option[String], TypeAnnotation)] = currentToken.variant match {
+      case LPAREN =>
+        advance()
+        val result = parseCommaSeperatedList(() =>
+          peek.variant match {
+            case COLON =>
+              val idTok = expect(errors)(ID)
+              expect(errors)(COLON)
+              (Some(idTok.lexeme), parseTypeAnnotation())
+            case _ =>
+              (None, parseTypeAnnotation())
+          }
+        )(Set(ID))
+        expect(errors)(RPAREN)
+        result.toVector
+      case _ =>
+        Vector.empty
+    }
+    expect(errors)(SEMICOLON)
+    EnumCase(
+      makeMeta(
+        Loc.between(name, params.lastOption.map(_._2).getOrElse(name)),
+        scope(),
+        errors.toList
+      ),
+      name,
+      params
+    )
+
   }
 
   private def parseModifiers(
@@ -460,7 +527,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       }
       val rbrace = expect(errors)(RBRACE)
 
-      val meta = makeMeta(Loc.between(lbrace, rbrace), scope(), errors.toVector)
+      val meta = makeMeta(Loc.between(lbrace, rbrace), scope(), errors.toList)
       Expr(
         meta,
         typ = (),

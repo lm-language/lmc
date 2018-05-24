@@ -182,10 +182,10 @@ trait Syntax {
         case Prop(e, _) =>
           List(e)
         case WithExpression(e1, e2) =>
-          Vector(e1, e2)
+          List(e1, e2)
         case Block(_, members) => members
-        case If(p, t, Some(f)) => Vector(p, t, f)
-        case If(p, t, None) => Vector(p, t)
+        case If(p, t, Some(f)) => List(p, t, f)
+        case If(p, t, None) => List(p, t)
         case Error() => List()
       }
     }
@@ -278,6 +278,8 @@ trait Syntax {
             .filter(_ != null)
         case Include(e) =>
           List(e)
+        case Enum(_, ident, genericParams, cases) =>
+          Seq(Seq(ident), genericParams, cases).flatten
         case Error() => List()
       }
     }
@@ -317,8 +319,25 @@ trait Syntax {
     case class Include(
       expr: Expr
     ) extends T
+    case class Enum(
+      scope: _Scope,
+      ident: Ident,
+      genericParams: Vector[GenericParam],
+      cases: Vector[EnumCase]
+    ) extends T
     case class Error() extends T
 
+  }
+
+  case class EnumCase(
+    meta: Meta,
+    name: Ident,
+    args: Vector[(Option[String], TypeAnnotation)]
+  ) extends NodeOps(meta) with HasMeta with Node {
+    override def children: Iterable[Node] =
+      args.flatMap({
+        case (_, annot) => List(annot)
+      })
   }
 
   case class GenericParam(

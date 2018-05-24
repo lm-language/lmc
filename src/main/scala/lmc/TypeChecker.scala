@@ -129,6 +129,71 @@ final class TypeChecker(
               modifiers
             )
         }
+      case N.Declaration.Enum(scope, ident, genericParams, cases) =>
+        val typedIdent = inferIdent(ident)
+        val inferredGenericParams = inferGenericParams(genericParams).toVector
+        val kind = inferredGenericParams.foldRight[Kind](Kind.Star)({
+          case (arg, f) =>
+            Kind.KFun(f, arg.kind)
+        })
+        val typeSymbolOpt =
+          decl.meta.scope.get.flatMap(_.typeSymbols.get(ident.name.text))
+        val typeSymbol = if (typeSymbolOpt.isEmpty) {
+          throw new Error(s"Compiler bug: No type symbol for enum added to scope: Check binder")
+        } else {
+          typeSymbolOpt.get
+        }
+        val enumConstr: Type = Constructor(typeSymbol.symbol, kind)
+        ctx.setTypeVar(typeSymbol.symbol, enumConstr)
+        ctx.setKindOfSymbol(typeSymbol.symbol, kind)
+        val enumTyp = inferredGenericParams.foldLeft(enumConstr)((f, arg) =>
+          TApplication(f, Var(arg.ident.name))
+        )
+        val inferredCases = cases.map(c => {
+          val typedName = inferIdent(c.name)
+          val typedArgs = c.args.map({
+            case (label, annotation) =>
+              (label, inferTypeAnnotation(annotation))
+          })
+          T.EnumCase(
+            c.meta.typed,
+            typedName,
+            typedArgs
+          )
+        })
+        val modType = Module(
+          Map.empty,
+          inferredCases.map(c => {
+            val innerTyp = if (c.args.isEmpty)
+              enumTyp
+            else {
+              val params: Vector[Func.Param] = c.args.map({
+                case (Some(name), annotation) =>
+                  (Some(ctx.makeSymbol(name)), annotationToType(annotation))
+                case (None, annotation) =>
+                  (None, annotationToType(annotation))
+              })
+              Func(
+                params, enumTyp
+              )
+            }
+            c.name.name -> makeForall(inferredGenericParams.map(_.ident.name), innerTyp)
+          }).toMap
+        )
+        ctx.setTypeOfSymbol(typedIdent.name, modType)
+        for ((name, typ) <- modType.values) {
+          ctx.setTypeOfSymbol(name, typ)
+        }
+        T.Declaration(
+          decl.meta.typed,
+          T.Declaration.Enum(
+            scope,
+            typedIdent,
+            inferredGenericParams,
+            inferredCases
+          ),
+          modifiers
+        )
       case N.Declaration.Error() =>
         T.Declaration(
           decl.meta.typed,
@@ -368,6 +433,8 @@ final class TypeChecker(
         .map({ List(_) }).getOrElse(Nil)
       case T.Declaration.TypeAlias(name, _, _) => List(name.name)
       case T.Declaration.Include(_) => Nil
+      case T.Declaration.Enum(_, ident, _, _) =>
+        List(ident.name)
       case T.Declaration.Error() => Nil
     }
   }

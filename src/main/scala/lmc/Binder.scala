@@ -86,9 +86,10 @@ class Binder(
     result
   }
 
-  private def bindTypeVar(name: String): Unit = {
+  private def bindTypeVar(name: String): lmc.common.Symbol = {
     val symbol = ctx.makeSymbol(name)
     currentScope.setTypeVar(name, TypeEntry(symbol))
+    symbol
   }
 
   def bindDeclaration(decl: Declaration): Declaration = {
@@ -169,6 +170,23 @@ class Binder(
           ),
           meta = decl.meta.withDiagnostics(errors)
         )
+      case Enum(scope, ident, genericParams, cases) =>
+        val boundIdent = bindIdent(ident)
+        bindTypeVar(boundIdent.name)
+        withScope(scope)(() => {
+          val boundGenericParams = genericParams.map(bindGenericParam(scope))
+          val boundCases = cases.map(c => {
+            val boundName = bindIdent(c.name)
+            val boundArgs = c.args.map({
+              case (name, annotation) =>
+                (name, bindAnnotation(annotation))
+            })
+            EnumCase(c.meta, boundName, boundArgs)
+          })
+          decl.copy(
+            variant = Enum(scope, boundIdent, boundGenericParams, boundCases)
+          )
+        })
       case TypeAlias(ident, kindAnnotation, annotation) =>
         val (boundIdent, error) = bindTypeDeclHelper(ident)
         val boundAnnotation = annotation.map(bindAnnotation)

@@ -1,0 +1,150 @@
+{
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
+    },
+    "end":{
+      "line":30,
+      "column":1
+    }
+  },
+  "symbols":{
+    "x":{
+      "typ":"Option[Bool]"
+    },
+    "iNone":{
+      "typ":"OptionInt"
+    },
+    "listEmpty":{
+      "typ":"([A] => List[Var(A)])"
+    },
+    "OptionInt":{
+      "typ":"Module(Map(),Map(ISome -> (fn(value:Int) => OptionInt), INone -> OptionInt))"
+    },
+    "optInt":{
+      "typ":"Option[Int]"
+    },
+    "listInt":{
+      "typ":"List[Int]"
+    },
+    "iSome":{
+      "typ":"OptionInt"
+    },
+    "Option":{
+      "typ":"Module(Map(),Map(Some -> ([A] => (fn(value:Var(A)) => Option[Var(A)])), None -> ([A] => Option[Var(A)])))"
+    },
+    "boolSome":{
+      "typ":"Option[Int]"
+    },
+    "None":{
+      "typ":"([A] => Option[Var(A)])"
+    },
+    "List":{
+      "typ":"Module(Map(),Map(Empty -> ([A] => List[Var(A)]), Cons -> ([A] => (fn(Var(A), List[Var(A)]) => List[Var(A)]))))"
+    },
+    "Switch":{
+      "typ":"Module(Map(),Map(On -> Switch, Off -> Switch))"
+    }
+  },
+  "types":{
+    "Switch":"*",
+    "Option":"([*] => *)",
+    "OptionInt":"*",
+    "List":"([*] => *)"
+  },
+  "children":[
+    {
+      "loc":{
+        "start":{
+          "line":2,
+          "column":1
+        },
+        "end":{
+          "line":5,
+          "column":2
+        }
+      },
+      "symbols":{
+        "On":{
+          "typ":"Switch"
+        },
+        "Off":{
+          "typ":"Switch"
+        }
+      },
+      "types":{},
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":6,
+          "column":1
+        },
+        "end":{
+          "line":9,
+          "column":2
+        }
+      },
+      "symbols":{
+        "ISome":{
+          "typ":"(fn(value:Int) => OptionInt)"
+        },
+        "INone":{
+          "typ":"OptionInt"
+        }
+      },
+      "types":{},
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":11,
+          "column":1
+        },
+        "end":{
+          "line":14,
+          "column":2
+        }
+      },
+      "symbols":{
+        "Some":{
+          "typ":"([A] => (fn(value:Var(A)) => Option[Var(A)]))"
+        },
+        "None":{
+          "typ":"([A] => Option[Var(A)])"
+        }
+      },
+      "types":{
+        "A":"*"
+      },
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":22,
+          "column":1
+        },
+        "end":{
+          "line":25,
+          "column":2
+        }
+      },
+      "symbols":{
+        "Cons":{
+          "typ":"([A] => (fn(Var(A), List[Var(A)]) => List[Var(A)]))"
+        },
+        "Empty":{
+          "typ":"([A] => List[Var(A)])"
+        }
+      },
+      "types":{
+        "A":"*"
+      },
+      "children":[]
+    }
+  ]
+}

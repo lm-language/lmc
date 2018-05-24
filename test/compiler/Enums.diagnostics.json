@@ -1,0 +1,18 @@
+{
+  "diagnostics":[
+    {
+      "loc":{
+        "start":{
+          "line":29,
+          "column":27
+        },
+        "end":{
+          "line":29,
+          "column":33
+        }
+      },
+      "severity":"Error",
+      "message":"TypeMismatch(Option,List)"
+    }
+  ]
+}

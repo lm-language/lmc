@@ -1,0 +1,29 @@
+
+enum Switch {
+	On;
+	Off;
+};
+enum OptionInt {
+	ISome(value: Int);
+	INone;
+};
+
+enum Option[A] {
+	Some(value: A);
+	None;
+};
+
+let iSome = OptionInt.ISome(3);
+let iNone = OptionInt.INone;
+let boolSome = Option.Some(2);
+let None = Option.None;
+let x: Option[Bool] = None;
+
+enum List[A] {
+	Empty;
+	Cons(A, List[A]);
+};
+
+let listEmpty = List.Empty;
+let listInt = List.Cons(1, List.Empty);
+let optInt: Option[Int] = listInt;

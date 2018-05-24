@@ -33,7 +33,8 @@ object Lexer {
     "include" -> INCLUDE,
     "with" -> WITH,
     "if" -> IF,
-    "else" -> ELSE
+    "else" -> ELSE,
+    "enum" -> ENUM
   )
   val OPERATOR_TOKENS = Map(
     "==" -> EQEQ,
