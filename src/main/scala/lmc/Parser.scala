@@ -25,12 +25,14 @@ object Parser {
   def isRecoveryToken(variant: token.Variant): Boolean = {
     RECOVERY_TOKENS.contains(variant)
   }
-
-  val PATTERN_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN)
-  val PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS
   val EXPR_PREDICTORS: Set[token.Variant] = Set(
     ID, LPAREN, FN, LBRACE, INT, MODULE
   )
+
+  val PATTERN_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, DOT)
+  val PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS
+  val PATTERN_PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS union Set(DOTDOT)
+
   val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, LSQB).union(EXPR_PREDICTORS)
 
   val ARG_PREDICTORS: Set[token.Variant] = EXPR_PREDICTORS
@@ -562,6 +564,36 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         meta, (), variant
       )
     }
+
+    def parseMatchBranch(errors: ListBuffer[Diagnostic])(): Expr.MatchBranch = withNewScope(scope => {
+      val p = parsePattern()
+      expect(errors)(FATARROW)
+      val e = parseExpr()
+      Expr.MatchBranch(
+        scope,
+        p,
+        e
+      )
+    })
+
+    def parseMatch() = {
+      val errors = ListBuffer.empty[Diagnostic]
+      val matchTok = advance()
+      val e = parseExpr()
+      expect(errors)(LBRACE)
+      val branches = parseCommaSeperatedList(parseMatchBranch(errors))(Parser.PATTERN_PREDICTORS)
+      val rbrace = expect(errors)(RBRACE)
+      val meta = makeMeta(
+        loc = Loc.between(matchTok, rbrace),
+        scope = scope(),
+        errors.toList
+      )
+      Expr(
+        meta,
+        (),
+        Expr.Match(e, branches.toVector)
+      )
+    }
     val head = currentToken.variant match {
       case INT =>
         parseIntLiteral()
@@ -575,6 +607,8 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         parseBlock()
       case IF =>
         parseIf()
+      case MATCH =>
+        parseMatch()
       case _ =>
         val loc = currentToken.loc
         val skippedDiagnostics = recover()
@@ -658,7 +692,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   }
 
   private def parsePattern(): Pattern = {
-    val pattern = currentToken.variant match {
+    val head = currentToken.variant match {
       case ID =>
         val tok = advance()
         val meta = makeMeta(loc = tok.loc, scope())
@@ -673,6 +707,19 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val errors = collection.mutable.ListBuffer.empty[Diagnostic]
         expect(errors)(RPAREN)
         p.copy(meta = p.meta.copy(diagnostics = p.meta.diagnostics ++ errors))
+
+      case DOT =>
+        val firstTok = advance()
+        val ident = parseIdent()
+        val lastTok = ident
+        Pattern(
+          meta = makeMeta(
+            Loc.between(firstTok, lastTok),
+            scope = scope()
+          ),
+          typ = (),
+          variant = Pattern.DotName(ident)
+        )
       case _ =>
         val loc = currentToken.loc
 
@@ -700,13 +747,48 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         val annotation = parseTypeAnnotation()
         Pattern(
           meta = makeMeta(
-            loc = Loc.between(pattern, annotation),
+            loc = Loc.between(head, annotation),
             scope()
           ),
           typ = (),
-          variant = Pattern.Annotated(pattern, annotation)
+          variant = Pattern.Annotated(head, annotation)
         )
-      case _ => pattern
+      case LPAREN =>
+        advance()
+        val errors = ListBuffer.empty[Diagnostic]
+        val params = parseCommaSeperatedList(parsePatternParam(errors))(
+          Parser.PATTERN_PARAM_PREDICTORS
+        )
+        val rparen = expect(errors)(RPAREN)
+        Pattern(
+          meta = makeMeta(
+            loc = Loc.between(head, rparen),
+            scope(),
+            errors.toList
+          ),
+          typ = (),
+          variant = Pattern.Function(head, params.toVector)
+        )
+      case _ => head
+    }
+  }
+
+  private def parsePatternParam(errors: ListBuffer[Diagnostic])(): Pattern.Param = {
+    currentToken.variant match {
+      case DOTDOT =>
+        Pattern.Param.Rest
+      case _ =>
+        peek.variant match {
+          case EQ =>
+            val ident = parseIdent()
+            expect(errors)(EQ)
+            val pattern = parsePattern()
+            Pattern.Param.SubPattern(Some(ident), pattern)
+          case _ =>
+            val p = parsePattern()
+            Pattern.Param.SubPattern(None, p)
+        }
+
     }
   }
 

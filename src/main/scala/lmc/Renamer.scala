@@ -354,6 +354,13 @@ class Renamer(
           renameExpr(t),
           f.map(renameExpr)
         )
+      case P.Expr.Match(e, branches) =>
+        val renamedExpr = renameExpr(e)
+        val renamedBranches = branches.map(renameMatchBranch)
+        N.Expr.Match(
+          renamedExpr,
+          renamedBranches
+        )
       case P.Expr.Error() =>
         N.Expr.Error()
     }
@@ -361,6 +368,16 @@ class Renamer(
       meta = expr.meta.named,
       typ = (),
       variant = namedVariant
+    )
+  }
+
+  private def renameMatchBranch(b: P.Expr.MatchBranch): N.Expr.MatchBranch = {
+    val lhs = renamePattern(b.lhs)
+    val rhs = renameExpr(b.rhs)
+    N.Expr.MatchBranch(
+      b.scope,
+      lhs,
+      rhs
     )
   }
 

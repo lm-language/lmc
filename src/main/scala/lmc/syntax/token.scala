@@ -10,13 +10,14 @@ object token {
       // keywords
       LET, IF, ELSE, FN, EXTERN, WITH, ENUM,
       TYPE, MODULE, ABSTRACT, OVERRIDE, INCLUDE,
+      MATCH,
 
       // Punctuation
       VBAR, LPAREN, RPAREN, LBRACE, RBRACE, SEMICOLON,
-      COLON, COMMA, LSQB, RSQB, DOT,
+      COLON, COMMA, LSQB, RSQB,
 
       // Operators
-      EQ, EQEQ, PLUS, FATARROW, STAR,
+      EQ, EQEQ, PLUS, FATARROW, STAR, DOT, DOTDOT,
 
       UNEXPECTED_CHAR,
       INVALID_OPERATOR,

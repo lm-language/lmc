@@ -74,6 +74,8 @@ trait Syntax {
     type T = Variant
     case class Var(ident: Ident) extends T
     case class Annotated(pattern: Pattern, annotation: TypeAnnotation) extends T
+    case class DotName(ident: Ident) extends T
+    case class Function(pattern: Pattern, params: Vector[Param]) extends T
     case object Error extends T
 
     sealed trait Variant extends HasChildren {
@@ -81,8 +83,39 @@ trait Syntax {
         case Var(ident) => List(ident)
         case Annotated(pattern, annotation) =>
           List(pattern, annotation)
+        case DotName(ident) => Vector(ident)
+        case Function(pattern, params) => pattern +: params.flatMap({
+          case Param.Rest => Vector.empty[Node]
+          case Param.SubPattern(Some(ident), p) =>
+            Vector(ident, p)
+          case Param.SubPattern(None, p) =>
+            Vector(p)
+        })
         case Error => List()
       }
+    }
+
+    sealed trait Param {
+      override def toString: String = this match {
+        case Param.Rest => ".."
+        case Param.SubPattern(Some(label), pat) =>
+          s"$label = $pat"
+        case Param.SubPattern(None, pat) =>
+          pat.toString
+      }
+    }
+    object Param {
+      case object Rest extends Param
+
+      /**
+        * @example
+        *          label = .Option(x)
+        */
+      case class SubPattern(
+        label: Option[Ident],
+        pattern: Pattern
+      ) extends Param
+
     }
   }
 
@@ -97,7 +130,11 @@ trait Syntax {
         case Pattern.Var(ident) =>
           ident.name.toString
         case Pattern.Annotated(p, t) =>
-          s"""(${p.toString}: ${t.toString})"""
+          s"(${p.toString}: ${t.toString})"
+        case Pattern.DotName(ident) =>
+          s".$ident"
+        case Pattern.Function(p, params) =>
+          s"$p($params)"
         case Pattern.Error => "<ERROR>"
       }
   }
@@ -186,6 +223,8 @@ trait Syntax {
         case Block(_, members) => members
         case If(p, t, Some(f)) => List(p, t, f)
         case If(p, t, None) => List(p, t)
+        case Match(e, branches) =>
+          e.children ++ branches.flatMap(b => List(b.lhs, b.rhs))
         case Error() => List()
       }
     }
@@ -236,6 +275,10 @@ trait Syntax {
       trueBranch: Expr,
       falseBranch: Option[Expr]
     ) extends T
+    case class Match(
+      expr: Expr,
+      branches: Vector[MatchBranch]
+    ) extends T
     case class Error() extends T
 
     case class Arg(
@@ -254,6 +297,12 @@ trait Syntax {
         case None => value.toString
       }
     }
+
+    case class MatchBranch(
+      scope: _Scope,
+      lhs: Pattern,
+      rhs: Expr
+    )
   }
 
   case class Expr(

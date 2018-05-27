@@ -1,0 +1,33 @@
+
+enum Option[T] {
+	None;
+	Some(T);
+};
+
+enum Labeled[T] {
+	C(value: T, id: Int, flag: Bool, opt: Option[Int]);
+};
+
+let int0 = match Some(1) {
+	.Some(x) => 1,
+	.None => 23
+};
+
+let labeledBool = Labeled.C(1, flag = true, opt = Option.None, id = 32);
+
+let .C(int1, int2, bool1, optInt1) = labeledBool;
+
+let int3 = match labeledBool {
+	.C(..) => 1
+};
+
+let .C(int4, ..) = labeledBool;
+
+let .C(flag = bool2, ..) = labeledBool;
+
+let .C(x = uninferred) = labeledBool;
+
+let .C(int4, .., opt2) = labeledBool;
+
+let .C(opt = .Some(int5), ..) = labeledBool;
+

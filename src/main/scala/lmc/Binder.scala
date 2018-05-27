@@ -275,6 +275,12 @@ class Binder(
           bindExpr(t),
           f.map(bindExpr)
         )
+      case Expr.Match(e, branches) =>
+        val boundBranches = branches.map(bindMatchBranch)
+        Expr.Match(
+          bindExpr(e),
+          boundBranches
+        )
       case Expr.Error() => expr.variant
     }
     expr.copy(variant = boundVariant)
@@ -314,6 +320,14 @@ class Binder(
     }
   }
 
+  private def bindMatchBranch(b: Expr.MatchBranch) = withScope(b.scope)(() => {
+    Expr.MatchBranch(
+      b.scope,
+      bindPattern(b.lhs, b.lhs.loc.end),
+      bindExpr(b.rhs)
+    )
+  })
+
   def bindPattern(pattern: Pattern, validAfter: Pos): Pattern = {
     import Pattern._
     pattern.variant match {
@@ -325,6 +339,22 @@ class Binder(
         val boundAnnotation = bindAnnotation(annotation)
         pattern.copy(
           variant = Pattern.Annotated(newPattern, boundAnnotation)
+        )
+      case Pattern.DotName(_) =>
+        pattern
+      case Pattern.Function(p, params) =>
+        pattern.copy(
+          variant = Pattern.Function(
+            bindPattern(p, p.loc.end),
+            params.map({
+              case Pattern.Param.Rest => Pattern.Param.Rest
+              case Pattern.Param.SubPattern(ident, p) =>
+                Pattern.Param.SubPattern(
+                  ident,
+                  bindPattern(p, p.loc.end)
+                )
+            })
+          )
         )
       case Error =>
         pattern
