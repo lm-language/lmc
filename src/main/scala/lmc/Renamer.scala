@@ -1,6 +1,7 @@
 package lmc
 
 import lmc.syntax.{Named => N, Parsed => P}
+import lmc.types._
 import lmc.common.{ScopeBuilder, ScopeEntry, Symbol}
 import lmc.diagnostics._
 
@@ -88,6 +89,7 @@ class Renamer(
               })
             )
           })
+          ctx.setEnumVariants(namedIdent.name, namedCases.map(_.name.name))
           (
             N.Declaration.Enum(
               scope, namedIdent, namedGenericParams, namedCases
@@ -116,6 +118,8 @@ class Renamer(
       case N.Declaration.TypeAlias(ident, _, _) =>
         addDecl(ident.name, WeakReference(declaration))
         ctx.setDeclOfTypeSymbol(ident.name, declaration)
+      case N.Declaration.Enum(_, ident, _, _) =>
+        ctx.setDeclOfSymbol(ident.name, declaration)
       case _ => ()
     }
   }
@@ -128,12 +132,30 @@ class Renamer(
         ctx.setDeclOfSymbol(ident.name, declaration)
       case P.Annotated(inner, _) =>
         addPatternDeclToScope(inner, declaration)
+      case P.Function(p, params) =>
+        params.foreach({
+          case P.Param.SubPattern(_, p) =>
+            addPatternDeclToScope(p, declaration)
+          case P.Param.Rest => ()
+        })
       case P.Error =>
         ()
     }
   }
 
-  private def renamePattern(pattern: P.Pattern, annotation: Option[P.TypeAnnotation] = None): N.Pattern = {
+  private def getEnumTypeSymbol(typ: Type): Option[Symbol] = {
+    typ match {
+      case Constructor(sym, _) => Some(sym)
+      case TApplication(t, _) => getEnumTypeSymbol(t)
+      case _ => None
+    }
+  }
+
+  private def renamePattern(
+    pattern: P.Pattern,
+    annotation: Option[P.TypeAnnotation] = None,
+    typ: Option[lmc.types.Type] = None
+  ): N.Pattern = {
     val (namedVariant, diagnostics: Iterable[Diagnostic]) = pattern.variant match {
       case P.Pattern.Var(ident) =>
         val namedIdent = renameVariableIdent(ident)
@@ -144,7 +166,45 @@ class Renamer(
           newPattern,
           renameAnnotation(annotation)
         ), List.empty)
-
+      case P.Pattern.DotName(ident) =>
+        typ.flatMap(getEnumTypeSymbol) match {
+          case Some(symbol) =>
+            ctx.getEnumVariants(symbol).find(_.text == ident.name) match {
+              case Some(sym) =>
+                (N.Pattern.DotName(
+                  N.Ident(
+                    meta = ident.meta.named,
+                    name = sym,
+                    duplicateBinder = ident.duplicateBinder)
+                ), List.empty)
+              case None =>
+                val renamedIdent = renameVarIdent(ident)
+                (
+                  N.Pattern.DotName(renamedIdent), List(Diagnostic(
+                  loc = ident.loc,
+                  severity = Severity.Error,
+                  variant = NoSuchVariant
+                )))
+            }
+          case None =>
+            val renamedIdent = renameVarIdent(ident)
+            (N.Pattern.DotName(renamedIdent), List(Diagnostic(
+              loc = ident.loc,
+              severity = Severity.Error,
+              variant = NoSuchVariant
+            )))
+        }
+      case P.Pattern.Function(pf, params) =>
+        val namedPf = renamePattern(pf)
+        val namedParams = params.map({
+          case P.Pattern.Param.Rest => N.Pattern.Param.Rest
+          case P.Pattern.Param.SubPattern(label, p) =>
+            N.Pattern.Param.SubPattern(
+              label.map(renameVariableIdent),
+              renamePattern(p)
+            )
+        })
+        (N.Pattern.Function(namedPf, namedParams), List.empty)
       case P.Pattern.Error =>
         (N.Pattern.Error, List.empty[Diagnostic])
     }
@@ -356,7 +416,9 @@ class Renamer(
         )
       case P.Expr.Match(e, branches) =>
         val renamedExpr = renameExpr(e)
-        val renamedBranches = branches.map(renameMatchBranch)
+        val checkedExpr = ctx.getTypedExpr(renamedExpr)
+        println(checkedExpr)
+        val renamedBranches = branches.map(renameMatchBranch(checkedExpr.typ))
         N.Expr.Match(
           renamedExpr,
           renamedBranches
@@ -371,8 +433,8 @@ class Renamer(
     )
   }
 
-  private def renameMatchBranch(b: P.Expr.MatchBranch): N.Expr.MatchBranch = {
-    val lhs = renamePattern(b.lhs)
+  private def renameMatchBranch(typ: lmc.types.Type)(b: P.Expr.MatchBranch): N.Expr.MatchBranch = {
+    val lhs = renamePattern(b.lhs, None, Some(typ))
     val rhs = renameExpr(b.rhs)
     N.Expr.MatchBranch(
       b.scope,
@@ -417,7 +479,9 @@ class Renamer(
       case Some(entry) =>
         N.Ident(ident.meta.named, entry.symbol, ident.duplicateBinder)
       case None =>
-        throw new Error(s"Compiler bug: No var symbol for $ident; Check binder")
+        throw new Error(
+          s"Compiler bug: No var symbol for $ident; Check binder; ${ident.loc}"
+        )
     }
   }
 

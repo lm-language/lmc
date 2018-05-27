@@ -8,7 +8,7 @@ enum Labeled[T] {
 	C(value: T, id: Int, flag: Bool, opt: Option[Int]);
 };
 
-let int0 = match Some(1) {
+let int0 = match Option.Some(1) {
 	.Some(x) => 1,
 	.None => 23
 };

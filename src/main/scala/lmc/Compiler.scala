@@ -30,6 +30,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private val _declOfSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
   private val _declOfTypeSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
   private val _symbolSubst = mutable.Map.empty[Symbol, WeakReference[Symbol]]
+  private val _enumVariants = mutable.Map.empty[Symbol, Vector[Symbol]]
 
   override def getSubstSymbol(sym: Symbol): Symbol = _symbolSubst.get(sym).flatMap(_.get) match {
     case Some(s) => getSubstSymbol(s)
@@ -286,4 +287,9 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
       case _ => None
     }
   }
+
+  override def getEnumVariants(sym: Symbol): Vector[Symbol] = _enumVariants.getOrElse(sym, Vector())
+
+  override def setEnumVariants(name: Symbol, variants: Iterable[Symbol]): Unit =
+    _enumVariants.update(name, variants.toVector)
 }

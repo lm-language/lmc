@@ -350,7 +350,7 @@ class Binder(
               case Pattern.Param.Rest => Pattern.Param.Rest
               case Pattern.Param.SubPattern(ident, p) =>
                 Pattern.Param.SubPattern(
-                  ident,
+                  ident.map(i => bindIdent(i)),
                   bindPattern(p, p.loc.end)
                 )
             })

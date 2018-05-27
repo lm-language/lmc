@@ -47,6 +47,7 @@ object diagnostics {
   case class ConflictingDecls(name: String) extends Variant
   case class InvalidTypeOverride(expectedKind: lmc.types.Kind, kind: lmc.types.Kind) extends Variant
   case class InvalidValueOverride(expectedType: lmc.types.Type, kind: lmc.types.Type) extends Variant
+  case object NoSuchVariant extends Variant
 
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {

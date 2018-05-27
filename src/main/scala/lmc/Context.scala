@@ -11,6 +11,7 @@ trait Context {
   def getDeclOfSymbol(name: Symbol): Option[syntax.Named.Declaration]
   def getSubstSymbol(sym: Symbol): Symbol
   def getDeclOfTypeSymbol(sym: Symbol): Option[syntax.Named.Declaration]
+  def getEnumVariants(sym: Symbol): Vector[Symbol]
 }
 
 object Context {
@@ -18,6 +19,7 @@ object Context {
   trait Renamer extends Context {
     def setDeclOfSymbol(name: Symbol, decl: syntax.Named.Declaration): Unit
     def setDeclOfTypeSymbol(name: Symbol, decl: syntax.Named.Declaration): Unit
+    def setEnumVariants(name: Symbol, variants: Iterable[Symbol]): Unit
   }
 
   trait TC extends Context {
