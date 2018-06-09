@@ -8,4 +8,5 @@ object Typed extends Syntax {
   type _Scope = Scope
   type _Type = Type
   type _Kind = Kind
+  override type _Parent = Option[Int]
 }

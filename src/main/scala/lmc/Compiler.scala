@@ -14,7 +14,7 @@ import lmc.syntax.{Named, Parsed, Typed}
 import scala.ref.WeakReference
 
 class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
-  extends Context with Context.TC with Context.Renamer {
+  extends Context with Context.TC with Context.Renamer with Context.Parser {
   private val _charStreams = mutable.Map.empty[Path, Stream[Char]]
   private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
@@ -31,6 +31,16 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private val _declOfTypeSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
   private val _symbolSubst = mutable.Map.empty[Symbol, WeakReference[Symbol]]
   private val _enumVariants = mutable.Map.empty[Symbol, Vector[Symbol]]
+
+  private val _namedSourceFiles = mutable.HashMap.empty[Int, WeakReference[Named.SourceFile]]
+  private val _namedDeclarations = mutable.HashMap.empty[Int, WeakReference[Named.Declaration]]
+  private val _namedExpressions = mutable.HashMap.empty[Int, WeakReference[Named.Expr]]
+  private val _namedPatterns = mutable.HashMap.empty[Int, WeakReference[Named.Pattern]]
+  private val _namedIdents = mutable.HashMap.empty[Int, WeakReference[Named.Ident]]
+
+  private val _parsedNodes = mutable.HashMap.empty[Int, WeakReference[Parsed.Node]]
+  private val _parentNodeMap = mutable.HashMap.empty[Int, Int]
+
 
   override def getSubstSymbol(sym: Symbol): Symbol = _symbolSubst.get(sym).flatMap(_.get) match {
     case Some(s) => getSubstSymbol(s)
@@ -88,6 +98,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   }
 
   val checker = new TypeChecker(this)
+  val renamer = new Renamer(this)
 
   def compile(): Future[Unit] = {
     Future.unit
@@ -105,7 +116,8 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
         sf
       case None =>
         val parsed = getParsedSourceFile(path)
-        val checkedSourceFile = checker.inferSourceFile(parsed)
+        val named = renamer.renameSourceFile(parsed)
+        val checkedSourceFile = checker.inferSourceFile(named)
         cacheCheckedSourceFile(path, checkedSourceFile)
         checkedSourceFile
     }
@@ -293,4 +305,43 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   override def setEnumVariants(name: Symbol, variants: Iterable[Symbol]): Unit = {
     _enumVariants.update(name, variants.toVector)
   }
+
+  override def getNamedSourceFile(id: Int): Option[Named.SourceFile] =
+    _namedSourceFiles.get(id).flatMap(_.get)
+  override def getNamedDecl(id: Int): Option[Named.Declaration] =
+    _namedDeclarations.get(id).flatMap(_.get)
+  override def getNamedExpr(id: Int): Option[Named.Expr] =
+    _namedExpressions.get(id).flatMap(_.get)
+  override def getNamedPattern(id: Int): Option[Named.Pattern] =
+    _namedPatterns.get(id).flatMap(_.get)
+  override def getNamedIdent(id: Int): Option[Named.Ident] =
+    _namedIdents.get(id).flatMap(_.get)
+
+  override def setNamedSourceFile(id: Int, sourceFile: Named.SourceFile): Unit =
+    _namedSourceFiles.update(id, WeakReference(sourceFile))
+  override def setNamedDecl(id: Int, decl: Named.Declaration): Unit =
+    _namedDeclarations.update(id, WeakReference(decl))
+  override def setNamedExpr(id: Int, expr: Named.Expr): Unit =
+    _namedExpressions.update(id, WeakReference(expr))
+  override def setNamedPattern(id: Int, pattern: Named.Pattern): Unit =
+    _namedPatterns.update(id, WeakReference(pattern))
+  override def setNamedIdent(id: Int, ident: Named.Ident): Unit =
+    _namedIdents.update(id, WeakReference(ident))
+
+
+  override def getParsedNode(id: Int): Option[Parsed.Node] =
+    _parsedNodes.get(id).flatMap(_.get)
+
+
+  override def setParsedNode(id: Int, node: Parsed.Node): Unit =
+    _parsedNodes.update(id, WeakReference(node))
+
+  override def getParsedParentOf(id: Int): Option[Parsed.Node] = for {
+    parentId <- _parentNodeMap.get(id)
+    parentWeakRef <- _parsedNodes.get(parentId).map(_.get)
+    parent <- parentWeakRef
+  } yield parent
+
+  override def setParsedParentOf(child: Parsed.Node, parent: Parsed.Node): Unit =
+    _parentNodeMap.update(child.getMeta.id, parent.getMeta.id)
 }

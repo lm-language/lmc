@@ -30,6 +30,7 @@ class CompilerTest {
     val compiler = new Compiler(paths = List(suitePath))
     for (path <- suiteDir.listFiles()
         filter { _.getName endsWith ".lm" }
+        filter { _.getName contains "DuplicateBinding" }
     ) {
       val filePath = Paths.get(path.getAbsolutePath)
       println(s"Checking $filePath")

@@ -26,11 +26,10 @@ final class TypeChecker(
   private val _checkedExprs =
     mutable.HashMap.empty[Int, WeakReference[T.Expr]]
 
-  def inferSourceFile(parsed: Parsed.SourceFile): T.SourceFile = {
-    val named = new Renamer(ctx.asInstanceOf[Context.Renamer]).renameSourceFile(parsed)
+  def inferSourceFile(named: Named.SourceFile): T.SourceFile = {
     val inferredDeclarations = named.declarations.map(inferDeclaration)
     T.SourceFile(
-      meta = parsed.meta.typed,
+      meta = named.meta.typed,
       scope = named.scope.typed,
       declarations = inferredDeclarations
     )
@@ -452,6 +451,7 @@ final class TypeChecker(
             rhs
         }
         checkedBranches.append(T.Expr.MatchBranch(
+          branch.meta.typed,
           branch.scope,
           checkedPattern,
           checkedRhs
@@ -1308,7 +1308,7 @@ final class TypeChecker(
           )
         )
       case N.Pattern.Function(
-        fPattern, params
+        fPattern@(N.Pattern(_, _, N.Pattern.DotName(dotNameIdent))), params
       ) =>
         val inferredFPattern = inferPattern(fPattern)
         val checkedParams = checkPatternParams(pattern.loc, fPattern.meta)(inferredFPattern.typ, params, typ)

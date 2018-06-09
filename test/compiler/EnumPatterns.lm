@@ -15,31 +15,17 @@ enum Labeled[T] {
 
 let labeledBool = Labeled.C(1, flag = true, opt = Option.None, id = 32);
 
-let _ = match labeledBool {
-	.C(int1, int2, bool1, optInt1) => 1
-};
+let .C(int1, int2, bool1, optInt1) = labeledBool;
 
-let int3 = match labeledBool {
-	.C(..) => 1
-};
+let .C(..) = labeledBool;
 
-let _ = labeledBool = {
-	.C(int4, ..) => 1
-};
+let .C(int4, ..) = labeledBool;
 
-let _ = match labeledBool {
-	.C(flag = bool2, ..) => 1
-};
+let .C(flag = bool2, ..) = labeledBool;
 
-let _ = match labeledBool {
-	.C(x = uninferred) => 1
-};
+let .C(x = uninferred) = labeledBool;
 
-let _ = match labeledBool {
-	.C(int4, .., opt2) => 1
-};
+let .C(int4, .., opt2) = labeledBool;
 
-let _ = match labeledBool {
-	.C(opt = .Some(int5), ..) => 1
-};
+let .C(opt = .Some(int5), ..) = labeledBool;
 

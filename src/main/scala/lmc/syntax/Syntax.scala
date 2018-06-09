@@ -10,15 +10,16 @@ trait Syntax {
   type _Scope <: Scope
   type _Type
   type _Kind
+  type _Parent
 
   case class Meta(
     id: Int,
     loc: Loc,
     scope: WeakReference[_Scope],
-    diagnostics: Iterable[Diagnostic] = List()
+    diagnostics: Iterable[Diagnostic] = List(),
+    parent: _Parent
   ) extends HasLoc {
     def typed: lmc.syntax.Typed.Meta = this.asInstanceOf[Typed.Meta]
-    def named: Named.Meta = this.asInstanceOf[Named.Meta]
 
     override def toString: String = ""
     def withDiagnostic(diagnostic: Diagnostic): Meta = {
@@ -45,9 +46,9 @@ trait Syntax {
     def errors: Iterable[Diagnostic] = {
       this.getMeta.diagnostics ++ this.children.flatMap(_.errors)
     }
-    def getScope: Scope = {
+    def getScope: _Scope = {
       this.getMeta.scope.get match {
-        case None => Scope.empty
+        case None => Scope.empty.asInstanceOf[_Scope]
         case Some(scope) => scope
       }
     }
@@ -309,10 +310,14 @@ trait Syntax {
     }
 
     case class MatchBranch(
+      meta: Meta,
       scope: _Scope,
       lhs: Pattern,
       rhs: Expr
-    )
+    ) extends NodeOps(meta) with Node {
+      override def children: Iterable[Node] =
+        Array(lhs, rhs)
+    }
   }
 
   case class Expr(

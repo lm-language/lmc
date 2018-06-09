@@ -1,10 +1,13 @@
 package lmc.common
 
 import java.nio.file.Paths
+
 import scala.collection._
 import scala.ref.WeakReference
+import lmc.syntax.Parsed
 
 sealed trait Scope extends HasLoc {
+  def parsedNode: Option[WeakReference[Parsed.Node]]
   def getSymbol(name: String): Option[Symbol] = {
     getEntry(name) map (_.symbol)
   }
@@ -61,13 +64,25 @@ object Scope {
   }
 }
 
-case class ScopeBuilder(
-  parent: Option[WeakReference[Scope]],
+object ScopeBuilder {
+  def apply(
+    parent: Option[WeakReference[Scope]],
+  ): ScopeBuilder = new ScopeBuilder(parent)
+}
+class ScopeBuilder(
+  override val parent: Option[WeakReference[Scope]],
 ) extends Scope {
+
   private val _symbols: mutable.HashMap[String, ScopeEntry] = mutable.HashMap.empty
   private val _typeSymbols: mutable.HashMap[String, TypeEntry] = mutable.HashMap.empty
   private var _children: List[WeakReference[Scope]] = List()
   private var _loc: Loc = _
+  private var _parsedNode: Option[WeakReference[Parsed.Node]] = None
+
+  override def parsedNode: Option[WeakReference[Parsed.Node]] = _parsedNode
+  def setParsedNode(node: Parsed.Node): Unit = {
+    _parsedNode = Some(WeakReference(node))
+  }
 
   private val _declMap: mutable.HashMap[Symbol, WeakReference[lmc.syntax.Named.Declaration]] = mutable.HashMap.empty
 
@@ -114,4 +129,3 @@ case class ScopeEntry(
   override def toString: String =
     s"""<$symbol:${symbol.id}>"""
 }
-

@@ -1,25 +1,22 @@
 {
-  "loc" : {
-    "start" : {
-      "line" : 1,
-      "column" : 1
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
     },
-    "end" : {
-      "line" : 3,
-      "column" : 1
+    "end":{
+      "line":3,
+      "column":1
     }
   },
-  "symbols" : {
-    "x" : {
-      "typ" : "Uninferred"
+  "symbols":{
+    "x":{
+      "typ":"ErrorType"
     },
-    "someVar" : {
-      "typ" : "Int"
+    "someVar":{
+      "typ":"Int"
     }
   },
-  "types" : {
-    
-  },
-  "children" : [
-  ]
+  "types":{},
+  "children":[]
 }
