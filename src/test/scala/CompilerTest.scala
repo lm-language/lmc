@@ -173,7 +173,7 @@ object ScopeJSON {
         compiler.getKindOfSymbol(sym.symbol) match {
           case Some(t) => t.toString
           case None =>
-            throw new Error(s"""CompilerBug: No kind for symbol ${sym.symbol.text}""")
+            throw new Error(s"""CompilerBug: No kind for symbol ${sym.symbol.text}(${sym.symbol.id})""")
         }
       })
         .toMap,

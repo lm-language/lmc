@@ -48,6 +48,8 @@ object diagnostics {
   case class InvalidTypeOverride(expectedKind: lmc.types.Kind, kind: lmc.types.Kind) extends Variant
   case class InvalidValueOverride(expectedType: lmc.types.Type, kind: lmc.types.Type) extends Variant
   case object NoSuchVariant extends Variant
+  case object DuplicateRestParam extends Variant
+  case object MissingPatternParams extends Variant
 
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {

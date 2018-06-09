@@ -290,6 +290,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
 
   override def getEnumVariants(sym: Symbol): Vector[Symbol] = _enumVariants.getOrElse(sym, Vector())
 
-  override def setEnumVariants(name: Symbol, variants: Iterable[Symbol]): Unit =
+  override def setEnumVariants(name: Symbol, variants: Iterable[Symbol]): Unit = {
     _enumVariants.update(name, variants.toVector)
+  }
 }

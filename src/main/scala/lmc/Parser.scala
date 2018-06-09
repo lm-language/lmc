@@ -776,17 +776,21 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   private def parsePatternParam(errors: ListBuffer[Diagnostic])(): Pattern.Param = {
     currentToken.variant match {
       case DOTDOT =>
-        Pattern.Param.Rest
+        val tok = currentToken
+        advance()
+        Pattern.Param.Rest(makeMeta(tok.loc, scope(), List()))
       case _ =>
         peek.variant match {
           case EQ =>
             val ident = parseIdent()
             expect(errors)(EQ)
             val pattern = parsePattern()
-            Pattern.Param.SubPattern(Some(ident), pattern)
+            val meta = makeMeta(Loc.between(ident, pattern), scope(), List())
+            Pattern.Param.SubPattern(meta, Some(ident), pattern)
           case _ =>
             val p = parsePattern()
-            Pattern.Param.SubPattern(None, p)
+            val meta = makeMeta(p.loc, scope(), List())
+            Pattern.Param.SubPattern(meta, None, p)
         }
 
     }

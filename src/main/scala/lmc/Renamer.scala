@@ -1,8 +1,10 @@
 package lmc
 
+import java.nio.file.Paths
+
 import lmc.syntax.{Named => N, Parsed => P}
 import lmc.types._
-import lmc.common.{ScopeBuilder, ScopeEntry, Symbol}
+import lmc.common.{Loc, ScopeBuilder, ScopeEntry, Symbol}
 import lmc.diagnostics._
 
 import scala.collection.mutable.ListBuffer
@@ -40,8 +42,17 @@ class Renamer(
   def renameDecl(decl: P.Declaration): N.Declaration = {
     val (variant, diagnostics) = decl.variant match {
       case P.Declaration.Let(pattern, expr) =>
-        val namedPattern = renamePattern(pattern)
         val namedExpr = expr.map(renameExpr)
+        val namedPattern = pattern.variant match {
+          case (
+            P.Pattern.Function(_, _)
+            | P.Pattern.DotName(_)
+            ) =>
+            val typ = namedExpr.map(ctx.getTypedExpr).map(_.typ)
+            renamePattern(pattern, None, typ)
+          case _ =>
+            renamePattern(pattern, None, None)
+        }
         (N.Declaration.Let(namedPattern, namedExpr), List.empty)
       case P.Declaration.TypeAlias(ident, kindAnnotation, annotation) =>
         val namedIdent = renameTypeIdent(ident)
@@ -80,9 +91,10 @@ class Renamer(
         withScope(scope)(() => {
           val namedGenericParams = renameGenericParams(genericParams).toVector
           val namedCases = cases.map(c => {
+            val caseName = renameVarIdent(c.name)
             N.EnumCase(
               c.meta.named,
-              renameVarIdent(c.name),
+              caseName,
               c.args.map({
                 case (label, annotation) =>
                   (label, renameAnnotation(annotation))
@@ -134,9 +146,9 @@ class Renamer(
         addPatternDeclToScope(inner, declaration)
       case P.Function(p, params) =>
         params.foreach({
-          case P.Param.SubPattern(_, p) =>
+          case P.Param.SubPattern(_, _, p) =>
             addPatternDeclToScope(p, declaration)
-          case P.Param.Rest => ()
+          case P.Param.Rest(_) => ()
         })
       case P.Error =>
         ()
@@ -194,13 +206,32 @@ class Renamer(
               variant = NoSuchVariant
             )))
         }
+      case P.Pattern.Function(pf@P.Pattern(_, _, P.Pattern.DotName(dotIdent)), params) =>
+        val namedPf = renamePattern(pf, None, typ)
+        var i = 0
+        val namedParams = params.map(param => {
+          val result = param match {
+            case P.Pattern.Param.Rest(meta) => N.Pattern.Param.Rest(meta.named)
+            case subPattern@P.Pattern.Param.SubPattern(meta, label, p) =>
+              N.Pattern.Param.SubPattern(
+                meta.named,
+                label.map(renameVariableIdent),
+                renamePattern(p, None)
+              )
+          }
+          i += 1
+          result
+        })
+        (N.Pattern.Function(namedPf, namedParams), List.empty)
       case P.Pattern.Function(pf, params) =>
+        // TODO: Add error here
         val namedPf = renamePattern(pf)
         val namedParams = params.map({
-          case P.Pattern.Param.Rest => N.Pattern.Param.Rest
-          case P.Pattern.Param.SubPattern(label, p) =>
+          case P.Pattern.Param.Rest(meta) => N.Pattern.Param.Rest(meta.named)
+          case P.Pattern.Param.SubPattern(meta, label, p) =>
             N.Pattern.Param.SubPattern(
-              label.map(renameVariableIdent),
+              meta.named,
+              label.map(renameVarIdent),
               renamePattern(p)
             )
         })
@@ -417,7 +448,6 @@ class Renamer(
       case P.Expr.Match(e, branches) =>
         val renamedExpr = renameExpr(e)
         val checkedExpr = ctx.getTypedExpr(renamedExpr)
-        println(checkedExpr)
         val renamedBranches = branches.map(renameMatchBranch(checkedExpr.typ))
         N.Expr.Match(
           renamedExpr,
@@ -434,13 +464,15 @@ class Renamer(
   }
 
   private def renameMatchBranch(typ: lmc.types.Type)(b: P.Expr.MatchBranch): N.Expr.MatchBranch = {
-    val lhs = renamePattern(b.lhs, None, Some(typ))
-    val rhs = renameExpr(b.rhs)
-    N.Expr.MatchBranch(
-      b.scope,
-      lhs,
-      rhs
-    )
+    withScope(b.scope)(() => {
+      val lhs = renamePattern(b.lhs, None, Some(typ))
+      val rhs = renameExpr(b.rhs)
+      N.Expr.MatchBranch(
+        b.scope,
+        lhs,
+        rhs
+      )
+    })
   }
 
   private def _openScope(scope: ScopeBuilder): Unit = {

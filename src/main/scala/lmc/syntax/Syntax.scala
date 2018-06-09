@@ -85,36 +85,46 @@ trait Syntax {
           List(pattern, annotation)
         case DotName(ident) => Vector(ident)
         case Function(pattern, params) => pattern +: params.flatMap({
-          case Param.Rest => Vector.empty[Node]
-          case Param.SubPattern(Some(ident), p) =>
+          case Param.Rest(_) => Vector.empty[Node]
+          case Param.SubPattern(_, Some(ident), p) =>
             Vector(ident, p)
-          case Param.SubPattern(None, p) =>
+          case Param.SubPattern(_, None, p) =>
             Vector(p)
         })
         case Error => List()
       }
     }
 
-    sealed trait Param {
+    sealed trait Param extends Node {
       override def toString: String = this match {
-        case Param.Rest => ".."
-        case Param.SubPattern(Some(label), pat) =>
+        case Param.Rest(_) => ".."
+        case Param.SubPattern(_, Some(label), pat) =>
           s"$label = $pat"
-        case Param.SubPattern(None, pat) =>
+        case Param.SubPattern(_, None, pat) =>
           pat.toString
       }
+
+      override def children: Iterable[Node] = this match {
+        case Param.Rest(_) => None
+        case Param.SubPattern(_, Some(label), pat) =>
+          List(label, pat)
+        case Param.SubPattern(_, None,  pat) =>
+          List(pat)
+      }
+
     }
     object Param {
-      case object Rest extends Param
+      case class Rest(meta: Meta) extends NodeOps(meta) with Param
 
       /**
         * @example
         *          label = .Option(x)
         */
       case class SubPattern(
+        meta: Meta,
         label: Option[Ident],
         pattern: Pattern
-      ) extends Param
+      ) extends NodeOps(meta) with Param with Node
 
     }
   }

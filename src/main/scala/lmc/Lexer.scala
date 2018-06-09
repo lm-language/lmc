@@ -105,6 +105,12 @@ final class Lexer(
             eofToken = Some(tok)
             tok
         }
+      case '#' =>
+        while (currentChar != EOF_CHAR && currentChar != '\n') {
+          advance
+        }
+        advance
+        next
       case c if Lexer.OPERATOR_CHARS.contains(c) =>
           operator
       case c if Lexer.isDigit(c) =>

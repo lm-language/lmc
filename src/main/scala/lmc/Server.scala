@@ -171,6 +171,9 @@ class Server {
       )
 
   def syncDiagnostics(uri: String, path: java.nio.file.Path): Unit = {
+    respond(
+      "debug" -> "getting source file diagnostics"
+    )
     val errors = compiler.getSourceFileDiagnostics(path)
     respond(
       ("jsonrpc" -> "2.0") ~

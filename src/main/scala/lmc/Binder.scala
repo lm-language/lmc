@@ -171,8 +171,7 @@ class Binder(
           meta = decl.meta.withDiagnostics(errors)
         )
       case Enum(scope, ident, genericParams, cases) =>
-        val boundIdent = bindIdent(ident)
-        bindTypeVar(boundIdent.name)
+        val boundIdent = bindIdent(ident, None, bindType = true)
         withScope(scope)(() => {
           val boundGenericParams = genericParams.map(bindGenericParam(scope))
           val boundCases = cases.map(c => {
@@ -297,7 +296,7 @@ class Binder(
     Expr.Param(bindPattern(param.pattern, validAfter))
   }
 
-  def bindIdent(ident: Ident, validAfter: Option[Pos] = None): Ident = {
+  def bindIdent(ident: Ident, validAfter: Option[Pos] = None, bindType: Boolean = false): Ident = {
     val symbol = ctx.makeSymbol(ident.name)
     currentScope.getSymbol(ident.name) match {
       case Some(_) =>
@@ -316,6 +315,9 @@ class Binder(
           ident.name,
           ScopeEntry(symbol, validAfter)
         )
+        if (bindType) {
+          currentScope.setTypeVar(ident.name, TypeEntry(symbol))
+        }
         ident
     }
   }
@@ -347,9 +349,10 @@ class Binder(
           variant = Pattern.Function(
             bindPattern(p, p.loc.end),
             params.map({
-              case Pattern.Param.Rest => Pattern.Param.Rest
-              case Pattern.Param.SubPattern(ident, p) =>
+              case Pattern.Param.Rest(meta) => Pattern.Param.Rest(meta)
+              case Pattern.Param.SubPattern(meta, ident, p) =>
                 Pattern.Param.SubPattern(
+                  meta,
                   ident.map(i => bindIdent(i)),
                   bindPattern(p, p.loc.end)
                 )

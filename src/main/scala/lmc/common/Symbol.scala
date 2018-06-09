@@ -1,5 +1,7 @@
 package lmc.common
 
+import lmc.utils.Debug
+
 case class Symbol(
   id: Int, text: String
 ) {
@@ -7,7 +9,9 @@ case class Symbol(
     id.hashCode
   }
 
-  override def toString: String = text
+  override def toString: String = if (Debug.isDebugging)
+    s"$text:$id"
+  else text
 
   override def equals(obj: scala.Any): Boolean =
     obj match {

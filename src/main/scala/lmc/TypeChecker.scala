@@ -136,16 +136,10 @@ final class TypeChecker(
           case (arg, f) =>
             Kind.KFun(f, arg.kind)
         })
-        val typeSymbolOpt =
-          decl.meta.scope.get.flatMap(_.typeSymbols.get(ident.name.text))
-        val typeSymbol = if (typeSymbolOpt.isEmpty) {
-          throw new Error(s"Compiler bug: No type symbol for enum added to scope: Check binder")
-        } else {
-          typeSymbolOpt.get
-        }
-        val enumConstr: Type = Constructor(typeSymbol.symbol, kind)
-        ctx.setTypeVar(typeSymbol.symbol, enumConstr)
-        ctx.setKindOfSymbol(typeSymbol.symbol, kind)
+        val typeSymbol = typedIdent.name
+        val enumConstr: Type = Constructor(typeSymbol, kind)
+        ctx.setTypeVar(typeSymbol, enumConstr)
+        ctx.setKindOfSymbol(typeSymbol, kind)
         val enumTyp = inferredGenericParams.foldLeft(enumConstr)((f, arg) =>
           TApplication(f, Var(arg.ident.name))
         )
@@ -419,11 +413,51 @@ final class TypeChecker(
             checkedP, inferredT, None
           )
         )
+      case N.Expr.Match(e, branches) =>
+        val inferredExpr = inferExpr(e)
+        val (branchType, checkedBranches) = checkMatchBranches(inferredExpr.typ, branches)
+        makeTyped(
+          typ = branchType,
+          variant = T.Expr.Match(
+            inferredExpr,
+            checkedBranches
+          )
+        )
+
       case N.Expr.Error() =>
         makeTyped(
           typ = ErrorType,
           variant = T.Expr.Error()
         )
+    }
+  }
+
+  private def checkMatchBranches(
+    typ: Type,
+    branches: Vector[N.Expr.MatchBranch]
+  ): (Type, Vector[T.Expr.MatchBranch]) = {
+    if (branches.isEmpty) {
+      (Primitive.Unit, Vector.empty)
+    } else {
+      var rhsType: Option[Type] = None
+      val checkedBranches = ListBuffer.empty[T.Expr.MatchBranch]
+      for (branch <- branches) {
+        val checkedPattern = checkPattern(branch.lhs, typ)
+        val checkedRhs = rhsType match {
+          case Some(t) =>
+            checkExpr(branch.rhs, t)
+          case None =>
+            val rhs = inferExpr(branch.rhs)
+            rhsType = Some(rhs.typ)
+            rhs
+        }
+        checkedBranches.append(T.Expr.MatchBranch(
+          branch.scope,
+          checkedPattern,
+          checkedRhs
+        ))
+      }
+      (rhsType.getOrElse(Primitive.Unit), checkedBranches.toVector)
     }
   }
 
@@ -917,6 +951,13 @@ final class TypeChecker(
             annotationTyp,
             List.empty
           )
+        case N.Pattern.DotName(ident) =>
+          ctx.getTypeOfSymbol(ident.name) match {
+            case Some(typ) =>
+              (T.Pattern.DotName(inferIdent(ident)), typ, List.empty)
+            case None =>
+              (T.Pattern.DotName(inferIdent(ident)), ErrorType, List.empty)
+          }
         case N.Pattern.Error =>
           (T.Pattern.Error, ErrorType, List.empty)
       }
@@ -1266,13 +1307,149 @@ final class TypeChecker(
             checkedAnnotation
           )
         )
-
+      case N.Pattern.Function(
+        fPattern, params
+      ) =>
+        val inferredFPattern = inferPattern(fPattern)
+        val checkedParams = checkPatternParams(pattern.loc, fPattern.meta)(inferredFPattern.typ, params, typ)
+        T.Pattern(
+          meta = pattern.meta.typed,
+          typ = typ,
+          variant = T.Pattern.Function(
+            inferredFPattern,
+            checkedParams
+          )
+        )
+      case N.Pattern.DotName(ident) =>
+        val inferredIdent = inferIdent(ident)
+        val (typ, errors) = getTypeOfIdent(ident)
+        T.Pattern(
+          meta = pattern.meta.typed.withDiagnostics(errors),
+          typ = typ,
+          variant = T.Pattern.DotName(inferredIdent)
+        )
       case N.Pattern.Error =>
         T.Pattern(
           meta = pattern.meta.typed,
           typ = typ,
           variant = T.Pattern.Error
         )
+    }
+  }
+
+  private def checkPatternParams(loc: Loc, fpatternMeta: N.Meta)(
+    fPatternTyp: Type,
+    params: Vector[N.Pattern.Param],
+    returnType: Type
+  ): Vector[T.Pattern.Param] = {
+    val instantiatedFPatternType = instantiateForall(fPatternTyp)
+    val _returnTypeOfFPattern = getReturnTypeOfPatternFuncType(instantiatedFPatternType)
+    val errors = ListBuffer.empty[Diagnostic]
+    errors.appendAll(assertSubType(fpatternMeta)(_returnTypeOfFPattern, returnType))
+
+    val expectedParams = getExpectedParams(applyEnv(instantiatedFPatternType))
+    val resultParams = ListBuffer.empty[T.Pattern.Param]
+    var i = 0
+    var restEncountered = false
+    var labeledFound = false
+    var missingArgErrorAdded = false
+    val labeledParams = mutable.HashMap.empty[Symbol, N.Pattern.Param.SubPattern]
+    val expectedLabeledParams = mutable.HashMap.empty[String, Type]
+    while (i < expectedParams.length) {
+      val (paramLabelOpt, expectedParamType) = expectedParams(i)
+      paramLabelOpt match {
+        case None => ()
+        case Some(symbol) =>
+          expectedLabeledParams.put(symbol.text, expectedParamType)
+      }
+
+      if (i >= params.length) {
+        if (!restEncountered && !missingArgErrorAdded) {
+          missingArgErrorAdded = true
+          errors.append(
+            Diagnostic(
+              loc = loc,
+              severity = Severity.Error,
+              variant = MissingPatternParams
+            )
+          )
+        }
+      } else {
+        val param = params(i)
+        param match {
+          case N.Pattern.Param.Rest(m) =>
+            val meta = if (restEncountered) {
+              m.typed.withDiagnostic(
+                Diagnostic(
+                  loc = m.loc,
+                  severity = Severity.Error,
+                  variant = DuplicateRestParam
+                )
+              )
+            } else {
+              restEncountered = true
+              m.typed
+            }
+            resultParams.append(T.Pattern.Param.Rest(meta))
+          case p@N.Pattern.Param.SubPattern(_, Some(label), innerPattern) =>
+            labeledParams.update(label.name, p)
+            labeledFound = true
+          case N.Pattern.Param.SubPattern(meta, None, innerPattern) =>
+            checkPattern(innerPattern, expectedParamType)
+
+        }
+      }
+      i += 1
+    }
+    while (i < params.length) {
+      val param = params(i)
+      // TODO: handle extra params
+      i += 1
+    }
+    for ((name, pattern) <- labeledParams) {
+      val param = expectedLabeledParams.get(name.text) match {
+        case None =>
+          T.Pattern.Param.SubPattern(
+            pattern.meta.typed.withDiagnostic(
+              Diagnostic(
+                loc = pattern.label.map(_.loc).getOrElse(pattern.loc),
+                severity = Severity.Error,
+                variant = NoSuchParamLabel(name.toString)
+              )
+            ),
+            pattern.label.map(inferIdent),
+            inferPattern(pattern.pattern)
+          )
+        case Some(t) =>
+          val innerPattern = checkPattern(pattern.pattern, t)
+          T.Pattern.Param.SubPattern(
+            pattern.meta.typed,
+            pattern.label.map(inferIdent),
+            innerPattern
+          )
+      }
+      resultParams.append(param)
+    }
+    resultParams.toVector
+
+  }
+
+  private def getExpectedParams(t: Type): Vector[(Option[Symbol], Type)] = {
+    t match {
+      case Func(from, _) =>
+        from
+      case _ => Vector.empty
+    }
+  }
+
+  private def getReturnTypeOfPatternFuncType(typ: Type): Type = {
+    typ match {
+      case Forall(_, inner) =>
+        getReturnTypeOfPatternFuncType(inner)
+      case Func(_, to) =>
+        to
+      case _ =>
+        typ
     }
   }
 
