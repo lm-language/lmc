@@ -41,11 +41,37 @@ class Renamer(
         val namedPattern = renamePattern(pattern)
         val namedExpr = rhs.map(renameExpr)
         N.Declaration.Let(namedPattern, namedExpr)
+      case P.Declaration.TypeAlias(ident, kindAnnotation, rhs) =>
+        val namedIdent = renameBindingTypeIdent(ident)
+        val namedKindAnnotation = kindAnnotation.map(renameKindAnnotation)
+        val namedRhs = rhs.map(renameTypeAnnotation)
+        N.Declaration.TypeAlias(
+          namedIdent,
+          namedKindAnnotation,
+          namedRhs
+        )
+      case P.Declaration.Error() =>
+        N.Declaration.Error()
     }
     N.Declaration(
       makeNamedMeta(decl),
       variant,
       decl.modifiers.map(P.Declaration.Modifier.named)
+    )
+  }
+
+  def renameKindAnnotation(k: P.KindAnnotation): N.KindAnnotation = {
+    var variant = k.variant match {
+      case P.KindAnnotation.Star => N.KindAnnotation.Star
+      case P.KindAnnotation.KFun(from, to) => N.KindAnnotation.KFun(
+        from.map(renameKindAnnotation),
+        renameKindAnnotation(to)
+      )
+      case P.KindAnnotation.Error => N.KindAnnotation.Error
+    }
+    N.KindAnnotation(
+      k.meta.named,
+      variant
     )
   }
 
@@ -64,6 +90,14 @@ class Renamer(
         N.Expr.Literal(N.Expr.LInt(i))
       case P.Expr.Var(ident) =>
         N.Expr.Var(renameVarIdent(expr)(ident))
+      case P.Expr.Call(argsLoc, func, args) =>
+        val namedFunc = renameExpr(func)
+        val namedArgs = args map {
+          case P.Expr.Arg(label, value) =>
+            val namedValue = renameExpr(value)
+            N.Expr.Arg(label, namedValue)
+        }
+        N.Expr.Call(argsLoc, namedFunc, namedArgs)
       case P.Expr.Error() =>
         N.Expr.Error()
     }
@@ -102,6 +136,30 @@ class Renamer(
     )
   }
 
+  def renameBindingTypeIdent(ident: P.Ident): N.Ident = {
+    ident.getScope.typeSymbols.get(ident.name) match {
+      case Some(entry) =>
+        val symbol = ctx.makeSymbol(ident.name)
+        N.Ident(
+          makeNamedMeta(ident).withDiagnostic(Diagnostic(
+            variant = DuplicateBinding(ident.name),
+            severity = Severity.Error,
+            loc = ident.loc
+          )),
+          name = symbol,
+          duplicateBinder = true
+        )
+      case None =>
+        val symbol = ctx.makeSymbol(ident.name)
+        ident.getScope.setTypeVar(ident.name, TypeEntry(symbol))
+        N.Ident(
+          makeNamedMeta(ident),
+          name = symbol,
+          duplicateBinder = ident.duplicateBinder
+        )
+    }
+  }
+
   def renameBindingIdent(ident: P.Ident): N.Ident = {
     ident.getScope.getEntry(ident.name) match {
       case Some(entry) =>
@@ -130,6 +188,34 @@ class Renamer(
     val variant = annotation.variant match {
       case P.TypeAnnotation.Var(ident) =>
         N.TypeAnnotation.Var(renameTVarIdent(ident))
+      case P.TypeAnnotation.Forall(scope, params, inner) =>
+        val namedParams = params.map(param => {
+          val namedIdent = renameBindingTypeIdent(param.ident)
+          val namedKindAnnotation = param.kindAnnotation.map(renameKindAnnotation)
+          N.GenericParam(
+            param.meta.named,
+            param.kind,
+            namedIdent,
+            namedKindAnnotation
+          )
+        })
+        val namedInner = renameTypeAnnotation(inner)
+        N.TypeAnnotation.Forall(scope, namedParams, namedInner)
+      case P.TypeAnnotation.TApplication(tf, args) =>
+        val namedTf = renameTypeAnnotation(tf)
+        val namedArgs = args.map(renameTypeAnnotation)
+        N.TypeAnnotation.TApplication(namedTf, namedArgs)
+      case P.TypeAnnotation.Func(params, returnType) =>
+        val namedParams = params map {
+          case (label, paramAnnotation) =>
+            val namedLabel = label.map(renameBindingIdent)
+            val namedTypeAnnotation = renameTypeAnnotation(paramAnnotation)
+            (namedLabel, namedTypeAnnotation)
+        }
+        val namedReturnType = renameTypeAnnotation(returnType)
+        N.TypeAnnotation.Func(
+          namedParams, namedReturnType
+        )
       case P.TypeAnnotation.Error =>
         N.TypeAnnotation.Error
     }
