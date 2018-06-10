@@ -18,11 +18,12 @@ class Renamer(
     }
   }
   def renameSourceFileHelper(sourceFile: P.SourceFile): N.SourceFile = {
-    N.SourceFile(
+    val result = N.SourceFile(
       makeNamedMeta(sourceFile),
       sourceFile.declarations.map(renameDeclaration),
       sourceFile.scope
     )
+    result
   }
 
   def renameDeclaration(decl: P.Declaration): N.Declaration = {
@@ -98,6 +99,16 @@ class Renamer(
             N.Expr.Arg(label, namedValue)
         }
         N.Expr.Call(argsLoc, namedFunc, namedArgs)
+      case P.Expr.Func(fnTok, scope, genericParams, params, returnTypeAnnotation, body) =>
+        val namedGenericParams = genericParams.map(renameGenericParam)
+        val namedParams = renameFunctionParams(params)
+        val namedReturnTypeAnnotation = returnTypeAnnotation.map(renameTypeAnnotation)
+        val namedBody = renameExpr(body)
+        N.Expr.Func(
+          fnTok, scope, namedGenericParams,
+          namedParams, namedReturnTypeAnnotation,
+          namedBody
+        )
       case P.Expr.Error() =>
         N.Expr.Error()
     }
@@ -105,6 +116,22 @@ class Renamer(
       meta = makeNamedMeta(expr),
       typ = (),
       variant
+    )
+  }
+
+  private def renameFunctionParams(params: Iterable[P.Expr.Param]): Iterable[N.Expr.Param] = {
+    params map (param => {
+      val namedPattern = renamePattern(param.pattern)
+      N.Expr.Param(namedPattern)
+    })
+  }
+
+  private def renameGenericParam(param: P.GenericParam): N.GenericParam = {
+    N.GenericParam(
+      meta = param.meta.named,
+      kind = (),
+      ident = renameBindingTypeIdent(param.ident),
+      kindAnnotation = param.kindAnnotation.map(renameKindAnnotation)
     )
   }
 
@@ -140,12 +167,13 @@ class Renamer(
     ident.getScope.typeSymbols.get(ident.name) match {
       case Some(entry) =>
         val symbol = ctx.makeSymbol(ident.name)
+        val error = Diagnostic(
+          variant = DuplicateBinding(ident.name),
+          severity = Severity.Error,
+          loc = ident.loc
+        )
         N.Ident(
-          makeNamedMeta(ident).withDiagnostic(Diagnostic(
-            variant = DuplicateBinding(ident.name),
-            severity = Severity.Error,
-            loc = ident.loc
-          )),
+          makeNamedMeta(ident).withDiagnostic(error),
           name = symbol,
           duplicateBinder = true
         )
@@ -175,7 +203,7 @@ class Renamer(
         )
       case None =>
         val symbol = ctx.makeSymbol(ident.name)
-        ident.getScope.setSymbol(ident.name, ScopeEntry(symbol))
+        ident.getScope.setSymbol(ident.name, ScopeEntry(symbol, declLoc = ident.loc))
         N.Ident(
           makeNamedMeta(ident),
           name = symbol,
@@ -189,16 +217,7 @@ class Renamer(
       case P.TypeAnnotation.Var(ident) =>
         N.TypeAnnotation.Var(renameTVarIdent(ident))
       case P.TypeAnnotation.Forall(scope, params, inner) =>
-        val namedParams = params.map(param => {
-          val namedIdent = renameBindingTypeIdent(param.ident)
-          val namedKindAnnotation = param.kindAnnotation.map(renameKindAnnotation)
-          N.GenericParam(
-            param.meta.named,
-            param.kind,
-            namedIdent,
-            namedKindAnnotation
-          )
-        })
+        val namedParams = params.map(renameGenericParam)
         val namedInner = renameTypeAnnotation(inner)
         N.TypeAnnotation.Forall(scope, namedParams, namedInner)
       case P.TypeAnnotation.TApplication(tf, args) =>
@@ -208,7 +227,13 @@ class Renamer(
       case P.TypeAnnotation.Func(params, returnType) =>
         val namedParams = params map {
           case (label, paramAnnotation) =>
-            val namedLabel = label.map(renameBindingIdent)
+            val namedLabel = label.map(
+                ident => N.Ident(
+                  meta = ident.meta.named,
+                  name = ctx.makeSymbol(ident.name),
+                  duplicateBinder = ident.duplicateBinder
+                )
+            )
             val namedTypeAnnotation = renameTypeAnnotation(paramAnnotation)
             (namedLabel, namedTypeAnnotation)
         }
@@ -319,6 +344,8 @@ class Renamer(
     decl.variant match {
       case P.Declaration.Let(pattern, _) =>
         isBindingPatternFor(name)(pattern)
+      case  _ => throw new Error(s"No decl for $name")
+
     }
   }
 

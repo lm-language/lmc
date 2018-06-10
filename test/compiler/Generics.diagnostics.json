@@ -1,32 +1,46 @@
 {
-  "diagnostics" : [
+  "diagnostics":[
     {
-      "loc" : {
-        "start" : {
-          "line" : 3,
-          "column" : 47
+      "loc":{
+        "start":{
+          "line":1,
+          "column":32
         },
-        "end" : {
-          "line" : 3,
-          "column" : 50
+        "end":{
+          "line":1,
+          "column":32
         }
       },
-      "severity" : "Error",
-      "message" : "TypeMismatch(Var(X),Bool)"
+      "severity":"Error",
+      "message":"DuplicateBinding(A)"
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 9,
-          "column" : 52
+      "loc":{
+        "start":{
+          "line":3,
+          "column":47
         },
-        "end" : {
-          "line" : 9,
-          "column" : 52
+        "end":{
+          "line":3,
+          "column":50
         }
       },
-      "severity" : "Error",
-      "message" : "TypeMismatch(Var(B),Var(A))"
+      "severity":"Error",
+      "message":"TypeMismatch(Var(X),Bool)"
+    },
+    {
+      "loc":{
+        "start":{
+          "line":9,
+          "column":52
+        },
+        "end":{
+          "line":9,
+          "column":52
+        }
+      },
+      "severity":"Error",
+      "message":"TypeMismatch(Var(B),Var(A))"
     }
   ]
 }

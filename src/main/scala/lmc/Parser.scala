@@ -95,7 +95,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
       id = ctx.nextMetaId(),
       _loc = Loc.between(currentToken, currentToken),
       scope = scope(),
-      _diagnostics = ListBuffer.empty,
+      _diagnostics = Vector(),
       _parent = _parents.head
     )
     _parents = meta.id::_parents
@@ -107,7 +107,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     meta.setLoc(Loc.between(startToken, endToken))
     ctx.setParsedNode(result.getMeta.id, result)
 
-    meta.setDiagnostics(errors.toArray[Diagnostic])
+    meta._setDiagnostics(errors.toVector)
     result
   }
 
@@ -753,9 +753,9 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
          val params = parseCommaSeperatedList(() => {
            val label = peek.variant match {
              case COLON =>
-               val labelTok = parseIdent()
+               val label = parseIdent()
                advance() // consume colon
-               Some(parseIdent())
+               Some(label)
              case _ =>
                None
            }

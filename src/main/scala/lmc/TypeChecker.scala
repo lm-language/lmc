@@ -294,7 +294,7 @@ final class TypeChecker(
       case Some(t) => (t, List.empty)
       case _ =>
         ident.getScope.resolveEntry(ident.name.text) match {
-          case Some(ScopeEntry(_, Some(pos))) if ident.loc.start < pos =>
+          case Some(ScopeEntry(_, Some(pos), _)) if ident.loc.start < pos =>
             (Uninferred, List(
               Diagnostic(
                 loc = ident.loc,

@@ -83,7 +83,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     scopeBuilder.setLoc(loc)
     for ((name, typ) <- entries) {
       val symbol = makeSymbol(name)
-      scopeBuilder.setSymbol(name, ScopeEntry(symbol, None))
+      scopeBuilder.setSymbol(name, ScopeEntry(symbol, None, loc))
       setTypeOfSymbol(symbol, typ)
     }
     for ((name, (t, kind)) <- primitiveTypes) {

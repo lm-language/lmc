@@ -1,373 +1,355 @@
 {
-  "loc" : {
-    "start" : {
-      "line" : 1,
-      "column" : 1
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
     },
-    "end" : {
-      "line" : 15,
-      "column" : 1
+    "end":{
+      "line":15,
+      "column":1
     }
   },
-  "symbols" : {
-    "idErr" : {
-      "typ" : "([X] => (fn(x:Var(X)) => Var(X)))"
+  "symbols":{
+    "idErr":{
+      "typ":"([X] => (fn(x:Var(X)) => Var(X)))"
     },
-    "fail" : {
-      "typ" : "([A] => Var(A))"
+    "fail":{
+      "typ":"([A] => Var(A))"
     },
-    "idBoolWithStrictLabel" : {
-      "typ" : "(fn(x:Bool) => Bool)"
+    "idBoolWithStrictLabel":{
+      "typ":"(fn(x:Bool) => Bool)"
     },
-    "idAnnotated" : {
-      "typ" : "([X] => (fn(x:Var(X)) => Var(X)))"
+    "idAnnotated":{
+      "typ":"([X] => (fn(x:Var(X)) => Var(X)))"
     },
-    "sndError" : {
-      "typ" : "([A,B] => (fn(Var(A), Var(B)) => Var(B)))"
+    "sndError":{
+      "typ":"([A,B] => (fn(Var(A), Var(B)) => Var(B)))"
     },
-    "idInt" : {
-      "typ" : "(fn(Int) => Int)"
+    "idInt":{
+      "typ":"(fn(Int) => Int)"
     },
-    "tooManyParams" : {
-      "typ" : "([X,Y] => (fn(x:Var(X), y:Var(Y)) => Var(X)))"
+    "tooManyParams":{
+      "typ":"([X,Y] => (fn(x:Var(X), y:Var(Y)) => Var(X)))"
     },
-    "snd" : {
-      "typ" : "([A,B] => (fn(a:Var(A), b:Var(B)) => Var(B)))"
+    "snd":{
+      "typ":"([A,B] => (fn(a:Var(A), b:Var(B)) => Var(B)))"
     },
-    "boolVal" : {
-      "typ" : "Bool"
+    "boolVal":{
+      "typ":"Bool"
     },
-    "duplicateParam" : {
-      "typ" : "([A,A] => Var(A))"
+    "duplicateParam":{
+      "typ":"([A,A] => Var(A))"
     },
-    "intVal1" : {
-      "typ" : "Int"
+    "intVal1":{
+      "typ":"Int"
     },
-    "idWithPatternAndLambdaAnnotation" : {
-      "typ" : "([X] => (fn(x:Var(X)) => Var(X)))"
+    "idWithPatternAndLambdaAnnotation":{
+      "typ":"([X] => (fn(x:Var(X)) => Var(X)))"
     },
-    "fst" : {
-      "typ" : "([A,B] => (fn(a:Var(A), b:Var(B)) => Var(A)))"
+    "fst":{
+      "typ":"([A,B] => (fn(a:Var(A), b:Var(B)) => Var(A)))"
     },
-    "boolVal1" : {
-      "typ" : "Bool"
+    "boolVal1":{
+      "typ":"Bool"
     }
   },
-  "types" : {
-    
-  },
-  "children" : [
+  "types":{},
+  "children":[
     {
-      "loc" : {
-        "start" : {
-          "line" : 1,
-          "column" : 28
+      "loc":{
+        "start":{
+          "line":1,
+          "column":28
         },
-        "end" : {
-          "line" : 1,
-          "column" : 38
+        "end":{
+          "line":1,
+          "column":38
         }
       },
-      "symbols" : {
+      "symbols":{},
+      "types":{
+        "A":"*"
+      },
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":2,
+          "column":18
+        },
+        "end":{
+          "line":2,
+          "column":25
+        }
+      },
+      "symbols":{},
+      "types":{
+        "A":"*"
+      },
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":3,
+          "column":12
+        },
+        "end":{
+          "line":3,
+          "column":34
+        }
+      },
+      "symbols":{},
+      "types":{
+        "X":"*"
+      },
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":3,
+          "column":38
+        },
+        "end":{
+          "line":3,
+          "column":50
+        }
+      },
+      "symbols":{
+        "x":{
+          "typ":"Var(X)"
+        }
+      },
+      "types":{},
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":4,
+          "column":18
+        },
+        "end":{
+          "line":4,
+          "column":40
+        }
+      },
+      "symbols":{
         
       },
-      "types" : {
-        "A" : "*"
+      "types":{
+        "X":"*"
       },
-      "children" : [
+      "children":[
       ]
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 2,
-          "column" : 18
+      "loc":{
+        "start":{
+          "line":4,
+          "column":44
         },
-        "end" : {
-          "line" : 2,
-          "column" : 25
+        "end":{
+          "line":4,
+          "column":53
         }
       },
-      "symbols" : {
+      "symbols":{
+        "x":{
+          "typ":"Var(X)"
+        }
+      },
+      "types":{
         
       },
-      "types" : {
-        "A" : "*"
-      },
-      "children" : [
+      "children":[
       ]
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 3,
-          "column" : 12
+      "loc":{
+        "start":{
+          "line":5,
+          "column":39
         },
-        "end" : {
-          "line" : 3,
-          "column" : 34
+        "end":{
+          "line":5,
+          "column":61
         }
       },
-      "symbols" : {
+      "symbols":{
         
       },
-      "types" : {
-        "X" : "*"
+      "types":{
+        "X":"*"
       },
-      "children" : [
+      "children":[
       ]
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 3,
-          "column" : 38
+      "loc":{
+        "start":{
+          "line":5,
+          "column":65
         },
-        "end" : {
-          "line" : 3,
-          "column" : 50
+        "end":{
+          "line":5,
+          "column":83
         }
       },
-      "symbols" : {
-        "x" : {
-          "typ" : "Var(X)"
+      "symbols":{
+        "x":{
+          "typ":"Var(X)"
         }
       },
-      "types" : {
+      "types":{
+        "A":"*"
+      },
+      "children":[
+      ]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":6,
+          "column":20
+        },
+        "end":{
+          "line":6,
+          "column":51
+        }
+      },
+      "symbols":{
         
       },
-      "children" : [
+      "types":{
+        "Y":"*",
+        "X":"*"
+      },
+      "children":[
       ]
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 4,
-          "column" : 18
+      "loc":{
+        "start":{
+          "line":6,
+          "column":55
         },
-        "end" : {
-          "line" : 4,
-          "column" : 40
+        "end":{
+          "line":6,
+          "column":85
         }
       },
-      "symbols" : {
+      "symbols":{
+        "y":{
+          "typ":"Var(Y)"
+        },
+        "x":{
+          "typ":"Var(X)"
+        }
+      },
+      "types":{
+        "A":"*",
+        "C":"*",
+        "B":"*"
+      },
+      "children":[
+      ]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":7,
+          "column":11
+        },
+        "end":{
+          "line":7,
+          "column":35
+        }
+      },
+      "symbols":{
+        "b":{
+          "typ":"Var(B)"
+        },
+        "a":{
+          "typ":"Var(A)"
+        }
+      },
+      "types":{
+        "A":"*",
+        "B":"*"
+      },
+      "children":[
+      ]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":8,
+          "column":11
+        },
+        "end":{
+          "line":8,
+          "column":35
+        }
+      },
+      "symbols":{
+        "b":{
+          "typ":"Var(B)"
+        },
+        "a":{
+          "typ":"Var(A)"
+        }
+      },
+      "types":{
+        "A":"*",
+        "B":"*"
+      },
+      "children":[
+      ]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":9,
+          "column":15
+        },
+        "end":{
+          "line":9,
+          "column":36
+        }
+      },
+      "symbols":{
         
       },
-      "types" : {
-        "X" : "*"
+      "types":{
+        "A":"*",
+        "B":"*"
       },
-      "children" : [
-      ]
+      "children":[]
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 4,
-          "column" : 44
+      "loc":{
+        "start":{
+          "line":9,
+          "column":40
         },
-        "end" : {
-          "line" : 4,
-          "column" : 53
+        "end":{
+          "line":9,
+          "column":52
         }
       },
-      "symbols" : {
-        "x" : {
-          "typ" : "Var(X)"
-        }
-      },
-      "types" : {
-        
-      },
-      "children" : [
-      ]
-    },
-    {
-      "loc" : {
-        "start" : {
-          "line" : 5,
-          "column" : 39
+      "symbols":{
+        "b":{
+          "typ":"Var(B)"
         },
-        "end" : {
-          "line" : 5,
-          "column" : 61
+        "a":{
+          "typ":"Var(A)"
         }
       },
-      "symbols" : {
-        
-      },
-      "types" : {
-        "X" : "*"
-      },
-      "children" : [
-      ]
-    },
-    {
-      "loc" : {
-        "start" : {
-          "line" : 5,
-          "column" : 65
-        },
-        "end" : {
-          "line" : 5,
-          "column" : 83
-        }
-      },
-      "symbols" : {
-        "x" : {
-          "typ" : "Var(X)"
-        }
-      },
-      "types" : {
-        "A" : "*"
-      },
-      "children" : [
-      ]
-    },
-    {
-      "loc" : {
-        "start" : {
-          "line" : 6,
-          "column" : 20
-        },
-        "end" : {
-          "line" : 6,
-          "column" : 51
-        }
-      },
-      "symbols" : {
-        
-      },
-      "types" : {
-        "Y" : "*",
-        "X" : "*"
-      },
-      "children" : [
-      ]
-    },
-    {
-      "loc" : {
-        "start" : {
-          "line" : 6,
-          "column" : 55
-        },
-        "end" : {
-          "line" : 6,
-          "column" : 85
-        }
-      },
-      "symbols" : {
-        "y" : {
-          "typ" : "Var(Y)"
-        },
-        "x" : {
-          "typ" : "Var(X)"
-        }
-      },
-      "types" : {
-        "A" : "*",
-        "C" : "*",
-        "B" : "*"
-      },
-      "children" : [
-      ]
-    },
-    {
-      "loc" : {
-        "start" : {
-          "line" : 7,
-          "column" : 11
-        },
-        "end" : {
-          "line" : 7,
-          "column" : 35
-        }
-      },
-      "symbols" : {
-        "b" : {
-          "typ" : "Var(B)"
-        },
-        "a" : {
-          "typ" : "Var(A)"
-        }
-      },
-      "types" : {
-        "A" : "*",
-        "B" : "*"
-      },
-      "children" : [
-      ]
-    },
-    {
-      "loc" : {
-        "start" : {
-          "line" : 8,
-          "column" : 11
-        },
-        "end" : {
-          "line" : 8,
-          "column" : 35
-        }
-      },
-      "symbols" : {
-        "b" : {
-          "typ" : "Var(B)"
-        },
-        "a" : {
-          "typ" : "Var(A)"
-        }
-      },
-      "types" : {
-        "A" : "*",
-        "B" : "*"
-      },
-      "children" : [
-      ]
-    },
-    {
-      "loc" : {
-        "start" : {
-          "line" : 9,
-          "column" : 15
-        },
-        "end" : {
-          "line" : 9,
-          "column" : 36
-        }
-      },
-      "symbols" : {
-        
-      },
-      "types" : {
-        "A" : "*",
-        "B" : "*"
-      },
-      "children" : [
-      ]
-    },
-    {
-      "loc" : {
-        "start" : {
-          "line" : 9,
-          "column" : 40
-        },
-        "end" : {
-          "line" : 9,
-          "column" : 52
-        }
-      },
-      "symbols" : {
-        "b" : {
-          "typ" : "Var(B)"
-        },
-        "a" : {
-          "typ" : "Var(A)"
-        }
-      },
-      "types" : {
-        
-      },
-      "children" : [
-      ]
+      "types":{},
+      "children":[]
     }
   ]
 }

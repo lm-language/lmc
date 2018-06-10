@@ -16,7 +16,7 @@ trait Syntax {
   trait Meta {
     def id: Int
     def loc: Loc
-    def diagnostics: Iterable[Diagnostic]
+    def diagnostics: Vector[Diagnostic]
     def scope: WeakReference[_Scope]
     def withDiagnostic(error: Diagnostic): Meta
     def withDiagnostics(errors: Iterable[Diagnostic]): Meta
@@ -29,25 +29,27 @@ trait Syntax {
     override val id: Int,
     private var _loc: Loc,
     override val scope: WeakReference[_Scope],
-    private var _diagnostics: Iterable[Diagnostic],
+    private var _diagnostics: Vector[Diagnostic],
     private var _parent: Int
   ) extends Meta {
     override def parent: Int = _parent
     override def loc: Loc = _loc
 
-    override def diagnostics: Iterable[Diagnostic] = _diagnostics
+    override def diagnostics: Vector[Diagnostic] = _diagnostics
 
-    def setDiagnostics(errors: Iterable[Diagnostic]) =
+    def _setDiagnostics(errors: Vector[Diagnostic]) =
       _diagnostics = errors
 
-    def setParent(p: Int): Unit =
+    def _setParent(p: Int): Unit =
       _parent = p
 
     def setLoc(loc: Loc): Unit =
       _loc = loc
 
-    override def withDiagnostic(error: Diagnostic): MutableMeta =
-      this.copy(_diagnostics = diagnostics ++ Array(error))
+    override def withDiagnostic(error: Diagnostic): MutableMeta = {
+      val result = this.copy(_diagnostics = diagnostics ++ Array(error))
+      result
+    }
     override def withDiagnostics(errors: Iterable[Diagnostic]): MutableMeta =
       this.copy(_diagnostics = diagnostics ++ errors)
 
@@ -68,7 +70,7 @@ trait Syntax {
   }
 
   sealed trait Node extends HasLoc with HasMeta with HasChildren {
-    def errors: Iterable[Diagnostic] = {
+    def errors: Vector[Diagnostic] = {
       this.getMeta.diagnostics ++ this.children.flatMap(_.errors)
     }
     def getScope: _Scope = {

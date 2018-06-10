@@ -124,7 +124,8 @@ case class TypeEntry(
 
 case class ScopeEntry(
   symbol: Symbol,
-  validAfter: Option[Pos] = None
+  validAfter: Option[Pos] = None,
+  declLoc: Loc
 ) {
   override def toString: String =
     s"""<$symbol:${symbol.id}>"""
