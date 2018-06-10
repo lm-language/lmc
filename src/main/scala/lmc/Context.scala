@@ -37,7 +37,6 @@ object Context {
     def setNamedExpr(id: Int, expr: syntax.Named.Expr): Unit
     def setNamedPattern(id: Int, pattern: syntax.Named.Pattern): Unit
     def setNamedIdent(id: Int, ident: syntax.Named.Ident): Unit
-    def setParsedParentOf(node: syntax.Parsed.Node, parentNode: syntax.Parsed.Node): Unit
   }
 
   trait TC extends Context {

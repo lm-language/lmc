@@ -12,22 +12,47 @@ trait Syntax {
   type _Kind
   type _Parent
 
-  case class Meta(
-    id: Int,
-    loc: Loc,
-    scope: WeakReference[_Scope],
-    diagnostics: Iterable[Diagnostic] = List(),
-    parent: _Parent
-  ) extends HasLoc {
-    def typed: lmc.syntax.Typed.Meta = this.asInstanceOf[Typed.Meta]
 
-    override def toString: String = ""
-    def withDiagnostic(diagnostic: Diagnostic): Meta = {
-      this.copy(diagnostics = this.diagnostics ++ List(diagnostic))
-    }
-    def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta = {
-      this.copy(diagnostics = this.diagnostics ++ diagnostics)
-    }
+  trait Meta {
+    def id: Int
+    def loc: Loc
+    def diagnostics: Iterable[Diagnostic]
+    def scope: WeakReference[_Scope]
+    def withDiagnostic(error: Diagnostic): Meta
+    def withDiagnostics(errors: Iterable[Diagnostic]): Meta
+    def typed: Typed.Meta
+    def named: Named.Meta
+    def parent: Int
+  }
+
+  case class MutableMeta(
+    override val id: Int,
+    private var _loc: Loc,
+    override val scope: WeakReference[_Scope],
+    private var _diagnostics: Iterable[Diagnostic],
+    private var _parent: Int
+  ) extends Meta {
+    override def parent: Int = _parent
+    override def loc: Loc = _loc
+
+    override def diagnostics: Iterable[Diagnostic] = _diagnostics
+
+    def setDiagnostics(errors: Iterable[Diagnostic]) =
+      _diagnostics = errors
+
+    def setParent(p: Int): Unit =
+      _parent = p
+
+    def setLoc(loc: Loc): Unit =
+      _loc = loc
+
+    override def withDiagnostic(error: Diagnostic): MutableMeta =
+      this.copy(_diagnostics = diagnostics ++ Array(error))
+    override def withDiagnostics(errors: Iterable[Diagnostic]): MutableMeta =
+      this.copy(_diagnostics = diagnostics ++ errors)
+
+    override def typed = this.asInstanceOf[Typed.Meta]
+    override def named = this.asInstanceOf[Named.Meta]
   }
 
   trait HasMeta {

@@ -19,47 +19,46 @@ class Renamer(
   }
   def renameSourceFileHelper(sourceFile: P.SourceFile): N.SourceFile = {
     N.SourceFile(
-      makeNamedMeta(sourceFile, null),
-      sourceFile.declarations.map(renameDeclaration(sourceFile)),
+      makeNamedMeta(sourceFile),
+      sourceFile.declarations.map(renameDeclaration),
       sourceFile.scope
     )
   }
 
-  def renameDeclaration(parent: P.Node)(decl: P.Declaration): N.Declaration = {
-    ctx.setParsedParentOf(decl, parent)
+  def renameDeclaration(decl: P.Declaration): N.Declaration = {
     ctx.getNamedDecl(decl.meta.id) match {
       case Some(d) => d
       case None =>
-        val named = renameDeclarationHelper(parent)(decl)
+        val named = renameDeclarationHelper(decl)
         ctx.setNamedDecl(decl.meta.id, named)
         named
     }
   }
-  def renameDeclarationHelper(parent: P.Node)(decl: P.Declaration): N.Declaration = {
+
+  def renameDeclarationHelper(decl: P.Declaration): N.Declaration = {
     val variant = decl.variant match {
       case P.Declaration.Let(pattern, rhs) =>
-        val namedPattern = renamePattern(decl)(pattern)
-        val namedExpr = rhs.map(renameExpr(decl))
+        val namedPattern = renamePattern(pattern)
+        val namedExpr = rhs.map(renameExpr)
         N.Declaration.Let(namedPattern, namedExpr)
     }
     N.Declaration(
-      makeNamedMeta(decl, parent),
+      makeNamedMeta(decl),
       variant,
       decl.modifiers.map(P.Declaration.Modifier.named)
     )
   }
 
-  def renameExpr(parent: P.Node)(expr: P.Expr): N.Expr = {
-    ctx.setParsedParentOf(expr, parent)
+  def renameExpr(expr: P.Expr): N.Expr = {
     ctx.getNamedExpr(expr.meta.id) match {
       case Some(e) => e
       case None =>
-        val named = renameExprHelper(parent)(expr)
+        val named = renameExprHelper(expr)
         ctx.setNamedExpr(expr.meta.id, named)
         named
     }
   }
-  def renameExprHelper(parent: P.Node)(expr: P.Expr): N.Expr = {
+  def renameExprHelper(expr: P.Expr): N.Expr = {
     val variant = expr.variant match {
       case P.Expr.Literal(P.Expr.LInt(i)) =>
         N.Expr.Literal(N.Expr.LInt(i))
@@ -69,48 +68,46 @@ class Renamer(
         N.Expr.Error()
     }
     N.Expr(
-      meta = makeNamedMeta(expr, parent),
+      meta = makeNamedMeta(expr),
       typ = (),
       variant
     )
   }
 
 
-  def renamePattern(parent: P.Node)(pattern: P.Pattern): N.Pattern = {
-    ctx.setParsedParentOf(pattern, parent)
+  def renamePattern(pattern: P.Pattern): N.Pattern = {
     ctx.getNamedPattern(pattern.meta.id) match {
       case Some(p) => p
       case None =>
-        val named = renamePatternHelper(parent)(pattern)
+        val named = renamePatternHelper(pattern)
         ctx.setNamedPattern(pattern.meta.id, named)
         named
     }
   }
-  def renamePatternHelper(parent: P.Node)(pattern: P.Pattern): N.Pattern = {
+  def renamePatternHelper(pattern: P.Pattern): N.Pattern = {
     val variant = pattern.variant match {
       case P.Pattern.Var(ident) =>
-        val namedIdent = renameBindingIdent(pattern)(ident)
+        val namedIdent = renameBindingIdent(ident)
         N.Pattern.Var(namedIdent)
       case P.Pattern.Annotated(p, annotation) =>
         N.Pattern.Annotated(
-          renamePattern(pattern)(p),
-          renameTypeAnnotation(pattern)(annotation)
+          renamePattern(p),
+          renameTypeAnnotation(annotation)
         )
     }
     N.Pattern(
-      makeNamedMeta(pattern, parent),
+      makeNamedMeta(pattern),
       typ = (),
       variant
     )
   }
 
-  def renameBindingIdent(parent: P.Node)(ident: P.Ident): N.Ident = {
-    ctx.setParsedParentOf(ident, parent)
+  def renameBindingIdent(ident: P.Ident): N.Ident = {
     ident.getScope.getEntry(ident.name) match {
       case Some(entry) =>
         val symbol = ctx.makeSymbol(ident.name)
         N.Ident(
-          makeNamedMeta(ident, parent).withDiagnostic(Diagnostic(
+          makeNamedMeta(ident).withDiagnostic(Diagnostic(
             variant = DuplicateBinding(ident.name),
             severity = Severity.Error,
             loc = ident.loc
@@ -122,41 +119,39 @@ class Renamer(
         val symbol = ctx.makeSymbol(ident.name)
         ident.getScope.setSymbol(ident.name, ScopeEntry(symbol))
         N.Ident(
-          makeNamedMeta(ident, parent),
+          makeNamedMeta(ident),
           name = symbol,
           duplicateBinder = ident.duplicateBinder
         )
     }
   }
 
-  def renameTypeAnnotation(parent: P.Node)(annotation: P.TypeAnnotation): N.TypeAnnotation = {
-    ctx.setParsedParentOf(annotation, parent)
+  def renameTypeAnnotation(annotation: P.TypeAnnotation): N.TypeAnnotation = {
     val variant = annotation.variant match {
       case P.TypeAnnotation.Var(ident) =>
-        N.TypeAnnotation.Var(renameTVarIdent(parent)(ident))
+        N.TypeAnnotation.Var(renameTVarIdent(ident))
       case P.TypeAnnotation.Error =>
         N.TypeAnnotation.Error
     }
     N.TypeAnnotation(
-      makeNamedMeta(annotation, parent),
+      makeNamedMeta(annotation),
       kind = (),
       variant
     )
   }
 
-  def renameTVarIdent(parent: P.Node)(ident: P.Ident): N.Ident = {
-    ctx.setParsedParentOf(ident, parent)
+  def renameTVarIdent(ident: P.Ident): N.Ident = {
     ident.getScope.resolveTypeEntry(ident.name) match {
       case Some(TypeEntry(sym)) =>
         N.Ident(
-          makeNamedMeta(ident, parent),
+          makeNamedMeta(ident),
           name = sym,
           duplicateBinder = ident.duplicateBinder
         )
       case None =>
         val sym = ctx.makeSymbol(ident.name)
         N.Ident(
-          makeNamedMeta(ident, parent).withDiagnostic(
+          makeNamedMeta(ident).withDiagnostic(
             Diagnostic(
               loc = ident.meta.loc,
               severity = Severity.Error,
@@ -170,11 +165,10 @@ class Renamer(
   }
 
   def renameVarIdent(parent: P.Node)(ident: P.Ident): N.Ident = {
-    ctx.setParsedParentOf(ident, parent)
     ident.getScope.resolveEntry(ident.name) match {
       case Some(entry) =>
         N.Ident(
-          makeNamedMeta(ident, parent),
+          makeNamedMeta(ident),
           name = entry.symbol,
           duplicateBinder = ident.duplicateBinder
         )
@@ -186,7 +180,7 @@ class Renamer(
             if (currentDecl.meta.id == parsedDecl.meta.id) {
               throw new Error("Cyclic declaration")
             } else {
-              renameDeclaration(ident)(parsedDecl)
+              renameDeclaration(parsedDecl)
               val errors = parsedDecl.variant match {
                 case P.Declaration.Let(_, _) =>
                   Array(
@@ -199,7 +193,7 @@ class Renamer(
               }
               val entry = ident.getScope.resolveEntry(ident.name).get
               N.Ident(
-                makeNamedMeta(ident, parent).withDiagnostics(errors),
+                makeNamedMeta(ident).withDiagnostics(errors),
                 name = entry.symbol,
                 duplicateBinder = ident.duplicateBinder
               )
@@ -211,7 +205,7 @@ class Renamer(
               variant = UnBoundVar(ident.name)
             )
             N.Ident(
-              makeNamedMeta(ident, parent).withDiagnostic(error),
+              makeNamedMeta(ident).withDiagnostic(error),
               name = ctx.makeSymbol(ident.name),
               duplicateBinder = ident.duplicateBinder
             )
@@ -251,22 +245,20 @@ class Renamer(
   }
 
   def getCurrentDecl(node: P.Node): P.Declaration = {
-    ctx.getParsedParentOf(node.getMeta.id) match {
+    ctx.getParsedNode(node.getMeta.parent) match {
       case Some(decl@P.Declaration(_, _, _)) => decl
       case Some(parent) =>
+        if (parent.getMeta.id == node.getMeta.id) {
+          throw new Error(s"Node $node ${node.getMeta.id} points to itself")
+        }
         getCurrentDecl(parent)
       case None =>
         throw new Error(s"Compiler bug: Node $node doesn't have a declaration; ${node.loc}")
     }
   }
 
-  private def makeNamedMeta(node: P.Node, parent: P.Node): N.Meta = {
-    if (parent == null) {
-     node.getMeta.copy(parent = -1).asInstanceOf[N.Meta]
-    } else {
-      ctx.setParsedParentOf(node, parent)
-      node.getMeta.copy(parent = parent.getMeta.id).asInstanceOf[N.Meta]
-    }
+  private def makeNamedMeta(node: P.Node): N.Meta = {
+    node.getMeta.named
   }
 
 }

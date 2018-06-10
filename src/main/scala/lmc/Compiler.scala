@@ -39,7 +39,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private val _namedIdents = mutable.HashMap.empty[Int, WeakReference[Named.Ident]]
 
   private val _parsedNodes = mutable.HashMap.empty[Int, WeakReference[Parsed.Node]]
-  private val _parentNodeMap = mutable.HashMap.empty[Int, Int]
 
 
   override def getSubstSymbol(sym: Symbol): Symbol = _symbolSubst.get(sym).flatMap(_.get) match {
@@ -337,11 +336,9 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     _parsedNodes.update(id, WeakReference(node))
 
   override def getParsedParentOf(id: Int): Option[Parsed.Node] = for {
-    parentId <- _parentNodeMap.get(id)
+    parsedNode <- getParsedNode(id)
+    parentId = parsedNode.getMeta.id
     parentWeakRef <- _parsedNodes.get(parentId).map(_.get)
     parent <- parentWeakRef
   } yield parent
-
-  override def setParsedParentOf(child: Parsed.Node, parent: Parsed.Node): Unit =
-    _parentNodeMap.update(child.getMeta.id, parent.getMeta.id)
 }
