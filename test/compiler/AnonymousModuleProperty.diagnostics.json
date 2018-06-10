@@ -1,0 +1,18 @@
+{
+  "diagnostics":[
+    {
+      "loc":{
+        "start":{
+          "line":6,
+          "column":9
+        },
+        "end":{
+          "line":7,
+          "column":3
+        }
+      },
+      "severity":"Error",
+      "message":"NoSuchValueProperty(p)"
+    }
+  ]
+}

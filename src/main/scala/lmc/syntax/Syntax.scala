@@ -211,7 +211,7 @@ trait Syntax {
     ) extends T
     case class Prop(
       expr: Expr,
-      prop: String
+      prop: Ident
     ) extends T
     case object Error extends T
     sealed trait Variant extends HasChildren {
@@ -229,8 +229,8 @@ trait Syntax {
                   List(annotation)
               }
             }) ++ List(returnType)
-          case Prop(expr, _) =>
-            List(expr)
+          case Prop(expr, ident) =>
+            List(expr, ident)
           case Forall(_, params, annotation) =>
             params ++ List(annotation)
           case Error => List.empty
@@ -254,8 +254,8 @@ trait Syntax {
           List(genericParams, patterns, ret, List(body)).flatten
         case Call(_, func, args) =>
           List(func) ++ args.map(_.value)
-        case Prop(e, _) =>
-          List(e)
+        case Prop(e, ident) =>
+          List(e, ident)
         case WithExpression(e1, e2) =>
           List(e1, e2)
         case Block(_, members) => members
@@ -298,7 +298,7 @@ trait Syntax {
     ) extends T
     case class Prop(
       expr: Expr,
-      prop: String
+      prop: Ident
     ) extends T
     case class WithExpression(
       e1: Expr,
@@ -371,6 +371,8 @@ trait Syntax {
           List(e)
         case Enum(_, ident, genericParams, cases) =>
           Seq(Seq(ident), genericParams, cases).flatten
+        case Module(_, ident,  genericParams, decls) =>
+          Set(Seq(ident), genericParams.toSeq, decls.toSeq).flatten
         case Error() => List()
       }
     }
@@ -415,6 +417,12 @@ trait Syntax {
       ident: Ident,
       genericParams: Vector[GenericParam],
       cases: Vector[EnumCase]
+    ) extends T
+    case class Module(
+      scope: Scope,
+      ident: Ident,
+      genericParams: Array[GenericParam],
+      declarations: Array[Declaration]
     ) extends T
     case class Error() extends T
 

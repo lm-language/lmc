@@ -51,6 +51,13 @@ class Renamer(
           namedKindAnnotation,
           namedRhs
         )
+      case P.Declaration.Module(scope, ident, genericParams, declarations) =>
+        val namedIdent = renameBindingIdent(ident)
+        val namedGenericParams = genericParams.map(renameGenericParam)
+        val namedDeclarations = declarations.map(renameDeclaration)
+        N.Declaration.Module(
+          scope, namedIdent, namedGenericParams, namedDeclarations
+        )
       case P.Declaration.Error() =>
         N.Declaration.Error()
     }
@@ -108,6 +115,47 @@ class Renamer(
           fnTok, scope, namedGenericParams,
           namedParams, namedReturnTypeAnnotation,
           namedBody
+        )
+      case P.Expr.Block(scope, members) =>
+        val namedMembers = members map {
+          case e@P.Expr(_, _, _) => renameExpr(e)
+          case d@P.Declaration(_, _, _) => renameDeclaration(d)
+        }
+        N.Expr.Block(scope, namedMembers)
+      case P.Expr.Prop(expr, prop) =>
+        val namedExpr = renameExpr(expr)
+        val typedExpr = ctx.getTypedExpr(namedExpr)
+        val namedProp = typedExpr.typ match {
+          case lmc.types.Module(_, values) =>
+            values.keySet.find(_.text == prop.name) match {
+              case Some(symbol) =>
+                N.Ident(
+                  prop.meta.named,
+                  symbol,
+                  prop.duplicateBinder
+                )
+              case None => N.Ident(
+                prop.meta.named,
+                ctx.makeSymbol(prop.name),
+                prop.duplicateBinder
+              )
+            }
+          case _ =>
+            N.Ident(
+              prop.meta.named,
+              ctx.makeSymbol(prop.name),
+              prop.duplicateBinder
+            )
+
+        }
+        N.Expr.Prop(namedExpr, namedProp)
+      case P.Expr.Module(scope, declarations) =>
+        N.Expr.Module(scope, declarations map renameDeclaration)
+      case P.Expr.If(p, t, f) =>
+        N.Expr.If(
+          renameExpr(p),
+          renameExpr(t),
+          f.map(renameExpr)
         )
       case P.Expr.Error() =>
         N.Expr.Error()
@@ -240,6 +288,26 @@ class Renamer(
         val namedReturnType = renameTypeAnnotation(returnType)
         N.TypeAnnotation.Func(
           namedParams, namedReturnType
+        )
+      case P.TypeAnnotation.Prop(e, prop) =>
+        val namedExpr = renameExpr(e)
+        val typedExpr = ctx.getTypedExpr(namedExpr)
+        val symbol = typedExpr.typ match {
+          case lmc.types.Module(types, _) =>
+            types.keys.find(_.text == prop.name) match {
+              case Some(sym) => sym
+              case None => ctx.makeSymbol(prop.name)
+            }
+          case _ =>
+            ctx.makeSymbol(prop.name)
+        }
+        N.TypeAnnotation.Prop(
+          namedExpr,
+          N.Ident(
+            prop.meta.named,
+            symbol,
+            prop.duplicateBinder
+          )
         )
       case P.TypeAnnotation.Error =>
         N.TypeAnnotation.Error

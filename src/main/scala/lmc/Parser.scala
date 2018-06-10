@@ -42,7 +42,7 @@ object Parser {
     OVERRIDE -> Declaration.Modifier.Override
   )
   val DECL_PREDICTORS: Set[token.Variant] = Set(
-    LET, EXTERN, TYPE, INCLUDE, ENUM
+    LET, EXTERN, TYPE, INCLUDE, ENUM, MODULE
   ) union DECL_MODIFIERS.keySet
 }
 
@@ -288,6 +288,36 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
             variant = Declaration.Enum(
               enumScope, ident, genericParams, cases.toVector
             )
+          )
+        })
+      case MODULE =>
+        advance()
+        val ident = parseIdent()
+
+        withNewScope(moduleScope => {
+          val genericParams = currentToken.variant match {
+            case LSQB =>
+              advance()
+              val list = parseGenericParamsList()
+              expect(errors)(RSQB)
+              list
+            case _ =>
+              List()
+          }
+          expect(errors)(LBRACE)
+          val declarations = ListBuffer.empty[Declaration]
+          while (Parser.DECL_PREDICTORS contains currentToken.variant) {
+            declarations.append(parseDeclaration)
+          }
+          expect(errors)(RBRACE)
+          Declaration(
+            meta,
+            variant = Declaration.Module(
+              moduleScope, ident,
+              genericParams.toArray,
+              declarations.toArray
+            ),
+            modifiers
           )
         })
       case _ =>
@@ -596,11 +626,11 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         )
       case DOT =>
         advance()
-        val propTok = expect(errors)(ID)
+        val prop = parseIdent()
         parseExprTail(Expr(
           meta = meta,
           typ = (),
-          variant = Expr.Prop(head, propTok.lexeme)
+          variant = Expr.Prop(head, prop)
         ))
       case WITH =>
         advance()

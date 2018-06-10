@@ -335,15 +335,18 @@ final class TypeChecker(
       case call@N.Expr.Call(_, _, _) =>
         inferCall(expr, call)
       case N.Expr.Prop(e, prop) =>
+        println(s"Prop($e, $prop)")
+        println(s"${e.loc}")
         val inferredExpr = getInferredExpr(e)
+        println(s"proptype: ${inferredExpr.typ}")
         inferredExpr.typ match {
           case mod@Module(_, _) =>
-            mod.typeOfString.get(prop) match {
+            mod.typeOfString.get(prop.name.text) match {
               case Some(t) =>
                 T.Expr(
                   meta = expr.meta.typed,
                   typ = t,
-                  variant = T.Expr.Prop(inferredExpr, prop)
+                  variant = T.Expr.Prop(inferredExpr, inferIdent(prop))
                 )
               case None =>
                 T.Expr(
@@ -351,12 +354,12 @@ final class TypeChecker(
                     Diagnostic(
                       loc = Loc.between(e, expr),
                       severity = Severity.Error,
-                      variant = NoSuchValueProperty(prop)
+                      variant = NoSuchValueProperty(prop.name.text)
                     )
                   ),
                   typ = Uninferred,
                   variant = T.Expr.Prop(
-                    inferredExpr, prop
+                    inferredExpr, inferIdent(prop)
                   )
                 )
             }
@@ -372,7 +375,7 @@ final class TypeChecker(
               typ = Uninferred,
               variant = T.Expr.Prop(
                 inferredExpr,
-                prop
+                inferIdent(prop)
               )
             )
         }
@@ -475,26 +478,38 @@ final class TypeChecker(
 
   private def inferModule(expr: N.Expr, module: N.Expr.Module): T.Expr = {
     val inferredDecls = module.declarations.map(inferDeclaration)
+    val typ = getModuleType(inferredDecls, module.scope)
+    T.Expr(
+      meta = expr.meta.typed,
+      typ = typ,
+      variant = T.Expr.Module(module.scope, inferredDecls)
+    )
+  }
+
+  private def getModuleType(
+    inferredDecls: Iterable[T.Declaration],
+    scope: lmc.common.Scope
+  ): Type = {
     val abstractNames = inferredDecls
       .filter(_.isAbstract).flatMap(getDeclBinders)
       .toSet
-    val types = module.scope.typeSymbols.values
+    val types = scope.typeSymbols.values
       .filter(t => !(abstractNames contains t.symbol))
       .map(t => t.symbol -> ctx.getKindOfSymbol(t.symbol).getOrElse(Kind.Star))
       .toMap
-    val values = module.scope.symbols.values
+    val values = scope.symbols.values
       .filter(t => !(abstractNames contains t.symbol))
       .map(e => e.symbol -> ctx.getTypeOfSymbol(e.symbol).getOrElse(Uninferred))
       .toMap
     val modTyp = Module(types, values)
-    val typ = if (abstractNames.isEmpty) {
+    if (abstractNames.isEmpty) {
       modTyp
     } else {
-      val abstractTypes = module.scope.typeSymbols.values
+      val abstractTypes = scope.typeSymbols.values
         .filter(abstractNames contains _.symbol)
         .map(t => t.symbol -> ctx.getKindOfSymbol(t.symbol).getOrElse(Kind.Star))
         .toMap
-      val abstractValues = module.scope.symbols.values
+      val abstractValues = scope.symbols.values
           .filter(abstractNames contains _.symbol)
           .map(e => e.symbol ->
             ctx.getTypeOfSymbol(e.symbol).getOrElse(Uninferred))
@@ -505,11 +520,6 @@ final class TypeChecker(
         modTyp
       )
     }
-    T.Expr(
-      meta = expr.meta.typed,
-      typ = typ,
-      variant = T.Expr.Module(module.scope, inferredDecls)
-    )
   }
 
   private def inferWith(
@@ -973,6 +983,15 @@ final class TypeChecker(
       case T.Pattern.Var(ident) => Some(ident.name)
       case T.Pattern.Annotated(p, _) =>
         getPatternLabel(p)
+      case _ => None
+    }
+  }
+
+  private def getNamedPatternLabel(pattern: N.Pattern): Option[Symbol] = {
+    pattern.variant match {
+      case N.Pattern.Var(ident) => Some(ident.name)
+      case N.Pattern.Annotated(p, _) =>
+        getNamedPatternLabel(p)
       case _ => None
     }
   }
@@ -1515,12 +1534,12 @@ final class TypeChecker(
         val inferredExpr = getInferredExpr(e)
         inferredExpr.typ match {
           case m@Module(_, _) =>
-            m.kindOfString.get(prop) match {
+            m.kindOfString.get(prop.name.text) match {
               case Some(kind) =>
                 (
                   T.TypeAnnotation.Prop(
                     inferredExpr,
-                    prop
+                    inferIdent(prop)
                   ),
                   kind
                 )
@@ -1532,11 +1551,11 @@ final class TypeChecker(
                         Diagnostic(
                           loc = e.loc,
                           severity = Severity.Error,
-                          variant = NoSuchTypeProperty(prop)
+                          variant = NoSuchTypeProperty(prop.name.text)
                         )
                       )
                     ),
-                    prop
+                    inferIdent(prop)
                   ),
                   Kind.Star
                 )
@@ -1553,7 +1572,7 @@ final class TypeChecker(
                     )
                   )
                 ),
-                prop
+                inferIdent(prop)
               ),
               Kind.Star
             )
@@ -1709,7 +1728,7 @@ final class TypeChecker(
           case modTyp@Module(_, _) =>
             modTyp
               .symbolOfString
-              .get(prop)
+              .get(prop.name.text)
               .map(sym => Var(sym))
               .getOrElse(ErrorType)
           case _ =>

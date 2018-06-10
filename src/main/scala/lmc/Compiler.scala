@@ -242,7 +242,8 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     this.getTypeOfSymbol(symbol).map(_.toString) match {
       case Some(s) => Some(s)
       case None =>
-        this.getTypeVar(symbol).map(_.toString)
+        val typ = this.getTypeVar(symbol).map(_.toString)
+        Some(s"$typ\n${symbol.text}:${symbol.id}")
     }
   }
 

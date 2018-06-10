@@ -1,0 +1,22 @@
+
+module M2 {
+  let y = M1.x;
+  let z = 3;
+  type A = Int;
+  type D = M1.C;
+  let cycleM2 = M1.cycleM1;
+}
+module M1 {
+  let M = M2;
+  let z = M.z;
+  let x = 30;
+  let a = M2.z;
+  type B = M2.A;
+  type C = Bool;
+  type I = C;
+  let cycleM1 = M2.cycleM2;
+}
+
+type C = Int;
+
+type Error = M1.Z;

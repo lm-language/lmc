@@ -1,0 +1,7 @@
+
+let x = module {
+  let y = 34;
+}.y;
+
+let y = module {
+}.p;
