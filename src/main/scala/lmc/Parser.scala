@@ -186,7 +186,8 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
       _scope = scope,
       _id = ctx.nextMetaId,
       _parentId = _parents.headOption,
-      _diagnostics = Array.empty
+      _diagnostics = Array.empty,
+      typ = ()
     )
 
     _parents = meta.id::_parents
@@ -198,6 +199,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     meta.setLoc(
       Loc.between(_start, endTok)
     )
+    ctx.setParsedNode(meta.id, node)
     node
   }
 

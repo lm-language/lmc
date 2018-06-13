@@ -10,6 +10,7 @@ import scala.ref.WeakReference
 trait Syntax {
   type Name
   type _Scope <: Scope
+  type _Type
 
   trait Meta {
     def id: Int
@@ -17,8 +18,14 @@ trait Syntax {
     def scope: WeakReference[_Scope]
     def parentId: Option[Int]
     def diagnostics: Array[Diagnostic]
+    def typ: _Type
     def withDiagnostic(diagnostic: Diagnostic): Meta
     def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta
+    def typed(typ: lmc.types.Type): Typed.Meta =
+      Typed.ImmutableMeta(
+        id, loc, scope, parentId,
+        diagnostics, typ
+      )
   }
 
   type NodeFlags = Int
@@ -27,9 +34,9 @@ trait Syntax {
     loc: Loc,
     scope: WeakReference[_Scope],
     parentId: Option[Int],
-    diagnostics: Array[Diagnostic] = Array()
+    diagnostics: Array[Diagnostic] = Array(),
+    typ: _Type
   ) extends Meta {
-    def typed: lmc.syntax.Typed.Meta = this.asInstanceOf[Typed.Meta]
     def named: Named.Meta = this.asInstanceOf[Named.Meta]
 
     override def withDiagnostic(diagnostic: Diagnostic): Meta = {
@@ -49,6 +56,7 @@ trait Syntax {
     private val _scope: WeakReference[_Scope],
     private var _parentId: Option[Int],
     private var _diagnostics: Array[Diagnostic],
+    typ: _Type
   ) extends Meta {
     override val id = _id
     override def loc = _loc
@@ -59,13 +67,15 @@ trait Syntax {
     override def withDiagnostic(diagnostic: Diagnostic): Meta =
       ImmutableMeta(
         _id, _loc, _scope, _parentId,
-        _diagnostics :+ diagnostic
+        _diagnostics :+ diagnostic,
+        typ
       )
 
     override def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta =
       ImmutableMeta(
         _id, _loc, _scope, _parentId,
-        _diagnostics ++ diagnostics
+        _diagnostics ++ diagnostics,
+        typ
       )
 
     def setDiagnostics(_diagnostics: ListBuffer[Diagnostic]): Unit = {
@@ -160,7 +170,9 @@ trait Syntax {
       override val modifiers: Set[Declaration.Modifier]
     ) extends Declaration
 
-    sealed trait Modifier
+    sealed trait Modifier {
+      def typed: Typed.Declaration.Modifier = this.asInstanceOf[Typed.Declaration.Modifier]
+    }
     object Modifier {
       case object Extern extends Modifier
       case object Abstract extends Modifier

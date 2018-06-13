@@ -24,8 +24,9 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private var _id = 0
   private var _nextGenericId = 0
   private var _nextNodeId = 0
-  private var _typeVariables = mutable.WeakHashMap.empty[Symbol, (Type, Kind)]
-  private var _symbolTypes = mutable.WeakHashMap.empty[Symbol, Type]
+  private val _typeVariables = mutable.WeakHashMap.empty[Symbol, (Type, Kind)]
+  private val _symbolTypes = mutable.WeakHashMap.empty[Symbol, Type]
+  private val _parsedNodes = mutable.WeakHashMap.empty[Int, Parsed.Node]
 
   private val primitiveTypes = Map(
     "Unit" -> Kind.Star,
@@ -218,4 +219,10 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   def goToDefinition(path: Path, pos: Pos): Option[Loc] = {
     None
   }
+
+  override def setParsedNode(id: Int, node: Parsed.Node): Unit =
+    _parsedNodes.update(id, node)
+
+  override def getParsedNode(id: Int): Option[Parsed.Node] =
+    _parsedNodes.get(id)
 }
