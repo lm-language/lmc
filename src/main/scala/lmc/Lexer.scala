@@ -7,6 +7,8 @@ import Variant._
 import io._
 import lmc.common.{Loc, Pos}
 
+import scala.ref.WeakReference
+
 object Lexer {
   def apply(path: Path, chars: Stream[Char]) = new Lexer(path, chars)
   def isIdentifierStarter(c: Char): Boolean = {
@@ -84,6 +86,7 @@ final class Lexer(
   private var _currentChar = chars.next
   private var _previousLine = 1
   private var _previousCol  = 1
+  private var _previousToken: Option[Token] = None
 
   private var eofToken: Option[Token] = None
 
@@ -170,7 +173,10 @@ final class Lexer(
     val start = this.pos
     val (variant, lexeme) = f()
     val stop = Pos(_previousLine, _previousCol)
-    Token(variant, Loc(path, start, stop), lexeme)
+    val tok = Token(
+      variant, Loc(path, start, stop), lexeme, _previousToken.map(t => WeakReference(t)))
+    _previousToken = Some(tok)
+    tok
   }
 
   private def advance: Char = {

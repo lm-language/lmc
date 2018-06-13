@@ -8,15 +8,14 @@ import token.Token
 import token.Variant._
 import diagnostics._
 import io.Stream
-import common.Loc
-import common.ScopeBuilder
+import common.{HasLoc, Loc, ScopeBuilder}
 
 import scala.collection.mutable.ListBuffer
 import scala.ref.WeakReference
 
 object Parser {
 
-  def apply(ctx: Context, path: Path, tokens: Stream[Token]) =
+  def apply(ctx: Context.Parser, path: Path, tokens: Stream[Token]) =
     new Parser(ctx, path, tokens)
   val RECOVERY_TOKENS = Set(
     NEWLINE, EOF, RPAREN, RBRACE, SEMICOLON
@@ -46,7 +45,7 @@ object Parser {
   ) union DECL_MODIFIERS.keySet
 }
 
-final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
+final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token]) {
 
   type Scope = syntax.Parsed._Scope
   private var _currentToken: Token = tokens.next
@@ -55,6 +54,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
   private def currentToken = _currentToken
   private var _errors: List[WeakReference[Diagnostic]] = List()
   private var _scopes = List.empty[WeakReference[Scope]]
+  private var _parents = List.empty[Int]
 
   /**
    * advance the token stream by one character
@@ -88,6 +88,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         tok
     }
   }
+
 
   private def withNewScope[T](f: (ScopeBuilder) => T): T = {
     val startToken = currentToken
@@ -147,50 +148,60 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         Token(
           loc = loc,
           variant = EXPECTED,
-          lexeme = ""
+          lexeme = "",
+          previous = Some(WeakReference(currentToken))
         )
     }
   }
 
-  def parseSourceFile(): SourceFile = withNewScope((scope) => {
-    while (currentToken.variant == NEWLINE) {
-      advance()
-    }
-    var declarations = Vector.empty[Declaration]
-    val startToken = this.currentToken
-    while (this.currentToken.variant != EOF) {
-      declarations = declarations :+ this.parseDeclaration
-    }
+  def parseSourceFile(): SourceFile = buildNode(
+    (meta, errors) => withNewScope((scope) => {
+       while (currentToken.variant == NEWLINE) {
+         advance()
+       }
+       var declarations = Vector.empty[Declaration]
+       val startToken = this.currentToken
+       while (this.currentToken.variant != EOF) {
+         declarations = declarations :+ this.parseDeclaration
+       }
+       val errors = ListBuffer.empty[Diagnostic]
+       val endToken = expect(errors)(EOF)
+       val loc = Loc.between(startToken, endToken)
+       SourceFile(
+         meta,
+         scope,
+         declarations.toArray
+       )
+    })
+  )
+
+  private def buildNode[N <: Node](
+    f: (Meta, ListBuffer[Diagnostic]) => N,
+    head: Option[Node] = None
+  ): N = {
     val errors = ListBuffer.empty[Diagnostic]
-    val endToken = expect(errors)(EOF)
-    val loc = Loc.between(startToken, endToken)
-    val meta = makeMeta(
-      loc,
-      WeakReference(scope),
-      errors.toList
-    )
-    SourceFile(
-      meta,
-      declarations,
-      scope = scope
-    )
-  })
-
-  private def makeMeta(
-    loc: Loc,
-    scope: WeakReference[Scope],
-    diagnostics: Iterable[Diagnostic] = List.empty
-  ): Meta =
-    Meta(
-      loc = loc,
-      scope = scope,
-      id = ctx.nextMetaId(),
-      diagnostics = diagnostics
+    val meta = MetaBuilder(
+      _loc = Loc.between(currentToken, currentToken),
+      _scope = scope,
+      _id = ctx.nextMetaId,
+      _parentId = _parents.headOption,
+      _diagnostics = Array.empty
     )
 
-  def parseDeclaration: Declaration = {
+    _parents = meta.id::_parents
+    val start = head.getOrElse(currentToken)
+    val node = f(meta, errors)
+    val endTok = currentToken.previous.flatMap(_.get).getOrElse(currentToken)
+    _parents = _parents.tail
+    meta.setDiagnostics(errors)
+    meta.setLoc(
+      Loc.between(start, endTok)
+    )
+    node
+  }
 
-    val errors = collection.mutable.ListBuffer.empty[Diagnostic]
+  def parseDeclaration: Declaration = buildNode((meta, errors) => {
+
     val modifiersWithTokens = parseModifiers(errors)
     val modifiers = modifiersWithTokens.map(_._2).toSet
     val modifierTokens = modifiersWithTokens.map(_._1)
@@ -210,14 +221,11 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           case _ => None
         }
         expect(errors)(SEMICOLON)
-        Declaration(
-          meta = makeMeta(
-            loc = Loc.between(startLocNode, rhs.getOrElse(pattern)),
-            scope = scope(),
-            diagnostics = errors.toList
-          ),
-          variant = Declaration.Let(pattern, rhs),
-          modifiers
+        Declaration.Let(
+          meta,
+          modifiers,
+          pattern,
+          rhs
         )
       case INCLUDE =>
         advance()
@@ -232,14 +240,10 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
             )
           )
         }
-        Declaration(
-          meta = makeMeta(
-            loc = Loc.between(startLocNode, e),
-            scope = scope(),
-            diagnostics = errors.toList
-          ),
-          variant = Declaration.Include(e),
-          modifiers
+        Declaration.Include(
+          meta,
+          modifiers,
+          e
         )
       case TYPE =>
         advance()
@@ -258,46 +262,39 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           case _ => None
         }
         val semicolon = expect(errors)(SEMICOLON)
-        Declaration(
-          meta = makeMeta(
-            loc = Loc.between(startLocNode, semicolon),
-            diagnostics = errors.toList,
-            scope = scope()
-          ),
-          variant = Declaration.TypeAlias(ident, kindAnnotation, rhs),
-          modifiers
+        Declaration.TypeAlias(
+          meta,
+          modifiers,
+          ident, kindAnnotation, rhs
         )
       case ENUM =>
         val outerScope = scope()
-        withNewScope((enumScope) => {
           val errors = ListBuffer.empty[Diagnostic]
           val firstTok = advance()
           val ident = parseIdent()
-          val genericParams = currentToken.variant match {
+
+        withNewScope((enumScope) => {
+          val genericParams: Array[GenericParam] = currentToken.variant match {
             case LSQB =>
               advance()
-              val params = parseGenericParamsList().toVector
+              val params = parseGenericParamsList()
               expect(errors)(RSQB)
-              params
-            case _ => Vector.empty
+              params.toArray
+            case _ => Array.empty
           }
           expect(errors)(LBRACE)
-          val cases = ListBuffer.empty[EnumCase]
+          val cases = ListBuffer.empty[Declaration.Enum.Case]
           while (!(Set(EOF, RBRACE) contains currentToken.variant)) {
             cases.append(parseEnumCase())
           }
           val rbrace = expect(errors)(RBRACE)
           expect(errors)(SEMICOLON)
-          Declaration(
-            meta = makeMeta(
-              Loc.between(firstTok, rbrace),
-              scope = outerScope,
-              errors.toVector
-            ),
-            modifiers = modifiers,
-            variant = Declaration.Enum(
-              enumScope, ident, genericParams, cases.toVector
-            )
+          Declaration.Enum(
+            meta, modifiers,
+            enumScope,
+            ident,
+            genericParams,
+            cases.toArray
           )
         })
       case _ =>
@@ -309,56 +306,42 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           Severity.Error,
           startTok.loc
         ))
-        addDiagnostics(diagnostics)
-        addDiagnostics(skippedDiagnostics)
-        Declaration(
-          meta = makeMeta(
-            loc = Loc.between(
-              modifierTokens.headOption.getOrElse(startTok),
-              currentToken
-            ),
-            scope(),
-            diagnostics ++ skippedDiagnostics
-          ),
-          variant = Declaration.Error(),
+        errors.appendAll(diagnostics)
+        errors.appendAll(skippedDiagnostics)
+        Declaration.Error(
+          meta,
           modifiers
         )
     }
-  }
+  })
 
-  private def parseEnumCase(): EnumCase = {
-    val errors = ListBuffer.empty[Diagnostic]
+  private def parseEnumCase(): Declaration.Enum.Case = buildNode((meta, errors) => {
     val name = parseIdent()
-    val params: Vector[(Option[String], TypeAnnotation)] = currentToken.variant match {
+    val params: Array[(Option[Ident], TypeAnnotation)] = currentToken.variant match {
       case LPAREN =>
         advance()
         val result = parseCommaSeperatedList(() =>
           peek.variant match {
             case COLON =>
-              val idTok = expect(errors)(ID)
+              val ident = parseIdent()
               expect(errors)(COLON)
-              (Some(idTok.lexeme), parseTypeAnnotation())
+              (Some(ident), parseTypeAnnotation())
             case _ =>
               (None, parseTypeAnnotation())
           }
         )(Set(ID))
         expect(errors)(RPAREN)
-        result.toVector
+        result.toArray
       case _ =>
-        Vector.empty
+        Array.empty
     }
     expect(errors)(SEMICOLON)
-    EnumCase(
-      makeMeta(
-        Loc.between(name, params.lastOption.map(_._2).getOrElse(name)),
-        scope(),
-        errors.toList
-      ),
+    Declaration.Enum.Case(
+      meta,
       name,
       params
     )
-
-  }
+  })
 
   private def parseModifiers(
     errors: ListBuffer[Diagnostic],
@@ -383,13 +366,12 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     }
   }
 
-  private def parseKindAnnotation(): KindAnnotation = {
+  private def parseKindAnnotation(): KindAnnotation = buildNode((meta, errors) => {
     currentToken.variant match {
       case STAR =>
         val tok = advance()
-        KindAnnotation(
-          meta = makeMeta(loc = tok.loc, scope = scope(), List.empty),
-          variant = KindAnnotation.Star
+        KindAnnotation.Star(
+          meta
         )
       case LSQB =>
         val startTok = advance()
@@ -399,9 +381,10 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         expect(errors)(RSQB)
         expect(errors)(FATARROW)
         val to = parseKindAnnotation()
-        KindAnnotation(
-          meta = makeMeta(loc = Loc.between(startTok, to), scope = scope(), List.empty),
-          variant = KindAnnotation.KFun(hd::tl, to)
+        val params = (hd::tl).toArray
+        KindAnnotation.Func(
+          meta,
+          params, to
         )
       case _ =>
         val loc = currentToken.loc
@@ -411,35 +394,29 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           Severity.Error,
           loc
         ))
-        addDiagnostics(diagnostics)
-        addDiagnostics(skippedDiagnostics)
-        KindAnnotation(
-          meta = makeMeta(
-            loc = currentToken.loc,
-            scope(),
-            diagnostics ++ skippedDiagnostics
-          ),
-          variant = KindAnnotation.Error
+        errors.appendAll(diagnostics)
+        errors.appendAll(skippedDiagnostics)
+
+        KindAnnotation.Error(
+          meta
         )
     }
-  }
+  })
 
-  private def parseExpr(): Expr = {
-    def parseIntLiteral() = {
+  private def parseExpr(): Expression = {
+    def parseIntLiteral() = buildNode((meta, errors) => {
       val tok = advance()
       val value = tok.lexeme.replaceAll("_", "").toInt
-      Expr(
-        meta = makeMeta(loc = tok.loc, scope()),
-        typ = (),
-        variant = Expr.Literal(Expr.LInt(value))
+      Expression.Literal(
+        meta,
+        Expression.Literal.Int
       )
-    }
+    })
 
-    def parseFn() = {
+    def parseFn() = buildNode((meta, errors) => {
       val parentScope = scope()
       withNewScope(fnScope => {
         val startTok = advance()
-        val errors = collection.mutable.ListBuffer.empty[Diagnostic]
         val genericParams = currentToken.variant match {
           case LSQB =>
             advance()
@@ -459,38 +436,28 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         }
         expect(errors)(FATARROW)
         val body = parseExpr()
-        Expr(
-          meta = makeMeta(
-            loc = Loc.between(startTok, body),
-            scope = parentScope,
-            errors.toList
-          ),
-          typ = (),
-          variant = Expr.Func(
-            startTok,
-            fnScope,
-            genericParams.toVector,
-            params,
-            annotation,
-            body
-          )
+        Expression.Func(
+          meta,
+          startTok,
+          fnScope,
+          genericParams.toVector,
+          params,
+          annotation,
+          body
         )
       })
-    }
+    })
 
-    def parseVar() = {
-      val tok = advance()
-      val meta = makeMeta(loc = tok.loc, scope())
-      Expr(
-        meta = meta,
-        typ = (),
-        variant = Expr.Var(Ident(meta, tok.lexeme))
+    def parseVar() = buildNode((meta, errors) => {
+      val ident = parseIdent()
+      Expression.Var(
+        meta,
+        ident
       )
-    }
+    })
 
-    def parseModule() = {
+    def parseModule() = buildNode((meta, errors) => {
       val tok = advance()
-      val errors = ListBuffer.empty[Diagnostic]
       withNewScope((moduleScope) => {
         expect(errors)(LBRACE)
         val declarations = {
@@ -501,20 +468,15 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
           buffer.toVector
         }
         val rbrace = expect(errors)(RBRACE)
-        val meta = makeMeta(loc = Loc.between(tok, rbrace), scope = scope())
-        Expr(
-          meta = meta,
-          typ = (),
-          variant = Expr.Module(
-            moduleScope,
-            declarations
-          )
+        Expression.Module(
+          meta,
+          moduleScope,
+          declarations
         )
       })
-    }
+    })
 
-    def parseBlock() = withNewScope(blockScope => {
-      val errors = ListBuffer.empty[Diagnostic]
+    def parseBlock() = buildNode((scope, errors) => withNewScope(blockScope => {
       var members = Vector.empty[BlockMember]
       val lbrace = advance()
       while (currentToken.variant != RBRACE && currentToken.variant != EOF) {
@@ -529,16 +491,12 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       }
       val rbrace = expect(errors)(RBRACE)
 
-      val meta = makeMeta(Loc.between(lbrace, rbrace), scope(), errors.toList)
-      Expr(
+      Expression.Block(
         meta,
-        typ = (),
-        Expr.Block(
-          blockScope,
-          members
-        )
+        blockScope,
+        members
       )
-    })
+    }))
 
     def parseIf() = {
       val ifTok = advance()
@@ -594,73 +552,64 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         Expr.Match(e, branches.toVector)
       )
     }
-    val head = currentToken.variant match {
-      case INT =>
-        parseIntLiteral()
-      case FN =>
-        parseFn()
-      case ID =>
-        parseVar()
-      case MODULE =>
-        parseModule()
-      case LBRACE =>
-        parseBlock()
-      case IF =>
-        parseIf()
-      case MATCH =>
-        parseMatch()
-      case _ =>
-        val loc = currentToken.loc
-        val skippedDiagnostics = recover()
-        val diagnostics = List(Diagnostic(
-          ExpressionExpected(),
-          Severity.Error,
-          loc
-        ))
-        addDiagnostics(diagnostics)
-        addDiagnostics(skippedDiagnostics)
-        Expr(
-          meta = makeMeta(
-            loc = currentToken.loc,
-            scope(),
-            diagnostics ++ skippedDiagnostics
-          ),
-          typ = (),
-          variant = Expr.Error()
-        )
-    }
-    parseExprTail(head)
+
+    buildNode((meta, errors) => {
+      val head = currentToken.variant match {
+        case INT =>
+          parseIntLiteral()
+        case FN =>
+          parseFn()
+        case ID =>
+          parseVar()
+        case MODULE =>
+          parseModule()
+        case LBRACE =>
+          parseBlock()
+        case IF =>
+          parseIf()
+        case MATCH =>
+          parseMatch()
+        case _ =>
+          val loc = currentToken.loc
+          val skippedDiagnostics = recover()
+          val diagnostics = List(Diagnostic(
+            ExpressionExpected(),
+            Severity.Error,
+            loc
+          ))
+          addDiagnostics(diagnostics)
+          addDiagnostics(skippedDiagnostics)
+          Expression.Error(
+            meta
+          )
+      }
+      parseExprTail(head)
+    })
+
   }
 
-  private def parseExprTail(head: Expr): Expr = {
+  private def parseExprTail(
+    head: Expression
+  ): Expression = buildNode(head = head, f = (meta, errors) => {
     currentToken.variant match {
       case LPAREN =>
-        val errors = ListBuffer.empty[Diagnostic]
-        val lparen = advance()
+        advance()
         val args = parseCommaSeperatedList(() => parseArg())(Parser.ARG_PREDICTORS).toVector
-        val rparen = expect(errors)(RPAREN)
-        Expr(
-          meta = makeMeta(
-            scope = head.meta.scope,
-            loc = Loc.between(head, rparen),
-            diagnostics = errors
-          ),
-          typ = (),
-          variant = Expr.Call(Loc.between(lparen, rparen), head, args)
+        expect(errors)(RPAREN)
+        Expression.Call(
+          meta,
+          Loc.between(lparen, rparen), head, args
         )
       case DOT =>
         val errors = ListBuffer.empty[Diagnostic]
         advance()
         val propTok = expect(errors)(ID)
-        parseExprTail(Expr(
-          meta = makeMeta(
-            loc = Loc.between(head, propTok),
-            scope = head.meta.scope,
-            diagnostics = errors.toList
-          ),
-          typ = (),
-          variant = Expr.Prop(head, propTok.lexeme)
-        ))
+        parseExprTail(
+          Expression.Prop(
+            meta = meta,
+            head, propTok.lexeme
+          )
+        )
       case WITH =>
         val errors = ListBuffer.empty[Diagnostic]
         advance()
@@ -675,50 +624,42 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         ))
       case _ => head
     }
-  }
+  })
 
-  private def parseArg(): Expr.Arg = {
+  private def parseArg(): Expression.Arg = {
     peek.variant match {
       case EQ =>
         val errors = ListBuffer.empty[Diagnostic]
         val labelTok = expect(errors)(ID)
         advance() // eat EQ
         val expr = parseExpr()
-        Expr.Arg(Some(labelTok, labelTok.lexeme), expr)
+        Expression.Arg(Some(labelTok, labelTok.lexeme), expr)
       case _ =>
         val e = parseExpr()
-        Expr.Arg(None, e)
+        Expression.Arg(None, e)
     }
   }
 
-  private def parsePattern(): Pattern = {
+  private def parsePattern(): Pattern = buildNode((meta, errors) => {
     val head = currentToken.variant match {
       case ID =>
-        val tok = advance()
-        val meta = makeMeta(loc = tok.loc, scope())
-        Pattern(
-          meta = meta,
-          typ = (),
-          variant = Pattern.Var(Ident(meta, tok.lexeme))
+        val ident = parseIdent()
+        Pattern.Var(
+          meta,
+          ident
         )
       case LPAREN =>
         advance()
         val p = parsePattern()
-        val errors = collection.mutable.ListBuffer.empty[Diagnostic]
         expect(errors)(RPAREN)
-        p.copy(meta = p.meta.copy(diagnostics = p.meta.diagnostics ++ errors))
-
+        p.withErrors(errors)
       case DOT =>
         val firstTok = advance()
         val ident = parseIdent()
         val lastTok = ident
-        Pattern(
-          meta = makeMeta(
-            Loc.between(firstTok, lastTok),
-            scope = scope()
-          ),
-          typ = (),
-          variant = Pattern.DotName(ident)
+        Pattern.DotName(
+          meta,
+          ident
         )
       case _ =>
         val loc = currentToken.loc
@@ -731,47 +672,36 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
         ))
         addDiagnostics(diagnostics)
         addDiagnostics(skippedDiagnostics)
-        Pattern(
-          meta = makeMeta(
-            loc = currentToken.loc,
-            scope(),
-            diagnostics ++ skippedDiagnostics
-          ),
-          typ = (),
-          variant = Pattern.Error
+        Pattern.Error(
+          meta
         )
     }
     currentToken.variant match {
       case COLON =>
         advance()
         val annotation = parseTypeAnnotation()
-        Pattern(
-          meta = makeMeta(
-            loc = Loc.between(head, annotation),
-            scope()
-          ),
-          typ = (),
-          variant = Pattern.Annotated(head, annotation)
-        )
+        buildNode(head = Some(head), f = (meta, errors) => {
+          Pattern.Annotated(
+            meta,
+            head,
+            annotation
+          )
+        })
       case LPAREN =>
-        advance()
-        val errors = ListBuffer.empty[Diagnostic]
-        val params = parseCommaSeperatedList(parsePatternParam(errors))(
-          Parser.PATTERN_PARAM_PREDICTORS
-        )
-        val rparen = expect(errors)(RPAREN)
-        Pattern(
-          meta = makeMeta(
-            loc = Loc.between(head, rparen),
-            scope(),
-            errors.toList
-          ),
-          typ = (),
-          variant = Pattern.Function(head, params.toVector)
-        )
+        buildNode((head, f = (meta, errors) => {
+          advance()
+          val params = parseCommaSeperatedList(parsePatternParam(errors))(
+            Parser.PATTERN_PARAM_PREDICTORS
+          )
+          val rparen = expect(errors)(RPAREN)
+          Pattern.Function(
+            meta = meta,
+            head, params.toVector
+          )
+        }))
       case _ => head
     }
-  }
+  })
 
   private def parsePatternParam(errors: ListBuffer[Diagnostic])(): Pattern.Param = {
     currentToken.variant match {
@@ -919,32 +849,29 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     parseTypeAnnotationTail(head)
   }
 
-  private def parseTypeAnnotationTail(head: TypeAnnotation): TypeAnnotation = {
-    currentToken.variant match {
-      case LSQB =>
-        val errors = ListBuffer.empty[Diagnostic]
-        advance()
-        val hd = parseTypeAnnotation()
-        val tl = parseCommaSeperatedListTail(() => parseTypeAnnotation())
-        val args = hd::tl
-        val rsqb = expect(errors)(RSQB)
-        parseTypeAnnotationTail(
-          TypeAnnotation(
-            meta = makeMeta(
-              loc = Loc.between(head, rsqb),
-              scope = scope()
-            ),
-            kind = (),
-            variant = TypeAnnotation.TApplication(head, args)
+  private def parseTypeAnnotationTail(head: TypeAnnotation): TypeAnnotation =
+    buildNode(head = Some(head), f = (meta, errors) => {
+      currentToken.variant match {
+        case LSQB =>
+          val errors = ListBuffer.empty[Diagnostic]
+          advance()
+          val hd = parseTypeAnnotation()
+          val tl = parseCommaSeperatedListTail(() => parseTypeAnnotation())
+          val args = hd::tl
+          val rsqb = expect(errors)(RSQB)
+          parseTypeAnnotationTail(
+            TypeAnnotation.TApplication(
+              meta,
+              head, args
+            )
           )
-        )
-      case _ => head
-    }
-  }
+        case _ => head
+      }
+  })
 
-  private def parseParam(): Expr.Param = {
+  private def parseParam(): Expression.Param = {
     val pattern = parsePattern()
-    Expr.Param(pattern)
+    Expression.Param(pattern)
   }
 
   private def parseGenericParamsList(): Iterable[GenericParam] = {
@@ -953,7 +880,7 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
     hd::tl
   }
 
-  private def parseGenericParam(): GenericParam = {
+  private def parseGenericParam(): GenericParam = buildNode((meta, errors) => {
     val ident = parseIdent()
     val kindAnnotation = currentToken.variant match {
       case COLON =>
@@ -962,28 +889,20 @@ final class Parser(ctx: Context, val path: Path, val tokens: Stream[Token]) {
       case _ => None
     }
 
-    val meta = makeMeta(
-      loc = ident.loc,
-      diagnostics = List.empty,
-      scope = scope()
-    )
-    GenericParam(meta, (), ident, kindAnnotation)
-  }
+    val meta = meta
+    GenericParam(meta, ident, kindAnnotation)
+  })
 
-  private def parseIdent(): Ident = {
-    val errors = ListBuffer.empty[Diagnostic]
+  private def parseIdent(): Ident = buildNode((meta, errors) =>{
     val tok = expect(errors)(ID)
     Ident(
-      makeMeta(
-        loc = tok.loc,
-        scope = scope(),
-        diagnostics = errors
-      ),
+      meta,
       tok.lexeme
     )
-  }
+  })
 
-  private def parseCommaSeperatedList[T](f: (() => T))(predictors: Set[token.Variant]): List[T] = {
+  private def parseCommaSeperatedList[T](
+    f: () => T)(predictors: Set[token.Variant]): List[T] = {
     if (predictors.contains(currentToken.variant)) {
       val hd = f()
       val tl = parseCommaSeperatedListTail(f)

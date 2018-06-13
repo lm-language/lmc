@@ -6,37 +6,17 @@ import lmc.types.{Kind, Type}
 trait Context {
   val PrimitiveScope: Scope
   def makeSymbol(text: String): Symbol
-  def nextMetaId(): Int
-  def getTypedExpr(e: syntax.Named.Expr): syntax.Typed.Expr
-  def getDeclOfSymbol(name: Symbol): Option[syntax.Named.Declaration]
-  def getSubstSymbol(sym: Symbol): Symbol
-  def getDeclOfTypeSymbol(sym: Symbol): Option[syntax.Named.Declaration]
-  def getEnumVariants(sym: Symbol): Vector[Symbol]
 }
 
 object Context {
-  trait Binder extends Context {}
-  trait Renamer extends Context {
-    def setDeclOfSymbol(name: Symbol, decl: syntax.Named.Declaration): Unit
-    def setDeclOfTypeSymbol(name: Symbol, decl: syntax.Named.Declaration): Unit
-    def setEnumVariants(name: Symbol, variants: Iterable[Symbol]): Unit
+  trait Parser extends Context {
+    def nextMetaId: Int
   }
+  trait Binder extends Context {}
+  trait Renamer extends Context {}
 
   trait TC extends Context {
-    def setTypeOfSymbol(symbol: Symbol, typ: Type): Unit
-    def getTypeOfSymbol(symbol: Symbol): Option[Type]
-    def getTypeVar(symbol: Symbol): Option[Type]
-    def setTypeVar(symbol: Symbol, typ: Type): Unit
-    def setKindOfSymbol(symbol: Symbol, kind: Kind): Unit
-    def getKindOfSymbol(symbol: Symbol): Option[Kind]
-    def makeGenericType(name: String): Type
-
-    def assignGeneric(n: Int, t: Type): Unit
-    def getGeneric(n: Int): Option[Type]
-    def getVars(): collection.Map[Symbol, Type]
-
     val Primitive: Primitive
-
   }
 }
 

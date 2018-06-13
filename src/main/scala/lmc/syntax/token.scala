@@ -2,6 +2,8 @@ package lmc.syntax
 
 import lmc.common.{HasLoc, Loc}
 
+import scala.ref.WeakReference
+
 object token {
   object Variant extends Enumeration {
     type Variant = Value
@@ -29,6 +31,7 @@ object token {
   final case class Token(
     variant: Variant,
     loc: Loc,
-    lexeme: String
+    lexeme: String,
+    previous: Option[WeakReference[Token]]
   ) extends HasLoc
 }

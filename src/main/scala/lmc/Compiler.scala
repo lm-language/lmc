@@ -16,28 +16,14 @@ import scala.ref.WeakReference
 class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   extends Context with Context.TC with Context.Renamer {
   private val _charStreams = mutable.Map.empty[Path, Stream[Char]]
-  private val _typedSourceFiles = mutable.Map.empty[Path, Typed.SourceFile]
-  private val _parsedSourceFiles = mutable.Map.empty[Path, Parsed.SourceFile]
+  private val _typedSourceFiles = mutable.WeakHashMap.empty[Path, Typed.SourceFile]
+  private val _parsedSourceFiles = mutable.WeakHashMap.empty[Path, Parsed.SourceFile]
 
   private var _id = 0
-  val _symbolTypes = mutable.Map.empty[Symbol, Type]
-  private val _symbolKinds = mutable.Map.empty[Symbol, Kind]
-  private val _typeVariables = mutable.Map.empty[Symbol, Type]
   private var _nextGenericId = 0
-  private val _generics = mutable.Map.empty[Int, Type]
   private var _nextNodeId = 0
-
-  private val _declOfSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
-  private val _declOfTypeSymbol = mutable.Map.empty[Symbol, WeakReference[Named.Declaration]]
-  private val _symbolSubst = mutable.Map.empty[Symbol, WeakReference[Symbol]]
-  private val _enumVariants = mutable.Map.empty[Symbol, Vector[Symbol]]
-
-  override def getSubstSymbol(sym: Symbol): Symbol = _symbolSubst.get(sym).flatMap(_.get) match {
-    case Some(s) => getSubstSymbol(s)
-    case None => sym
-  }
-
-  override def getVars(): collection.Map[Symbol, Type] = _symbolTypes
+  private var _typeVariables = mutable.WeakHashMap.empty[Symbol, (Type, Kind)]
+  private var _symbolTypes = mutable.WeakHashMap.empty[Symbol, Type]
 
   private val primitiveTypes = Map(
     "Unit" -> Kind.Star,
@@ -79,10 +65,8 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     }
     for ((name, (t, kind)) <- primitiveTypes) {
       val symbol = t.symbol
-      _typeVariables += symbol -> t
       scopeBuilder.setTypeVar(name, TypeEntry(symbol))
-      setKindOfSymbol(symbol, kind)
-      setTypeVar(symbol, t)
+      setTypeVar(symbol, t, kind)
     }
     scopeBuilder
   }
@@ -93,7 +77,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     Future.unit
   }
 
-  override def nextMetaId(): Int = {
+  override def nextMetaId: Int = {
     val id = _nextNodeId
     _nextNodeId += 1
     id
@@ -111,32 +95,23 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     }
   }
 
-  override def getTypedExpr(e: Named.Expr): Typed.Expr = {
-    checker.getInferredExpr(e)
+  def getType(symbol: Symbol): Option[Type] = {
+    _symbolTypes.get(symbol)
   }
 
-  override def setKindOfSymbol(symbol: Symbol, kind: Kind): Unit = {
-    _symbolKinds.update(symbol, kind)
+
+  def setTypeVar(symbol: Symbol, typ: Type, kind: Kind): Unit = {
+    _typeVariables.update(symbol, typ -> kind)
   }
 
-  override def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
-    _symbolKinds.get(symbol)
-  }
-
-  override def setTypeVar(symbol: Symbol, typ: Type): Unit = {
-    _typeVariables.update(symbol, typ)
-  }
-
-  override def getTypeVar(symbol: Symbol): Option[Type] =
-    _typeVariables.get(symbol)
-
-  override def setTypeOfSymbol(symbol: Symbol, typ: Type): Unit = {
+  def setTypeOfSymbol(symbol: Symbol, typ: Type): Unit = {
     _symbolTypes.update(symbol, typ)
   }
 
-  def getTypeOfSymbol(symbol: Symbol): Option[Type] = {
-    _symbolTypes.get(symbol)
+  def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
+    _typeVariables.get(symbol).map({ case (_, kind) => kind })
   }
+
 
   def getSourceFileScope(path: Path): Scope = {
     getCheckedSourceFile(path).scope
@@ -191,15 +166,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     _typedSourceFiles.put(path, sourceFile)
   }
 
-  def getType(symbol: Symbol): Option[Type] = {
-    _symbolTypes.get(symbol)
-  }
-
-  override def assignGeneric(n: Int, t: Type): Unit =
-    _generics.put(n, t)
-
-  override def getGeneric(n: Int): Option[Type] =
-    _generics.get(n)
 
   override def makeSymbol(text: String): Symbol = {
     val id = _id
@@ -208,31 +174,18 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     Symbol(id, text)
   }
 
-  override def makeGenericType(name: String): Type = {
+  def makeGenericType(name: String): Type = {
     val id = _nextGenericId
     _nextGenericId += 1
     ExistentialInstance(id, name)
   }
 
   def getHoverInfo(path: Path, pos: Pos): Option[String] = {
-    debug("getHoverInfo")
-    val node = findNodeAtPos(path, pos)
-    node match {
-      case Some(Typed.Ident(_, symbol, _)) =>
-        getHoverInfoForSymbol(symbol)
-      case Some(Typed.Expr(_, typ, _)) =>
-        Some(typ.toString)
-      case _ =>
-        None
-    }
+    None
   }
 
   private def getHoverInfoForSymbol(symbol: Symbol): Option[String] = {
-    this.getTypeOfSymbol(symbol).map(_.toString) match {
-      case Some(s) => Some(s)
-      case None =>
-        this.getTypeVar(symbol).map(_.toString)
-    }
+    None
   }
 
   private def findNodeAtPos(path: Path, pos: Pos): Option[Typed.Node] = {
@@ -246,21 +199,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     )
   }
 
-  override def getDeclOfSymbol(name: Symbol): Option[Named.Declaration] = {
-    _declOfSymbol.get(name).flatMap(_.get)
-  }
-
-  override def setDeclOfSymbol(name: Symbol, decl: Named.Declaration): Unit = {
-    _declOfSymbol.update(name, WeakReference(decl))
-  }
-
-  override def getDeclOfTypeSymbol(name: Symbol): Option[Named.Declaration] = {
-    _declOfTypeSymbol.get(name).flatMap(_.get)
-  }
-
-  override def setDeclOfTypeSymbol(name: Symbol, decl: Named.Declaration): Unit = {
-    _declOfTypeSymbol.update(name, WeakReference(decl))
-  }
 
   private def findNodeInNode(node: Typed.Node, pos: Pos): Option[Typed.Node] = {
     for (child <- node.children) {
@@ -276,21 +214,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   }
 
   def goToDefinition(path: Path, pos: Pos): Option[Loc] = {
-    val node = findNodeAtPos(path, pos)
-    node match {
-      case Some(Typed.Ident(_, symbol, _)) =>
-        this.getDeclOfSymbol(symbol) match {
-          case Some(d) => Some(d.loc)
-          case None =>
-            this.getDeclOfTypeSymbol(symbol).map(_.loc)
-        }
-      case _ => None
-    }
-  }
-
-  override def getEnumVariants(sym: Symbol): Vector[Symbol] = _enumVariants.getOrElse(sym, Vector())
-
-  override def setEnumVariants(name: Symbol, variants: Iterable[Symbol]): Unit = {
-    _enumVariants.update(name, variants.toVector)
+    None
   }
 }
