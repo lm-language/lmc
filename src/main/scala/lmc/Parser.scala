@@ -125,11 +125,13 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     _scopes = _scopes.tail
   }
 
+
+  val EMPTY_SCOPE = ScopeBuilder(None)
   private def scope(): WeakReference[Scope] = {
     // Unsafe get because scope should definitely be
     // defined during parsing, otherwise, something
     // is wrong and exception should be thrown
-    WeakReference(_scopes.head.get.get)
+    WeakReference(_scopes.headOption.flatMap(_.get).getOrElse(EMPTY_SCOPE))
   }
 
   private def expect(errors: collection.mutable.ListBuffer[Diagnostic])
