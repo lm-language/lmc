@@ -11,7 +11,7 @@ trait Syntax {
   type Name
   type _Scope <: Scope
 
-  trait MetaT {
+  trait Meta {
     def id: Int
     def loc: Loc
     def scope: WeakReference[_Scope]
@@ -22,13 +22,13 @@ trait Syntax {
   }
 
   type NodeFlags = Int
-  case class Meta(
+  case class ImmutableMeta(
     id: Int,
     loc: Loc,
     scope: WeakReference[_Scope],
     parentId: Option[Int],
     diagnostics: Array[Diagnostic] = Array()
-  ) extends MetaT {
+  ) extends Meta {
     def typed: lmc.syntax.Typed.Meta = this.asInstanceOf[Typed.Meta]
     def named: Named.Meta = this.asInstanceOf[Named.Meta]
 
@@ -49,7 +49,7 @@ trait Syntax {
     private val _scope: WeakReference[_Scope],
     private var _parentId: Option[Int],
     private var _diagnostics: Array[Diagnostic],
-  ) extends MetaT {
+  ) extends Meta {
     override val id = _id
     override def loc = _loc
     override def scope = _scope
@@ -57,13 +57,13 @@ trait Syntax {
     override def diagnostics: Array[Diagnostic] = _diagnostics
 
     override def withDiagnostic(diagnostic: Diagnostic): Meta =
-      Meta(
+      ImmutableMeta(
         _id, _loc, _scope, _parentId,
         _diagnostics :+ diagnostic
       )
 
     override def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta =
-      Meta(
+      ImmutableMeta(
         _id, _loc, _scope, _parentId,
         _diagnostics ++ diagnostics
       )
@@ -194,34 +194,53 @@ trait Syntax {
           Array(inner, annotation)
         case DotName(_, ident) => Array(ident)
       }
-
-    def withErrors(errors: Iterable[Diagnostic]): Pattern = {
-      this match {
-        case Var(meta, ident) => Var(meta.withDiagnostics(errors), ident)
-        case Annotated(meta, inner, annotation) =>
-          Annotated(meta.withDiagnostics(errors), inner, annotation)
-        case DotName(meta, ident) =>
-          DotName(meta.withDiagnostics(errors), ident)
-      }
-    }
   }
   object Pattern {
     case class Var(
-      override val meta: Meta,
+      meta: Meta,
       ident: Ident
     ) extends Pattern
     case class Annotated(
-      override val meta: Meta,
+      meta: Meta,
       innerPattern: Pattern,
       typeAnnotation: TypeAnnotation
     ) extends Pattern
     case class DotName(
-      override val meta: Meta,
+      meta: Meta,
       ident: Ident
+    ) extends Pattern
+    case class Function(
+      meta: Meta,
+      f: Pattern,
+      params: Array[Param]
+    ) extends Pattern
+    case class Paren(
+      meta: Meta,
+      inner: Pattern
     ) extends Pattern
     case class Error(
       override val meta: Meta
     ) extends Pattern
+
+    sealed trait Param extends Node {
+      import Param._
+      override def children: Array[Node] =
+        this match {
+          case Rest(_) => Array.empty
+          case SubPattern(_, None, pattern) =>
+            Array(pattern)
+          case SubPattern(_, Some(ident), p) =>
+            Array(ident, p)
+        }
+    }
+    object Param {
+      case class Rest(meta: Meta) extends Param
+      case class SubPattern(
+        meta: Meta,
+        label: Option[Ident],
+        pattern: Pattern
+      ) extends Param
+    }
   }
 
   sealed trait TypeAnnotation extends Node {
@@ -232,7 +251,36 @@ trait Syntax {
       }
   }
   object TypeAnnotation {
-    case class Var(meta: Meta, ident: Ident) extends TypeAnnotation
+    case class Var(
+      meta: Meta,
+      ident: Ident
+    ) extends TypeAnnotation
+    case class TApplication(
+      meta: Meta,
+      tFunc: TypeAnnotation,
+      args: Array[TypeAnnotation]
+    ) extends TypeAnnotation
+    case class Paren(
+      meta: Meta,
+      inner: TypeAnnotation
+    ) extends TypeAnnotation
+    case class Forall(
+      meta: Meta,
+      forallScope: _Scope,
+      genericParams: Array[GenericParam],
+      inner: TypeAnnotation
+    ) extends TypeAnnotation
+    case class Func(
+      meta: Meta,
+      params: Array[(Option[Ident], TypeAnnotation)],
+      returnType: TypeAnnotation
+    ) extends TypeAnnotation
+    case class Prop(
+      meta: Meta,
+      expr: Expression,
+      prop: Ident
+    ) extends TypeAnnotation
+    case class Error(meta: Meta) extends TypeAnnotation
   }
 
 
@@ -245,10 +293,16 @@ trait Syntax {
       }
   }
   object Expression {
-    case class Literal(override val meta: Meta, variant: Literal.Variant) extends Expression
-    case class Var(override val meta: Meta, ident: Ident) extends Expression
+    case class Literal(
+      meta: Meta,
+      variant: Literal.Variant
+    ) extends Expression
+    case class Var(
+      meta: Meta,
+      ident: Ident
+    ) extends Expression
     case class Func(
-      override val meta: Meta,
+      meta: Meta,
       fnToken: Token,
       funcScope: _Scope,
       genericParams: Array[GenericParam],
@@ -261,6 +315,57 @@ trait Syntax {
       blockScope: _Scope,
       members: Array[Block.Member]
     ) extends Expression
+    case class Module(
+      meta: Meta,
+      moduleScope: _Scope,
+      declarations: Array[Declaration]
+    ) extends Expression
+    case class If(
+      meta: Meta,
+      predicate: Expression,
+      trueBranch: Expression,
+      falseBranch: Option[Expression]
+    ) extends Expression
+    case class Match(
+      meta: Meta,
+      expr: Expression,
+      branches: Array[Match.Branch]
+    ) extends Expression
+    case class Call(
+      meta: Meta,
+      func: Expression,
+      args: Array[Call.Arg]
+    ) extends Expression
+    case class Prop(
+      meta: Meta,
+      expr: Expression,
+      prop: Ident
+    ) extends Expression
+    case class With(
+      meta: Meta,
+      e1: Expression,
+      e2: Expression
+    ) extends Expression
+    case class Error(meta: Meta) extends Expression
+
+    object Call {
+      case class Arg(meta: Meta, label: Option[Ident], value: Expression) extends Node {
+        override def children: Array[Node] =
+          label match {
+            case Some(ident) => Array(ident, value)
+            case None => Array(value)
+          }
+      }
+    }
+
+    object Match {
+      case class Branch(
+        meta: Meta, branchScope: Scope, pattern: Pattern, expr: Expression
+      ) extends Node {
+        override def children: Array[Node] =
+          Array(pattern, expr)
+      }
+    }
 
     object Literal {
       sealed trait Variant

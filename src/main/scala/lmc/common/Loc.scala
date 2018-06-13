@@ -8,10 +8,6 @@ case class Loc(
   end: Pos
 )
 
-trait HasLoc {
-  def loc: Loc
-}
-
 object Loc {
   def between(start: HasLoc, end: HasLoc): Loc =
     start.loc.copy(end = end.loc.end)

@@ -14,7 +14,9 @@ import lmc.syntax.{Named, Parsed, Typed}
 import scala.ref.WeakReference
 
 class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
-  extends Context with Context.TC with Context.Renamer {
+  extends Context
+    with Context.TC
+    with Context.Parser {
   private val _charStreams = mutable.Map.empty[Path, Stream[Char]]
   private val _typedSourceFiles = mutable.WeakHashMap.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.WeakHashMap.empty[Path, Parsed.SourceFile]
