@@ -76,6 +76,15 @@ final class TypeChecker(
           checkedPattern,
           Some(inferredRhs)
         )
+      case PD.Let(meta, modifiers, pattern, None) =>
+        checkModifiers(errors)(modifiers)
+        val inferredPattern = inferPattern(pattern)
+        TD.Let(
+          meta.typed(Primitive.Unit).withDiagnostics(errors),
+          modifiers.map(_.typed),
+          inferredPattern,
+          None
+        )
       case PD.TypeAlias(meta, modifiers, ident, kindAnnotation, rhs) =>
         checkModifiers(errors)(modifiers)
         val checkedKindAnnotation = kindAnnotation.map(inferKindAnnotation)
@@ -91,7 +100,7 @@ final class TypeChecker(
             r.meta.typ
           case None => Uninferred
         }
-        val inferredIdent = inferTypeVarBindingIdent(ident, typ)
+        val inferredIdent = inferTypeVarBindingIdent(ident, Some(typ))
         setKindOfSymbol(inferredIdent.name, kind)
         decl.scope.addDeclaration(inferredIdent.name, meta.id)
         TD.TypeAlias(
@@ -114,11 +123,28 @@ final class TypeChecker(
   }
 
   private def getKindFromAnnotation(annotation: T.KindAnnotation): Kind = {
-    ???
+    annotation match {
+      case _: T.KindAnnotation.Star => Kind.Star
+      case k: T.KindAnnotation.Func =>
+        k.from.foldRight(getKindFromAnnotation(k.to))((current, previous) =>
+          Kind.KFun(getKindFromAnnotation(current), previous))
+      case _: T.KindAnnotation.Error => Kind.Star
+    }
   }
 
   def inferKindAnnotation(annot: P.KindAnnotation): T.KindAnnotation = {
-    ???
+    annot match {
+      case P.KindAnnotation.Star(meta) =>
+        T.KindAnnotation.Star(meta.typed(Primitive.Unit))
+      case P.KindAnnotation.Func(meta, from, to) =>
+        T.KindAnnotation.Func(
+          meta.typed(Primitive.Unit),
+          from.map(inferKindAnnotation),
+          inferKindAnnotation(to)
+        )
+      case P.KindAnnotation.Error(meta) =>
+        T.KindAnnotation.Star(meta.typed(Primitive.Unit))
+    }
   }
 
   def inferExpr(expr: P.Expression): T.Expression = {
@@ -135,7 +161,34 @@ final class TypeChecker(
   }
 
   def inferPattern(pattern: P.Pattern): T.Pattern = {
-    ???
+    pattern match {
+      case P.Pattern.Var(meta, ident) =>
+        val inferredIdent = T.Ident(
+          ident.meta.typed(Uninferred),
+          ctx.makeSymbol(ident.name)
+        )
+
+        T.Pattern.Var(
+          meta.typed(Uninferred).withDiagnostic(
+            Diagnostic(
+              loc = pattern.loc,
+              severity = Severity.Error,
+              variant = MissingTypeAnnotation
+            )
+          ),
+          inferredIdent
+        )
+      case P.Pattern.Annotated(meta, innerPattern, typeAnnotation) =>
+        val inferredAnnotation = inferTypeAnnotation(typeAnnotation)
+        val checkedInnerPattern =
+          checkPattern(inferredAnnotation.meta.typ)(innerPattern)
+        T.Pattern.Annotated(
+          meta.typed(inferredAnnotation.meta.typ),
+          checkedInnerPattern,
+          inferredAnnotation
+        )
+
+    }
   }
 
   def checkExpr(typ: Type)(expr: P.Expression): T.Expression = {
@@ -227,8 +280,66 @@ final class TypeChecker(
           meta.typed(inferredIdent.meta.typ),
           inferredIdent
         )
+      case forall: P.TypeAnnotation.Forall =>
+        val inferredParams = inferGenericParams(forall.genericParams)
+        val inferredBody = inferTypeAnnotation(forall.inner)
+        val typ = inferredParams
+          .foldRight(inferredBody.meta.typ)((param, body) =>
+            Forall(param.ident.name, body)
+          )
+        T.TypeAnnotation.Forall(
+          forall.meta.typed(typ),
+          forall.forallScope,
+          inferredParams,
+          inferredBody
+        )
+      case func: P.TypeAnnotation.Func =>
+        val from = func.params.map({
+          case (Some(label), t) =>
+            val annotationType = inferTypeAnnotation(t)
+            val ident = inferVarBindingIdent(label, annotationType.meta.typ)
+            Some(ident) -> annotationType
+          case (None, t) =>
+            None -> inferTypeAnnotation(t)
+        })
+        val to = inferTypeAnnotation(func.returnType)
+        val typ = Func(
+          from.map({
+            case (label, t) =>
+              (label.map(_.name), t.meta.typ)
+          }),
+          to.meta.typ
+        )
+        T.TypeAnnotation.Func(
+          func.meta.typed(typ),
+          from,
+          to
+        )
+      case t: P.TypeAnnotation.TApplication =>
+        val func = inferTypeAnnotation(t.tFunc)
+        val args = t.args.map(inferTypeAnnotation)
+        val typ = args.foldLeft(func.meta.typ)((f, arg) =>
+          TApplication(f, arg.meta.typ))
+        T.TypeAnnotation.TApplication(
+          t.meta.typed(typ),
+          func, args
+        )
 
     }
+  }
+
+  def inferGenericParams(params: Array[P.GenericParam]): Array[T.GenericParam] = {
+    params.map(inferGenericParam)
+  }
+
+  def inferGenericParam(param: P.GenericParam): T.GenericParam = {
+    val ident = inferTypeVarBindingIdent(param.ident)
+    val kindAnnotation = param.kindAnnotation.map(inferKindAnnotation)
+    T.GenericParam(
+      param.meta.typed(Uninferred),
+      ident,
+      kindAnnotation
+    )
   }
 
   def getTypeVar(symbol: Symbol): Option[Type] = {
@@ -320,12 +431,19 @@ final class TypeChecker(
     )
   }
 
-  def inferTypeVarBindingIdent(ident: P.Ident, typ: Type): T.Ident = {
+  def inferTypeVarBindingIdent(ident: P.Ident, typOpt: Option[Type] = None): T.Ident = {
     ident.scope.typeSymbols.get(ident.name) match {
       case None =>
         val symbol = ctx.makeSymbol(ident.name)
-        setTypeVar(symbol, typ)
         ident.scope.setTypeVar(ident.name, TypeEntry(symbol))
+
+        val typ = typOpt match {
+          case Some(t) =>
+            setTypeVar(symbol, t)
+            t
+          case None =>
+            Uninferred
+        }
         T.Ident(
           meta = ident.meta.typed(typ),
           name = symbol

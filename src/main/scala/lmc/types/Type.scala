@@ -58,7 +58,7 @@ case class ExistentialInstance(id: Int, text: String) extends Type {
   override def toString: String = s"Existential($text)"
 }
 case class Func(
-  from: Vector[Func.Param],
+  from: Array[Func.Param],
   to: Type
 ) extends Type {
   override def toString: String = {
