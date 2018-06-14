@@ -1,7 +1,7 @@
 package lmc
 
 import lmc.common.{Loc, ScopeEntry, Symbol, TypeEntry}
-import lmc.diagnostics.{Diagnostic, Severity, TypeMismatch, UnBoundTypeVar}
+import lmc.diagnostics._
 import lmc.types._
 import lmc.utils.Debug
 
@@ -285,14 +285,22 @@ final class TypeChecker(
   }
 
   def inferVarIdent(ident: P.Ident): T.Ident = {
+    val errors = ListBuffer.empty[Diagnostic]
     val (typ, symbol) = ident.scope.resolveEntry(ident.name) match {
       case Some(ScopeEntry(symbol, _)) =>
         (getTypeOfSymbol(symbol).getOrElse(Uninferred), symbol)
       case None =>
+        errors.append(
+          Diagnostic(
+            loc = ident.loc,
+            severity = Severity.Error,
+            variant = UnBoundVar(ident.name)
+          )
+        )
         (Uninferred, ctx.makeSymbol(ident.name))
     }
     T.Ident(
-      ident.meta.typed(typ),
+      ident.meta.typed(typ).withDiagnostics(errors),
       symbol
     )
   }
