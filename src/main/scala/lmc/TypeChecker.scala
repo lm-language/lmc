@@ -6,6 +6,7 @@ import lmc.types._
 import lmc.utils.Debug
 
 import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 
 
 final class TypeChecker(
@@ -157,6 +158,215 @@ final class TypeChecker(
       case P.Expression.Var(meta, ident) =>
         val inferredIdent = inferVarIdent(ident)
         T.Expression.Var(meta.typed(inferredIdent.meta.typ), inferredIdent)
+      case call: P.Expression.Call =>
+        inferCall(call)
+    }
+  }
+
+  def inferCall(call: P.Expression.Call): T.Expression.Call = {
+    val func = inferExpr(call.func)
+    val funcTyp = instantiateForall(func.meta.typ)
+    funcTyp match {
+      case Func(from, to) =>
+        val errors = ListBuffer.empty[Diagnostic]
+        val args = checkFunctionArgs(func.meta.loc, errors, from, call.args)
+        val typ = to
+        T.Expression.Call(
+          call.meta.typed(typ),
+          func,
+          args
+        )
+      case _ =>
+        throw new Error("No a function")
+    }
+
+  }
+
+  def checkFunctionArgs(
+    loc: Loc,
+    errors: ListBuffer[Diagnostic],
+    params: Array[(Option[Symbol], Type)],
+    args: Array[P.Expression.Call.Arg]
+  ): Array[T.Expression.Call.Arg] = {
+    var i = 0
+    var labeledEncountered = false
+    val missingArguments = ListBuffer.empty[(Option[String], Type)]
+    val resultArgs = ListBuffer.empty[T.Expression.Call.Arg]
+    val labeledArgs = mutable.HashMap.empty[String, P.Expression.Call.Arg]
+
+    for (param <- params) {
+      if (i >= args.length) {
+        missingArguments.append(
+          param._1.map(_.text) -> param._2
+        )
+      } else {
+        val arg = args(i)
+        arg.label match {
+          case Some(label) =>
+            labeledEncountered = true
+            labeledArgs.put(label.name, arg)
+          case None =>
+            if (labeledEncountered) {
+              val expr = checkExpr(param._2)(arg.value)
+              resultArgs.append(
+                T.Expression.Call.Arg(
+                  meta = arg.meta.typed(param._2).withDiagnostic(
+                    Diagnostic(
+                      loc = arg.loc,
+                      severity = Severity.Error,
+                      variant = PositionalArgAfterLabelled
+                    )
+                  ),
+                  None,
+                  value = expr
+                )
+              )
+            } else {
+              val expr = checkExpr(param._2)(arg.value)
+              resultArgs.append(
+                T.Expression.Call.Arg(
+                  meta = arg.meta.typed(param._2),
+                  None,
+                  value = expr
+                )
+              )
+            }
+        }
+      }
+      i += 1
+    }
+
+    while (i < args.length) {
+      val arg = args(i)
+      arg.label match {
+        case Some(label) =>
+          labeledArgs.put(label.name, arg)
+        case None =>
+          val expr = inferExpr(arg.value)
+          resultArgs.append(
+            T.Expression.Call.Arg(
+              meta = arg.meta.typed(
+                expr.meta.typ
+              ).withDiagnostic(
+                Diagnostic(
+                  loc = arg.loc,
+                  severity = Severity.Error,
+                  variant = ExtraArg
+                )
+              ),
+              label = None,
+              value = expr
+            )
+          )
+      }
+      i += 1
+    }
+
+    val labelChecked = mutable.Set.empty[String]
+    for (param <- params) {
+      param match {
+        case (Some(label), expectedType) =>
+          labelChecked += label.text
+          labeledArgs.get(label.text) match {
+            case Some(arg) =>
+              val expr = checkExpr(expectedType)(arg.value)
+              val argLabel = arg.label.get
+              resultArgs.append(
+                T.Expression.Call.Arg(
+                  arg.meta.typed(expectedType),
+                  label = Some(
+                    T.Ident(
+                      meta = argLabel.meta.typed(expectedType),
+                      name = label
+                    )
+                  ),
+                  value = expr
+                )
+              )
+            case None =>
+              missingArguments.append(Some(label.text) -> expectedType)
+          }
+        case _ => ()
+      }
+    }
+    for ((label, arg) <- labeledArgs) {
+      if (!labelChecked.contains(label)) {
+        val expr = inferExpr(arg.value)
+        val label = arg.label.map(l => T.Ident(
+          meta = l.meta.typed(expr.meta.typ).withDiagnostic(
+            Diagnostic(
+              loc = l.loc,
+              severity = Severity.Error,
+              variant = NoSuchParamLabel(l.name)
+            )
+          ),
+          ctx.makeSymbol(l.name)
+        ))
+        resultArgs.append(
+          T.Expression.Call.Arg(
+            arg.meta.typed(expr.meta.typ),
+            label,
+            expr
+          )
+        )
+      }
+    }
+    if (missingArguments.nonEmpty) {
+      errors.append(
+        Diagnostic(
+          loc = loc,
+          severity = Severity.Error,
+          variant = MissingArguments(missingArguments)
+        )
+      )
+    }
+    resultArgs.toArray
+  }
+
+
+
+  private def instantiateForall(typ: Type): Type = {
+    typ match {
+      case Forall(param, innerTyp) =>
+        val subst = mutable.Map.empty[Symbol, Type]
+        subst.put(param, ctx.makeGenericType(param.text))
+        instantiateForall(applySubst(innerTyp, subst))
+      case _ => typ
+    }
+  }
+
+
+  private def applySubst(t: Type, subst: collection.Map[Symbol, Type]): Type = {
+    t match {
+      case (
+        Constructor(_, _)
+        | ErrorType
+        | ExistentialInstance(_, _)
+        | Uninferred
+      ) => t
+      case Var(name) =>
+        subst.get(name) match {
+          case Some(typ) =>
+            applySubst(typ, subst)
+          case None => t
+        }
+      case Forall(params, inner) =>
+        Forall(params, applySubst(inner, subst))
+      case TApplication(f, arg) =>
+        TApplication(applySubst(f, subst), applySubst(arg, subst))
+      case Module(types, values) =>
+        Module(types, values.mapValues((typ) => applySubst(typ, subst)))
+      case Abstract(types, values, inner) =>
+        Abstract(
+          types,
+          values.mapValues(t => applySubst(t, subst)),
+          applySubst(inner, subst)
+        )
+      case Func(from, to) =>
+        Func(
+          from.map(param => (param._1, applySubst(param._2, subst))),
+          applySubst(to, subst)
+        )
     }
   }
 
@@ -324,6 +534,12 @@ final class TypeChecker(
           t.meta.typed(typ),
           func, args
         )
+      case P.TypeAnnotation.Paren(meta, inner) =>
+        val inferredInner = inferTypeAnnotation(inner)
+        T.TypeAnnotation.Paren(
+          meta.typed(inferredInner.meta.typ),
+          inferredInner
+        )
 
     }
   }
@@ -335,6 +551,8 @@ final class TypeChecker(
   def inferGenericParam(param: P.GenericParam): T.GenericParam = {
     val ident = inferTypeVarBindingIdent(param.ident)
     val kindAnnotation = param.kindAnnotation.map(inferKindAnnotation)
+    val kind = kindAnnotation.map(getKindFromAnnotation).getOrElse(Kind.Star)
+    setKindOfSymbol(ident.name, kind)
     T.GenericParam(
       param.meta.typed(Uninferred),
       ident,
@@ -447,6 +665,17 @@ final class TypeChecker(
         T.Ident(
           meta = ident.meta.typed(typ),
           name = symbol
+        )
+      case Some(TypeEntry(symbol)) =>
+        T.Ident(
+          meta = ident.meta.typed(Primitive.Unit).withDiagnostic(
+            Diagnostic(
+              loc = ident.loc,
+              severity = Severity.Error,
+              variant = DuplicateBinding(symbol.text)
+            )
+          ),
+          name = ctx.makeSymbol(symbol.text)
         )
     }
   }

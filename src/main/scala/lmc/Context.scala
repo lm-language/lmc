@@ -21,6 +21,7 @@ object Context {
 
   trait TC extends Context {
     val Primitive: Primitive
+    def makeGenericType(text: String): Type
   }
 }
 

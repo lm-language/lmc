@@ -277,6 +277,18 @@ trait Syntax {
     override def children: Array[Node] =
       this match {
         case Var(_, ident) => Array(ident)
+        case Forall(_, _, genericParams, body) =>
+          genericParams :+ body
+        case Func(_, from, to) =>
+          from.flatMap({
+            case (Some(ident), annotation) =>
+              Array[Node](ident, annotation)
+            case (None, annotation) =>
+              Array[Node](annotation)
+          }) :+ to
+
+        case TApplication(_, tf, args) =>
+          tf +: args
       }
   }
   object TypeAnnotation {
@@ -319,6 +331,13 @@ trait Syntax {
       this match {
         case Literal(_, _) => Array.empty
         case Var(_, i) => Array(i)
+        case Call(_, expr, args) =>
+          expr +: args.flatMap(arg =>
+            arg.label match {
+              case Some(l) => Array[Node](l, arg.value)
+              case None => Array[Node](arg.value)
+            }
+          )
       }
   }
   object Expression {
