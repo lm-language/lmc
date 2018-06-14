@@ -335,11 +335,22 @@ final class TypeChecker(
 
   def inferVarBindingIdent(ident: P.Ident, typ: Type): T.Ident = {
     ident.scope.getSymbol(ident.name) match {
+      case Some(symbol) =>
+        T.Ident(
+          meta = ident.meta.typed(typ).withDiagnostic(
+            Diagnostic(
+              loc = ident.loc,
+              severity = Severity.Error,
+              variant = DuplicateBinding(ident.name)
+            )
+          ),
+          name = symbol
+        )
       case None =>
         val symbol = ctx.makeSymbol(ident.name)
         ident.scope.setSymbol(ident.name, ScopeEntry(symbol))
         T.Ident(
-          meta = ident.meta.typed(Uninferred),
+          meta = ident.meta.typed(typ),
           name = symbol
         )
     }
