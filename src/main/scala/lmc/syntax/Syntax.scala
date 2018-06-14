@@ -99,15 +99,18 @@ trait Syntax {
     }
 
     def children: Array[Node]
-    def scope: Scope = {
+    def scope: _Scope = {
       this.meta.scope.get match {
-        case None => Scope.empty
+        case None => Scope.empty.asInstanceOf[_Scope]
         case Some(scope) => scope
       }
     }
   }
 
-  case class Ident(override val meta: Meta, name: Name) extends Node {
+  case class Ident(
+    meta: Meta,
+    name: Name
+  ) extends Node {
     val children = Array()
   }
 
@@ -119,6 +122,17 @@ trait Syntax {
           Array(ident, rhs)
         case Declaration.Let(_, _, ident, None) =>
           Array(ident)
+        case Declaration.TypeAlias(_, _, ident, kindAnnotation, rhs) =>
+          val result: ListBuffer[Node] = ListBuffer(ident)
+          kindAnnotation match {
+            case Some(t) => result.append(t)
+            case None => ()
+          }
+          rhs match {
+            case Some(t) => result.append(t)
+            case None => ()
+          }
+          result.toArray
       }
   }
 
@@ -139,7 +153,8 @@ trait Syntax {
     case class Let(
       override val meta: Meta,
       override val modifiers: Set[Declaration.Modifier],
-      pattern: Pattern, rhs: Option[Expression]
+      pattern: Pattern,
+      rhs: Option[Expression]
     ) extends Declaration
 
     case class TypeAlias(
@@ -198,13 +213,12 @@ trait Syntax {
   }
 
   sealed trait Pattern extends Node {
-    import Pattern._
     override def children: Array[Node] =
       this match {
-        case Var(_, ident) => Array(ident)
-        case Annotated(_, inner, annotation) =>
+        case Pattern.Var(_, ident) => Array(ident)
+        case Pattern.Annotated(_, inner, annotation) =>
           Array(inner, annotation)
-        case DotName(_, ident) => Array(ident)
+        case Pattern.DotName(_, ident) => Array(ident)
       }
   }
   object Pattern {
@@ -381,9 +395,7 @@ trait Syntax {
 
     object Literal {
       sealed trait Variant
-      case object Int extends Variant
-      case object Float extends Variant
-      case object String extends Variant
+      case class LInt(value: Int) extends Variant
     }
 
     object Block {
@@ -399,6 +411,9 @@ trait Syntax {
     import KindAnnotation._
     override def children: Array[Node] = this match {
       case Star(_) => Array.empty
+      case Func(_, from, to) =>
+        from :+ to
+      case Error(_) => Array.empty
     }
   }
   object KindAnnotation {

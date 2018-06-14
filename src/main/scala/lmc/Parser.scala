@@ -53,7 +53,9 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
   private var _lookahead: Option[Token] = None
   private def currentToken = _currentToken
   private var _errors: List[WeakReference[Diagnostic]] = List()
-  private var _scopes = List.empty[WeakReference[Scope]]
+  private var _scopes = List(
+    WeakReference(ctx.PrimitiveScope.asInstanceOf[syntax.Parsed._Scope])
+  )
   private var _parents = List.empty[Int]
 
   /**
@@ -407,7 +409,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
       val value = tok.lexeme.replaceAll("_", "").toInt
       Expression.Literal(
         meta,
-        Expression.Literal.Int
+        Expression.Literal.LInt(value)
       )
     })
 

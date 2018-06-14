@@ -16,7 +16,7 @@ sealed trait Scope extends HasLoc {
   def parent: Option[WeakReference[Scope]]
   def children: Iterable[WeakReference[Scope]]
 
-  def declMap: collection.Map[Symbol, WeakReference[lmc.syntax.Named.Declaration]]
+  def declMap: collection.Map[Symbol, Int]
 
   def resolveTypeEntry(name: String): Option[TypeEntry] = {
     typeSymbols.get(name) match {
@@ -69,7 +69,7 @@ case class ScopeBuilder(
   private var _children: List[WeakReference[Scope]] = List()
   private var _loc: Loc = _
 
-  private val _declMap: mutable.HashMap[Symbol, WeakReference[lmc.syntax.Named.Declaration]] = mutable.HashMap.empty
+  private val _declMap = mutable.HashMap.empty[Symbol, Int]
 
   override def loc: Loc = _loc
 
@@ -78,11 +78,11 @@ case class ScopeBuilder(
 
   override def typeSymbols: Map[String, TypeEntry] = _typeSymbols
 
-  override def declMap: collection.Map[Symbol, WeakReference[lmc.syntax.Named.Declaration]] =
+  override def declMap: collection.Map[Symbol, Int] =
     _declMap
 
-  def addDeclaration(symbol: Symbol, decl: WeakReference[lmc.syntax.Named.Declaration]): Unit = {
-    _declMap.put(symbol, decl)
+  def addDeclaration(symbol: Symbol, nodeId: Int): Unit = {
+    _declMap.put(symbol, nodeId)
   }
 
   override def children: Iterable[WeakReference[Scope]] = _children

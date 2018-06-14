@@ -25,7 +25,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private var _nextGenericId = 0
   private var _nextNodeId = 0
   private val _typeVariables = mutable.WeakHashMap.empty[Symbol, (Type, Kind)]
-  private val _symbolTypes = mutable.WeakHashMap.empty[Symbol, Type]
   private val _parsedNodes = mutable.WeakHashMap.empty[Int, Parsed.Node]
 
   private val primitiveTypes = Map(
@@ -47,6 +46,8 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     override val Unit: Type = primitive("Unit")
   }
 
+  val checker = new TypeChecker(this)
+
   override val PrimitiveScope: Scope = {
     val loc = Loc(
       path = Paths.get("<builtin>"),
@@ -64,7 +65,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     for ((name, typ) <- entries) {
       val symbol = makeSymbol(name)
       scopeBuilder.setSymbol(name, ScopeEntry(symbol, None))
-      setTypeOfSymbol(symbol, typ)
+      checker.setTypeOfSymbol(symbol, typ)
     }
     for ((name, (t, kind)) <- primitiveTypes) {
       val symbol = t.symbol
@@ -74,7 +75,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     scopeBuilder
   }
 
-  val checker = new TypeChecker(this)
 
   def compile(): Future[Unit] = {
     Future.unit
@@ -99,20 +99,18 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   }
 
   def getType(symbol: Symbol): Option[Type] = {
-    _symbolTypes.get(symbol)
+    checker.getTypeOfSymbol(symbol)
   }
 
 
   def setTypeVar(symbol: Symbol, typ: Type, kind: Kind): Unit = {
     _typeVariables.update(symbol, typ -> kind)
-  }
-
-  def setTypeOfSymbol(symbol: Symbol, typ: Type): Unit = {
-    _symbolTypes.update(symbol, typ)
+    checker.setKindOfSymbol(symbol, kind)
+    checker.setTypeVar(symbol, typ)
   }
 
   def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
-    _typeVariables.get(symbol).map({ case (_, kind) => kind })
+    checker.getKindOfSymbol(symbol)
   }
 
 
