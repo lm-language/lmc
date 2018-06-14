@@ -290,13 +290,28 @@ final class TypeChecker(
       case Some(ScopeEntry(symbol, _)) =>
         (getTypeOfSymbol(symbol).getOrElse(Uninferred), symbol)
       case None =>
-        errors.append(
-          Diagnostic(
-            loc = ident.loc,
-            severity = Severity.Error,
-            variant = UnBoundVar(ident.name)
-          )
-        )
+        getDeclOfVar(ident.name, ident) match {
+          case Some(d: P.Declaration.Let) =>
+            if (d.loc.start >= ident.loc.end) {
+              errors.append(
+                Diagnostic(
+                  loc = ident.loc,
+                  severity = Severity.Error,
+                  variant = UseBeforeAssignment(ident.name)
+                )
+              )
+            } else {
+              errors.append(
+                Diagnostic(
+                  loc = ident.loc,
+                  severity = Severity.Error,
+                  variant = UnBoundVar(ident.name)
+                )
+              )
+            }
+          case _ => ()
+        }
+
         (Uninferred, ctx.makeSymbol(ident.name))
     }
     T.Ident(
@@ -350,6 +365,43 @@ final class TypeChecker(
           case None => None
         }
       case None => None
+    }
+  }
+
+  def getDeclOfVar(name: P.Name, node: P.Node): Option[P.Declaration] = {
+    node.meta.parentId match {
+      case Some(parentId) =>
+        ctx.getParsedNode(parentId) match {
+          case Some(P.SourceFile(_, _, declarations)) =>
+            declarations.find(isVarDeclOf(name))
+          case Some(n) =>
+            getDeclOfVar(name, n)
+          case None =>
+            None
+        }
+      case None => None
+    }
+  }
+
+  def isVarDeclOf(name: String)(decl: P.Declaration): Boolean = {
+    decl match {
+      case d: P.Declaration.Let =>
+        doesPatternBind(name, d.pattern)
+      case _ => false
+    }
+  }
+
+  def doesPatternBind(name: String, pattern: P.Pattern): Boolean = {
+    pattern match {
+      case P.Pattern.Var(_, ident) if ident.name == name => true
+      case _: P.Pattern.Var =>  false
+      case P.Pattern.Annotated(_, inner, _) => doesPatternBind(name, inner)
+      case P.Pattern.Function(_, f, params) =>
+        doesPatternBind(name, f) || params.exists({
+          case P.Pattern.Param.SubPattern(_, _, p) => doesPatternBind(name, p)
+          case P.Pattern.Param.Rest(_) =>  false
+        })
+      case P.Pattern.DotName(_, _) => false
     }
   }
 
