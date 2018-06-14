@@ -66,6 +66,16 @@ final class TypeChecker(
           checkedPattern,
           Some(checkedRhs)
         )
+      case PD.Let(meta, modifiers, pattern, Some(rhs)) =>
+        checkModifiers(errors)(modifiers)
+        val inferredRhs = inferExpr(rhs)
+        val checkedPattern = checkPattern(inferredRhs.meta.typ)(pattern)
+        TD.Let(
+          meta.typed(Primitive.Unit).withDiagnostics(errors),
+          modifiers.map(_.typed),
+          checkedPattern,
+          Some(inferredRhs)
+        )
       case PD.TypeAlias(meta, modifiers, ident, kindAnnotation, rhs) =>
         checkModifiers(errors)(modifiers)
         val checkedKindAnnotation = kindAnnotation.map(inferKindAnnotation)
@@ -85,7 +95,7 @@ final class TypeChecker(
         setKindOfSymbol(inferredIdent.name, kind)
         decl.scope.addDeclaration(inferredIdent.name, meta.id)
         TD.TypeAlias(
-          meta.typed(Primitive.Unit),
+          meta.typed(Primitive.Unit).withDiagnostics(errors),
           modifiers.map(_.typed),
           inferredIdent,
           checkedKindAnnotation,
@@ -133,7 +143,7 @@ final class TypeChecker(
       case _ =>
         val inferredExpr = inferExpr(expr)
         val errors = ListBuffer.empty[Diagnostic]
-        assertSubType(
+        assertTypeMatch(
           errors, inferredExpr.loc
         )(expected = typ, found = inferredExpr.meta.typ)
         exprWithMeta(inferredExpr, inferredExpr.meta.withDiagnostics(
@@ -154,7 +164,7 @@ final class TypeChecker(
     }
   }
 
-  def assertSubType(
+  def assertTypeMatch(
     errors: ListBuffer[diagnostics.Diagnostic],
     loc: Loc
   )(
@@ -183,6 +193,21 @@ final class TypeChecker(
         val typedIdent = inferVarBindingIdent(ident, typ)
         setTypeOfSymbol(typedIdent.name, typ)
         TP.Var(meta.typed(typedIdent.meta.typ), typedIdent)
+      case PP.Paren(meta, inner) =>
+        val checkedInner = checkPattern(typ)(inner)
+        TP.Paren(meta.typed(checkedInner.meta.typ), checkedInner)
+      case PP.Annotated(meta, inner, typeAnnotation) =>
+        val errors = ListBuffer.empty[Diagnostic]
+        val inferredAnnotation = inferTypeAnnotation(typeAnnotation)
+        val checkedInner = checkPattern(inferredAnnotation.meta.typ)(inner)
+        assertTypeMatch(
+          errors, inferredAnnotation.loc
+        )(expected = typ, found = inferredAnnotation.meta.typ)
+        TP.Annotated(
+          meta.typed(typ).withDiagnostics(errors),
+          checkedInner,
+          inferredAnnotation
+        )
     }
   }
 
@@ -198,7 +223,6 @@ final class TypeChecker(
     annotation match {
       case P.TypeAnnotation.Var(meta, ident) =>
         val inferredIdent = inferTypeVarIdent(ident)
-        println(s"${inferredIdent.name}: ${inferredIdent.meta.typ}")
         T.TypeAnnotation.Var(
           meta.typed(inferredIdent.meta.typ),
           inferredIdent
@@ -216,9 +240,6 @@ final class TypeChecker(
   }
 
   def inferTypeVarIdent(ident: P.Ident): T.Ident = {
-    if (ident.name == "I") {
-      Debug.start()
-    }
     val name = ident.name
     Debug.log(s"$name inferTypeVarIdent(${ident.name})")
     ident.scope.resolveTypeEntry(ident.name) match {
@@ -264,10 +285,16 @@ final class TypeChecker(
   }
 
   def inferVarIdent(ident: P.Ident): T.Ident = {
-    ident.scope.resolveEntry(ident.name) match {
-      case Some(symbol) =>
-        ???
+    val (typ, symbol) = ident.scope.resolveEntry(ident.name) match {
+      case Some(ScopeEntry(symbol, _)) =>
+        (getTypeOfSymbol(symbol).getOrElse(Uninferred), symbol)
+      case None =>
+        (Uninferred, ctx.makeSymbol(ident.name))
     }
+    T.Ident(
+      ident.meta.typed(typ),
+      symbol
+    )
   }
 
   def inferTypeVarBindingIdent(ident: P.Ident, typ: Type): T.Ident = {

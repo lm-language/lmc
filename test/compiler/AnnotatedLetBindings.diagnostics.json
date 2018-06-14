@@ -1,60 +1,60 @@
 {
-  "diagnostics" : [
+  "diagnostics":[
     {
-      "loc" : {
-        "start" : {
-          "line" : 4,
-          "column" : 14
+      "loc":{
+        "start":{
+          "line":4,
+          "column":14
         },
-        "end" : {
-          "line" : 4,
-          "column" : 17
+        "end":{
+          "line":4,
+          "column":17
         }
       },
-      "severity" : "Error",
-      "message" : "TypeMismatch(Int,Bool)"
+      "severity":"Error",
+      "message":"TypeMismatch(Int,Bool)"
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 5,
-          "column" : 8
+      "loc":{
+        "start":{
+          "line":5,
+          "column":8
         },
-        "end" : {
-          "line" : 5,
-          "column" : 10
+        "end":{
+          "line":5,
+          "column":10
         }
       },
-      "severity" : "Error",
-      "message" : "UnBoundTypeVar(SDF)"
+      "severity":"Error",
+      "message":"UnBoundTypeVar(SDF)"
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 5,
-          "column" : 14
+      "loc":{
+        "start":{
+          "line":5,
+          "column":14
         },
-        "end" : {
-          "line" : 5,
-          "column" : 17
+        "end":{
+          "line":5,
+          "column":17
         }
       },
-      "severity" : "Error",
-      "message" : "TypeMismatch(Var(SDF),Bool)"
+      "severity":"Error",
+      "message":"TypeMismatch(Uninferred,Bool)"
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 7,
-          "column" : 9
+      "loc":{
+        "start":{
+          "line":7,
+          "column":9
         },
-        "end" : {
-          "line" : 7,
-          "column" : 12
+        "end":{
+          "line":7,
+          "column":12
         }
       },
-      "severity" : "Error",
-      "message" : "TypeMismatch(Int,Bool)"
+      "severity":"Error",
+      "message":"TypeMismatch(Int,Bool)"
     }
   ]
 }

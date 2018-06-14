@@ -219,6 +219,9 @@ trait Syntax {
         case Pattern.Annotated(_, inner, annotation) =>
           Array(inner, annotation)
         case Pattern.DotName(_, ident) => Array(ident)
+        case Pattern.Paren(_, inner) => Array(inner)
+        case Pattern.Annotated(_, inner, annotation) =>
+          Array(inner, annotation)
       }
   }
   object Pattern {

@@ -1,40 +1,37 @@
 {
-  "loc" : {
-    "start" : {
-      "line" : 1,
-      "column" : 1
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
     },
-    "end" : {
-      "line" : 8,
-      "column" : 1
+    "end":{
+      "line":8,
+      "column":1
     }
   },
-  "symbols" : {
-    "x" : {
-      "typ" : "Int"
+  "symbols":{
+    "x":{
+      "typ":"Int"
     },
-    "y" : {
-      "typ" : "Unit"
+    "y":{
+      "typ":"Unit"
     },
-    "a" : {
-      "typ" : "Int"
+    "a":{
+      "typ":"Int"
     },
-    "b" : {
-      "typ" : "Var(SDF)"
+    "b":{
+      "typ":"Uninferred"
     },
-    "c" : {
-      "typ" : "Bool"
+    "c":{
+      "typ":"Bool"
     },
-    "z" : {
-      "typ" : "Bool"
+    "z":{
+      "typ":"Bool"
     },
-    "d" : {
-      "typ" : "Bool"
+    "d":{
+      "typ":"Bool"
     }
   },
-  "types" : {
-    
-  },
-  "children" : [
-  ]
+  "types":{},
+  "children":[]
 }
