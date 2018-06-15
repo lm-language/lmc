@@ -223,6 +223,18 @@ trait Syntax {
         case Pattern.Annotated(_, inner, annotation) =>
           Array(inner, annotation)
       }
+
+    def withMeta(meta: Meta): Pattern = this match {
+      case Pattern.Var(_, ident) => Pattern.Var(meta, ident)
+      case Pattern.Annotated(_, inner, annotation) =>
+        Pattern.Annotated(meta, inner, annotation)
+      case Pattern.Paren(_, inner) =>
+        Pattern.Paren(meta, inner)
+      case Pattern.DotName(_, ident) =>
+        Pattern.DotName(meta, ident)
+      case Pattern.Function(_, f, args) =>
+        Pattern.Function(meta, f, args)
+    }
   }
   object Pattern {
     case class Var(
@@ -279,7 +291,7 @@ trait Syntax {
         case Var(_, ident) => Array(ident)
         case Forall(_, _, genericParams, body) =>
           genericParams :+ body
-        case Func(_, from, to) =>
+        case Func(_, _, from, to) =>
           from.flatMap({
             case (Some(ident), annotation) =>
               Array[Node](ident, annotation)
@@ -289,7 +301,14 @@ trait Syntax {
 
         case TApplication(_, tf, args) =>
           tf +: args
+        case Paren(_, a) => Array(a)
       }
+
+    def withMeta(meta: Meta): TypeAnnotation = this match {
+      case Var(_, ident) => Var(meta, ident)
+      case Forall(_, scope, p, body) =>
+        Forall(meta, scope, p, body)
+    }
   }
   object TypeAnnotation {
     case class Var(
@@ -313,6 +332,7 @@ trait Syntax {
     ) extends TypeAnnotation
     case class Func(
       meta: Meta,
+      funcScope: Scope,
       params: Array[(Option[Ident], TypeAnnotation)],
       returnType: TypeAnnotation
     ) extends TypeAnnotation
@@ -338,6 +358,10 @@ trait Syntax {
               case None => Array[Node](arg.value)
             }
           )
+        case Func(_, _, _, genericParams, params, Some(returnType), body) =>
+          genericParams ++ params.map(_.pattern) :+ returnType :+ body
+        case Func(_, _, _, genericParams, params, None, body) =>
+          genericParams ++ params.map(_.pattern) :+ body
       }
   }
   object Expression {

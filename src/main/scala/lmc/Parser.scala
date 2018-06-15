@@ -769,24 +769,27 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
        })
        case FN => buildNode((meta, errors) => {
 
-         val startTok = advance()
-         expect(errors)(LPAREN)
-         val params = parseCommaSeperatedList(() => {
-           val label = peek.variant match {
-             case COLON =>
-               val ident = parseIdent()
-               advance() // consume colon
-               Some(ident)
-             case _ =>
-               None
-           }
-           val typ = parseTypeAnnotation()
-           (label, typ)
-         })(Parser.TYPE_PREDICTORS)
-         expect(errors)(RPAREN)
-         expect(errors)(FATARROW)
-         val returnType = parseTypeAnnotation()
-         TypeAnnotation.Func(meta, params.toArray, returnType)
+         withNewScope(funcScope => {
+           val startTok = advance()
+           expect(errors)(LPAREN)
+           val params = parseCommaSeperatedList(() => {
+             val label = peek.variant match {
+               case COLON =>
+                 val ident = parseIdent()
+                 advance() // consume colon
+                 Some(ident)
+               case _ =>
+                 None
+             }
+             val typ = parseTypeAnnotation()
+             (label, typ)
+           })(Parser.TYPE_PREDICTORS)
+           expect(errors)(RPAREN)
+           expect(errors)(FATARROW)
+           val returnType = parseTypeAnnotation()
+           TypeAnnotation.Func(meta, funcScope, params.toArray, returnType)
+
+         })
        })
        case v if Parser.EXPR_PREDICTORS.contains(v) =>
          val e = parseExpr()
