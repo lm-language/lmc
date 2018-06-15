@@ -184,17 +184,31 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   def getHoverInfo(path: Path, pos: Pos): Option[String] = for {
     node <- findNodeAtPos(path, pos)
     info <- node match {
-      case Typed.Ident(meta, name) =>
-        getHoverInfoForSymbol(name)
+      case i: Typed.Ident =>
+        getHoverInfoForIdent(i)
       case _ => None
     }
   } yield info
 
-  private def getHoverInfoForSymbol(symbol: Symbol): Option[String] = {
-    checker.getTypeOfSymbol(symbol).map(_.toString) match {
-      case Some(s) => Some(s)
-      case None => checker.getTypeVar(symbol).map(_.toString)
+  private def getHoverInfoForIdent(ident: Typed.Ident): Option[String] = {
+    val symbol = ident.name
+    if (inType(getParsedNode(ident.meta.id).get)) {
+      checker.getKindOfSymbol(ident.name).map(_.toString)
+    } else {
+      checker.getTypeOfSymbol(symbol).map(_.toString)
     }
+  }
+
+  private def inType(node: Parsed.Node): Boolean = {
+    node match {
+      case _: Parsed.TypeAnnotation => true
+      case _ => (for {
+        parentId <- node.meta.parentId
+        parent <- getParsedNode(parentId)
+        isInType = inType(parent)
+      } yield isInType).contains(true)
+    }
+
   }
 
   private def findNodeAtPos(path: Path, pos: Pos): Option[Typed.Node] = {

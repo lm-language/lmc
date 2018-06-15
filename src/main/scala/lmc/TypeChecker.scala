@@ -35,9 +35,47 @@ final class TypeChecker(
   }
 
   def getModuleTypeFromDeclarations(declarations: Array[T.Declaration]): Type = {
-    // TODO
-    Uninferred
+    val types = mutable.HashMap.empty[Symbol, Kind]
+    val values = mutable.HashMap.empty[Symbol, Type]
+
+    def addPatternBindings(p: T.Pattern): Unit = {
+      p match {
+        case v: T.Pattern.Var => values.update(v.ident.name, v.meta.typ)
+        case a: T.Pattern.Annotated => addPatternBindings(a.innerPattern)
+        case _: T.Pattern.Error => ()
+        case p: T.Pattern.Paren => addPatternBindings(p.inner)
+        case f: T.Pattern.Function =>
+          f.params.foreach({
+            case _: T.Pattern.Param.Rest => ()
+            case s: T.Pattern.Param.SubPattern =>
+              addPatternBindings(s.pattern)
+          })
+
+      }
+    }
+
+    for (decl <- declarations) {
+      decl match {
+        case d: T.Declaration.Let =>
+          addPatternBindings(d.pattern)
+        case d: T.Declaration.TypeAlias =>
+          getKindOfSymbol(d.ident.name) match {
+            case Some(k) =>
+              types.update(d.ident.name, k)
+            case None =>
+              throw new Error(s"Compiler bug: No kind for symbol ${d.ident.name}")
+          }
+        case _ => ()
+      }
+    }
+    val result = Module(
+      types.toMap,
+      values.toMap
+    )
+
+    result
   }
+
 
   def inferDeclaration(decl: P.Declaration): T.Declaration = {
     _checkedDecls.get(decl.meta.id) match {
@@ -102,13 +140,16 @@ final class TypeChecker(
           case None =>
             Kind.Star
         }
+
+        val inferredIdent = inferTypeVarBindingIdent(ident)
         val typedRhs = rhs.map(inferTypeAnnotation)
         val typ = typedRhs match {
           case Some(r) =>
             r.meta.typ
-          case None => Uninferred
+          case None =>
+            Var(inferredIdent.name)
         }
-        val inferredIdent = inferTypeVarBindingIdent(ident, Some(typ))
+        setTypeVar(inferredIdent.name, typ)
         setKindOfSymbol(inferredIdent.name, kind)
         decl.scope.addDeclaration(inferredIdent.name, meta.id)
         TD.TypeAlias(
@@ -175,11 +216,132 @@ final class TypeChecker(
         inferCall(call)
       case func: P.Expression.Func =>
         inferFunc(func)
+      case mod: P.Expression.Module =>
+        inferModule(mod)
+      case prop: P.Expression.Prop =>
+        inferProp(prop)
       case P.Expression.Error(meta) =>
         T.Expression.Error(
           meta.typed(Uninferred)
         )
     }
+  }
+
+  def inferProp(prop: P.Expression.Prop): T.Expression.Prop = {
+    val inferredExpr = inferExpr(prop.expr)
+    inferredExpr.meta.typ match {
+      case modTyp: Module =>
+        modTyp.symbolOfString.get(prop.prop.name) match {
+          case Some(symbol) =>
+            getTypeOfSymbol(symbol) match {
+              case Some(t) =>
+                T.Expression.Prop(
+                  prop.meta.typed(t),
+                  inferredExpr,
+                  T.Ident(
+                    prop.prop.meta.typed(t),
+                    symbol
+                  )
+                )
+              case None =>
+                throw new Error(s"Compiler bug: No type for symbol ${symbol}")
+            }
+          case None =>
+            T.Expression.Prop(
+              meta = prop.meta.typed(Uninferred),
+              inferredExpr,
+              T.Ident(
+                prop.prop.meta.typed(Uninferred).withDiagnostic(
+                  Diagnostic(
+                    loc = prop.prop.loc,
+                    severity = Severity.Error,
+                    variant = NoSuchValueProperty(prop.prop.name)
+                  )
+                ),
+                ctx.makeSymbol(prop.prop.name)
+              )
+            )
+        }
+      case typ =>
+        T.Expression.Prop(
+          prop.meta.typed(Uninferred).withDiagnostic(
+            Diagnostic(
+              loc = inferredExpr.loc,
+              severity = Severity.Error,
+              variant = NotAModule
+            )
+          ),
+          inferredExpr,
+          T.Ident(
+            prop.prop.meta.typed(Uninferred),
+            ctx.makeSymbol(prop.prop.name)
+          )
+        )
+    }
+  }
+
+
+  def inferPropAnnotation(prop: P.TypeAnnotation.Prop): T.TypeAnnotation.Prop = {
+    val inferredExpr = inferExpr(prop.expr)
+    inferredExpr.meta.typ match {
+      case modTyp: Module =>
+        modTyp.symbolOfString.get(prop.prop.name) match {
+          case Some(symbol) =>
+            getKindOfSymbol(symbol) match {
+              case Some(t) =>
+                T.TypeAnnotation.Prop(
+                  prop.meta.typed(Primitive.Unit),
+                  inferredExpr,
+                  T.Ident(
+                    prop.prop.meta.typed(Primitive.Unit),
+                    symbol
+                  )
+                )
+              case None =>
+                throw new Error(s"Compiler bug: No kind for symbol $symbol")
+            }
+          case None =>
+            T.TypeAnnotation.Prop(
+              meta = prop.meta.typed(Primitive.Unit),
+              inferredExpr,
+              T.Ident(
+                prop.prop.meta.typed(Uninferred).withDiagnostic(
+                  Diagnostic(
+                    loc = prop.prop.loc,
+                    severity = Severity.Error,
+                    variant = NoSuchTypeProperty(prop.prop.name)
+                  )
+                ),
+                ctx.makeSymbol(prop.prop.name)
+              )
+            )
+        }
+      case typ =>
+        T.TypeAnnotation.Prop(
+          prop.meta.typed(Uninferred).withDiagnostic(
+            Diagnostic(
+              loc = inferredExpr.loc,
+              severity = Severity.Error,
+              variant = NotAModule
+            )
+          ),
+          inferredExpr,
+          T.Ident(
+            prop.prop.meta.typed(Uninferred),
+            ctx.makeSymbol(prop.prop.name)
+          )
+        )
+    }
+  }
+
+  def inferModule(module: P.Expression.Module): T.Expression.Module = {
+    val inferredDeclarations = module.declarations.map(inferDeclaration)
+    val modType = getModuleTypeFromDeclarations(inferredDeclarations)
+    T.Expression.Module(
+      module.meta.typed(modType),
+      module.moduleScope,
+      inferredDeclarations
+    )
   }
 
   def inferFunc(func: P.Expression.Func): T.Expression.Func = {
@@ -269,10 +431,14 @@ final class TypeChecker(
 
   def resolveType(t: Type): Type = {
     t match {
-      case ExistentialInstance(id, _) =>
-        getGeneric(id).getOrElse(Uninferred)
+      case ExistentialInstance(id, text) =>
+        getGeneric(id).getOrElse(ExistentialInstance(id, text))
       case _: Var => t
       case _: Constructor => t
+      case Uninferred => t
+      case Module(types, values) =>
+        Module(types, values.mapValues(resolveType))
+      case _ => t
     }
   }
 
@@ -651,23 +817,12 @@ final class TypeChecker(
         assertTypeMatch(
           errors, inferredExpr.loc
         )(expected = typ, found = inferredExpr.meta.typ)
-        exprWithMeta(inferredExpr, inferredExpr.meta.withDiagnostics(
+        inferredExpr.withMeta(inferredExpr.meta.withDiagnostics(
           errors
         ))
     }
   }
 
-  def exprWithMeta(e: T.Expression, meta: T.Meta): T.Expression = {
-    e match {
-      case v: T.Expression.Var => v.copy(meta)
-      case e: T.Expression.Error => e.copy(meta)
-      case l: T.Expression.Literal => l.copy(meta)
-      case c: T.Expression.Call => c.copy(meta)
-      case f: T.Expression.Func => f.copy(meta)
-      case w: T.Expression.With => w.copy(meta)
-      case b: T.Expression.Block => b.copy(meta)
-    }
-  }
 
   private def assertTypeMatch(
     errors: ListBuffer[diagnostics.Diagnostic],
@@ -830,6 +985,8 @@ final class TypeChecker(
           t.meta.typed(typ),
           func, args
         )
+      case p: P.TypeAnnotation.Prop =>
+        inferPropAnnotation(p)
       case P.TypeAnnotation.Paren(meta, inner) =>
         val inferredInner = inferTypeAnnotation(inner)
         T.TypeAnnotation.Paren(

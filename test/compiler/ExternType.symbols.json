@@ -1,56 +1,69 @@
 {
-  "loc" : {
-    "start" : {
-      "line" : 1,
-      "column" : 1
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
     },
-    "end" : {
-      "line" : 9,
-      "column" : 1
+    "end":{
+      "line":9,
+      "column":1
     }
   },
-  "symbols" : {
-    "boolArr" : {
-      "typ" : "Var(Array)[Bool]"
+  "symbols":{
+    "boolArr":{
+      "typ":"Var(Array)[Bool]"
     },
-    "empty" : {
-      "typ" : "([A] => (fn() => Var(Array)[Var(A)]))"
+    "empty":{
+      "typ":"([A] => (fn() => Var(Array)[Var(A)]))"
     },
-    "intArr" : {
-      "typ" : "Var(Array)[Int]"
+    "intArr":{
+      "typ":"Var(Array)[Int]"
     },
-    "intArr2" : {
-      "typ" : "Var(Array)[Int]"
+    "intArr2":{
+      "typ":"Var(Array)[Int]"
     },
-    "intArr1" : {
-      "typ" : "Var(Array)[Int]"
+    "intArr1":{
+      "typ":"Var(Array)[Int]"
     },
-    "err" : {
-      "typ" : "Var(Array)[Int]"
+    "err":{
+      "typ":"Var(Array)[Int]"
     }
   },
-  "types" : {
-    "Array" : "([*] => *)"
+  "types":{
+    "Array":"([*] => *)"
   },
-  "children" : [
+  "children":[
     {
-      "loc" : {
-        "start" : {
-          "line" : 3,
-          "column" : 19
+      "loc":{
+        "start":{
+          "line":3,
+          "column":19
         },
-        "end" : {
-          "line" : 3,
-          "column" : 41
+        "end":{
+          "line":3,
+          "column":41
         }
       },
-      "symbols" : {
-        
+      "symbols":{},
+      "types":{
+        "A":"*"
       },
-      "types" : {
-        "A" : "*"
-      },
-      "children" : [
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":3,
+              "column":26
+            },
+            "end":{
+              "line":3,
+              "column":41
+            }
+          },
+          "symbols":{},
+          "types":{},
+          "children":[]
+        }
       ]
     }
   ]

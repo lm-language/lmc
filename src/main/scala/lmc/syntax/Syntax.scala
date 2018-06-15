@@ -133,6 +133,8 @@ trait Syntax {
             case None => ()
           }
           result.toArray
+        case Declaration.Error(_, _) =>
+          Array()
       }
   }
 
@@ -302,6 +304,7 @@ trait Syntax {
         case TApplication(_, tf, args) =>
           tf +: args
         case Paren(_, a) => Array(a)
+        case Prop(_, e, prop) => Array(e, prop)
       }
 
     def withMeta(meta: Meta): TypeAnnotation = this match {
@@ -357,6 +360,9 @@ trait Syntax {
           genericParams ++ params.map(_.pattern) :+ returnType :+ body
         case Func(_, _, _, genericParams, params, None, body) =>
           genericParams ++ params.map(_.pattern) :+ body
+        case Prop(_, e, p) => Array(e, p)
+        case m: Module =>
+          m.declarations.toArray
       }
 
     def withMeta(meta: Meta): Expression = this match {
