@@ -181,12 +181,20 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     ExistentialInstance(id, name)
   }
 
-  def getHoverInfo(path: Path, pos: Pos): Option[String] = {
-    None
-  }
+  def getHoverInfo(path: Path, pos: Pos): Option[String] = for {
+    node <- findNodeAtPos(path, pos)
+    info <- node match {
+      case Typed.Ident(meta, name) =>
+        getHoverInfoForSymbol(name)
+      case _ => None
+    }
+  } yield info
 
   private def getHoverInfoForSymbol(symbol: Symbol): Option[String] = {
-    None
+    checker.getTypeOfSymbol(symbol).map(_.toString) match {
+      case Some(s) => Some(s)
+      case None => checker.getTypeVar(symbol).map(_.toString)
+    }
   }
 
   private def findNodeAtPos(path: Path, pos: Pos): Option[Typed.Node] = {
