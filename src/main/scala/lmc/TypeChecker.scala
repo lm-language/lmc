@@ -235,12 +235,34 @@ final class TypeChecker(
         val args = checkFunctionArgs(func.meta.loc, errors, from, call.args)
         val typ = resolveType(to)
         T.Expression.Call(
-          call.meta.typed(typ),
+          call.meta.typed(typ).withDiagnostics(errors),
           func,
           args
         )
       case _ =>
-        throw new Error("Not a function")
+        val args = call.args.map({
+          case P.Expression.Call.Arg(meta, labelOpt, value) =>
+            val inferredValue = inferExpr(value)
+            T.Expression.Call.Arg(
+              meta.typed(inferredValue.meta.typ),
+              labelOpt.map(l => T.Ident(
+                l.meta.typed(inferredValue.meta.typ),
+                ctx.makeSymbol(l.name)
+              )),
+              inferredValue
+            )
+        })
+        T.Expression.Call(
+          call.meta.typed(Uninferred).withDiagnostic(
+            Diagnostic(
+              loc = func.loc,
+              severity = Severity.Error,
+              variant = NotAFunction(funcTyp)
+            )
+          ),
+          func,
+          args
+        )
     }
 
   }
@@ -380,145 +402,167 @@ final class TypeChecker(
     )
   }
 
+  def checkFunctionArgs(): Unit = {
+
+  }
+
   def checkFunctionArgs(
     loc: Loc,
     errors: ListBuffer[Diagnostic],
     params: Array[(Option[Symbol], Type)],
     args: Array[P.Expression.Call.Arg]
   ): Array[T.Expression.Call.Arg] = {
+    val labelChecked = mutable.Set.empty[String]
     var i = 0
-    var labeledEncountered = false
+    val checkedArgs = ListBuffer.empty[T.Expression.Call.Arg]
     val missingArguments = ListBuffer.empty[(Option[String], Type)]
-    val resultArgs = ListBuffer.empty[T.Expression.Call.Arg]
-    val labeledArgs = mutable.HashMap.empty[String, P.Expression.Call.Arg]
-
-    for (param <- params) {
+    var labelEncountered = false
+    val labeledArgsToCheck = ListBuffer.empty[(String, P.Expression.Call.Arg)]
+    val expectedLabeledArgs = params.filter({ _._1.isDefined }).map(arg => {
+      (arg._1.get.text, (arg._1.get -> arg._2))
+    }).toMap
+    for (expectedArg <- params) {
       if (i >= args.length) {
-        missingArguments.append(
-          param._1.map(_.text) -> param._2
-        )
+        missingArguments.append(expectedArg._1.map(_.text) -> expectedArg._2)
+        expectedArg._1 match {
+          case Some(s) => labelChecked += s.text
+          case None => ()
+        }
       } else {
         val arg = args(i)
         arg.label match {
           case Some(label) =>
-            labeledEncountered = true
-            labeledArgs.put(label.name, arg)
+            labelEncountered = true
+            labeledArgsToCheck.append(label.name -> arg)
           case None =>
-            if (labeledEncountered) {
-              val expr = checkExpr(param._2)(arg.value)
-              resultArgs.append(
-                T.Expression.Call.Arg(
-                  meta = arg.meta.typed(param._2).withDiagnostic(
-                    Diagnostic(
-                      loc = arg.loc,
-                      severity = Severity.Error,
-                      variant = PositionalArgAfterLabelled
-                    )
-                  ),
-                  None,
-                  value = expr
-                )
-              )
+            val diagnostic = if (labelEncountered) {
+              Some(Diagnostic(
+                loc = arg.value.loc,
+                severity = Severity.Error,
+                variant = PositionalArgAfterLabelled
+              ))
             } else {
-              val expr = checkExpr(param._2)(arg.value)
-              resultArgs.append(
-                T.Expression.Call.Arg(
-                  meta = arg.meta.typed(param._2),
-                  None,
-                  value = expr
-                )
-              )
+              None
             }
+            expectedArg._1 match {
+              case None => ()
+              case Some(label) =>
+                labelChecked += label.text
+            }
+            var checkedExpr = checkExpr(expectedArg._2)(arg.value)
+            diagnostic match {
+              case Some(d) =>
+                checkedExpr = checkedExpr.withMeta(
+                  checkedExpr.meta.withDiagnostic(d)
+                )
+              case None => ()
+            }
+            val checkedArg = T.Expression.Call.Arg(
+              arg.meta.typed(checkedExpr.meta.typ), None, checkedExpr)
+            checkedArgs.append(checkedArg)
         }
       }
       i += 1
     }
-
     while (i < args.length) {
       val arg = args(i)
       arg.label match {
         case Some(label) =>
-          labeledArgs.put(label.name, arg)
+          labelEncountered = true
+          labeledArgsToCheck.append(label.name -> arg)
         case None =>
-          val expr = inferExpr(arg.value)
-          resultArgs.append(
-            T.Expression.Call.Arg(
-              meta = arg.meta.typed(
-                expr.meta.typ
-              ).withDiagnostic(
-                Diagnostic(
-                  loc = arg.loc,
-                  severity = Severity.Error,
-                  variant = ExtraArg
-                )
-              ),
-              label = None,
-              value = expr
+          var inferredExpr = inferExpr(arg.value)
+          inferredExpr = inferredExpr.withMeta(
+            inferredExpr.meta.withDiagnostic(
+              Diagnostic(
+                loc = arg.value.loc,
+                severity = Severity.Error,
+                variant = ExtraArg
+              )
             )
           )
+          val checkedArg = T.Expression.Call.Arg(
+            arg.meta.typed(inferredExpr.meta.typ),
+            None,
+            inferredExpr
+          )
+          checkedArgs.append(checkedArg)
       }
       i += 1
     }
-
-    val labelChecked = mutable.Set.empty[String]
-    for (param <- params) {
-      param match {
-        case (Some(label), expectedType) =>
-          labelChecked += label.text
-          labeledArgs.get(label.text) match {
-            case Some(arg) =>
-              val expr = checkExpr(expectedType)(arg.value)
-              val argLabel = arg.label.get
-              resultArgs.append(
-                T.Expression.Call.Arg(
-                  arg.meta.typed(expectedType),
-                  label = Some(
-                    T.Ident(
-                      meta = argLabel.meta.typed(expectedType),
-                      name = label
-                    )
-                  ),
-                  value = expr
-                )
-              )
-            case None =>
-              missingArguments.append(Some(label.text) -> expectedType)
+    for ((name, arg) <- labeledArgsToCheck) {
+      expectedLabeledArgs.get(name) match {
+        case Some((expectedLabel, expectedTyp)) =>
+          val diagnostic = if (labelChecked.contains(name)) {
+            Some(Diagnostic(
+              loc = arg.label.map(_.loc).getOrElse(arg.meta.loc),
+              severity = Severity.Error,
+              variant = DuplicateLabelArg(name)
+            ))
+          } else {
+            None
           }
-        case _ => ()
+          var checkedExpr = checkExpr(expectedTyp)(arg.value)
+          diagnostic match {
+            case Some(d) =>
+              checkedExpr = checkedExpr.withMeta(
+                checkedExpr.meta.withDiagnostic(d)
+              )
+            case None => ()
+          }
+          val checkedLabel = arg.label.map(i => {
+            T.Ident(
+              meta = i.meta.typed(checkedExpr.meta.typ),
+              expectedLabel
+            )
+          })
+          val checkedArg = T.Expression.Call.Arg(
+            arg.meta.typed(checkedExpr.meta.typ),
+            checkedLabel,
+            checkedExpr
+          )
+          checkedArgs.append(checkedArg)
+          labelChecked += name
+        case None =>
+          val inferredExpr = inferExpr(arg.value)
+          val inferredArg = T.Expression.Call.Arg(
+            arg.meta.typed(inferredExpr.meta.typ).withDiagnostic(
+              Diagnostic(
+                loc = arg.label.map(_.loc).getOrElse(arg.loc),
+                severity = Severity.Error,
+                variant = NoSuchParamLabel(name)
+              )
+            ),
+            label = arg.label.map(i =>
+              T.Ident(
+                i.meta.typed(inferredExpr.meta.typ),
+                ctx.makeSymbol(i.name))
+            ),
+            value = inferredExpr
+          )
+          checkedArgs.append(inferredArg)
       }
     }
-    for ((label, arg) <- labeledArgs) {
-      if (!labelChecked.contains(label)) {
-        val expr = inferExpr(arg.value)
-        val label = arg.label.map(l => T.Ident(
-          meta = l.meta.typed(expr.meta.typ).withDiagnostic(
-            Diagnostic(
-              loc = l.loc,
-              severity = Severity.Error,
-              variant = NoSuchParamLabel(l.name)
-            )
-          ),
-          ctx.makeSymbol(l.name)
-        ))
-        resultArgs.append(
-          T.Expression.Call.Arg(
-            arg.meta.typed(expr.meta.typ),
-            label,
-            expr
-          )
-        )
+    for (expected <- params) {
+      expected._1 match {
+        case Some(name) =>
+          if (!labelChecked.contains(name.text)) {
+            missingArguments.append(Some(name.text) -> expected._2)
+          }
+        case None => ()
       }
     }
     if (missingArguments.nonEmpty) {
       errors.append(
         Diagnostic(
           loc = loc,
-          severity = Severity.Error,
-          variant = MissingArguments(missingArguments)
+          variant = MissingArguments(missingArguments.toList),
+          severity = Severity.Error
         )
       )
     }
-    resultArgs.toArray
+
+    checkedArgs.toArray
   }
 
 

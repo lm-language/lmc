@@ -352,17 +352,25 @@ trait Syntax {
         case Literal(_, _) => Array.empty
         case Var(_, i) => Array(i)
         case Call(_, expr, args) =>
-          expr +: args.flatMap(arg =>
-            arg.label match {
-              case Some(l) => Array[Node](l, arg.value)
-              case None => Array[Node](arg.value)
-            }
-          )
+          expr +: args
         case Func(_, _, _, genericParams, params, Some(returnType), body) =>
           genericParams ++ params.map(_.pattern) :+ returnType :+ body
         case Func(_, _, _, genericParams, params, None, body) =>
           genericParams ++ params.map(_.pattern) :+ body
       }
+
+    def withMeta(meta: Meta): Expression = this match {
+      case Literal(_, a) => Literal(meta, a)
+      case Var(_, a) => Var(meta, a)
+      case c: Call => c.copy(meta)
+      case f: Func => f.copy(meta)
+      case b: Block => b.copy(meta)
+      case m: Module => m.copy(meta)
+      case i: If => i.copy(meta)
+      case p: Prop => p.copy(meta)
+      case p: Error => p.copy(meta)
+      case w: With => w.copy(meta)
+    }
   }
   object Expression {
     case class Literal(

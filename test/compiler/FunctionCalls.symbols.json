@@ -1,101 +1,101 @@
 {
-  "loc" : {
-    "start" : {
-      "line" : 1,
-      "column" : 1
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
     },
-    "end" : {
-      "line" : 12,
-      "column" : 1
+    "end":{
+      "line":12,
+      "column":1
     }
   },
-  "symbols" : {
-    "missingArg" : {
-      "typ" : "Int"
+  "symbols":{
+    "missingArg":{
+      "typ":"Int"
     },
-    "extraArg" : {
-      "typ" : "Int"
+    "extraArg":{
+      "typ":"Int"
     },
-    "typErr" : {
-      "typ" : "Int"
+    "typErr":{
+      "typ":"Int"
     },
-    "boolVal" : {
-      "typ" : "Bool"
+    "boolVal":{
+      "typ":"Bool"
     },
-    "intBoolFst" : {
-      "typ" : "(fn(a:Int, b:Bool) => Int)"
+    "intBoolFst":{
+      "typ":"(fn(a:Int, b:Bool) => Int)"
     },
-    "noSuchLabel" : {
-      "typ" : "Int"
+    "noSuchLabel":{
+      "typ":"Int"
     },
-    "notAFunc" : {
-      "typ" : "ErrorType"
+    "notAFunc":{
+      "typ":"Uninferred"
     },
-    "intVal" : {
-      "typ" : "Int"
+    "intVal":{
+      "typ":"Int"
     },
-    "intVal1" : {
-      "typ" : "Int"
+    "intVal1":{
+      "typ":"Int"
     },
-    "positionalAfterLabeled" : {
-      "typ" : "Int"
+    "positionalAfterLabeled":{
+      "typ":"Int"
     },
-    "intBoolSnd" : {
-      "typ" : "(fn(a:Int, b:Bool) => Bool)"
+    "intBoolSnd":{
+      "typ":"(fn(a:Int, b:Bool) => Bool)"
     }
   },
-  "types" : {
+  "types":{
     
   },
-  "children" : [
+  "children":[
     {
-      "loc" : {
-        "start" : {
-          "line" : 1,
-          "column" : 18
+      "loc":{
+        "start":{
+          "line":1,
+          "column":18
         },
-        "end" : {
-          "line" : 1,
-          "column" : 41
+        "end":{
+          "line":1,
+          "column":41
         }
       },
-      "symbols" : {
-        "b" : {
-          "typ" : "Bool"
+      "symbols":{
+        "b":{
+          "typ":"Bool"
         },
-        "a" : {
-          "typ" : "Int"
+        "a":{
+          "typ":"Int"
         }
       },
-      "types" : {
+      "types":{
         
       },
-      "children" : [
+      "children":[
       ]
     },
     {
-      "loc" : {
-        "start" : {
-          "line" : 2,
-          "column" : 18
+      "loc":{
+        "start":{
+          "line":2,
+          "column":18
         },
-        "end" : {
-          "line" : 2,
-          "column" : 41
+        "end":{
+          "line":2,
+          "column":41
         }
       },
-      "symbols" : {
-        "b" : {
-          "typ" : "Bool"
+      "symbols":{
+        "b":{
+          "typ":"Bool"
         },
-        "a" : {
-          "typ" : "Int"
+        "a":{
+          "typ":"Int"
         }
       },
-      "types" : {
+      "types":{
         
       },
-      "children" : [
+      "children":[
       ]
     }
   ]
