@@ -47,7 +47,23 @@
         "A":"*",
         "B":"*"
       },
-      "children":[]
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":3,
+              "column":28
+            },
+            "end":{
+              "line":3,
+              "column":49
+            }
+          },
+          "symbols":{},
+          "types":{},
+          "children":[]
+        }
+      ]
     },
     {
       "loc":{
@@ -64,24 +80,72 @@
       "types":{
         "A":"*"
       },
-      "children":[]
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":4,
+              "column":24
+            },
+            "end":{
+              "line":4,
+              "column":42
+            }
+          },
+          "symbols":{},
+          "types":{},
+          "children":[]
+        }
+      ]
     },
     {
       "loc":{
         "start":{
           "line":6,
-          "column":11
+          "column":8
         },
         "end":{
           "line":6,
-          "column":39
+          "column":71
         }
       },
       "symbols":{},
-      "types":{
-        "A":"*"
-      },
-      "children":[]
+      "types":{},
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":6,
+              "column":11
+            },
+            "end":{
+              "line":6,
+              "column":39
+            }
+          },
+          "symbols":{},
+          "types":{
+            "A":"*"
+          },
+          "children":[
+            {
+              "loc":{
+                "start":{
+                  "line":6,
+                  "column":18
+                },
+                "end":{
+                  "line":6,
+                  "column":39
+                }
+              },
+              "symbols":{},
+              "types":{},
+              "children":[]
+            }
+          ]
+        }
+      ]
     },
     {
       "loc":{
@@ -117,7 +181,23 @@
       "types":{
         "A":"*"
       },
-      "children":[]
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":9,
+              "column":29
+            },
+            "end":{
+              "line":9,
+              "column":50
+            }
+          },
+          "symbols":{},
+          "types":{},
+          "children":[]
+        }
+      ]
     }
   ]
 }
