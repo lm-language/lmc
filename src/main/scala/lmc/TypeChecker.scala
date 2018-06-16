@@ -349,8 +349,27 @@ final class TypeChecker(
     val params = func.params.map(
       p => T.Expression.Param(inferPattern(p.pattern))
     )
-    val retTypAnnotation = func.returnType.map(inferTypeAnnotation)
-    val body = retTypAnnotation match {
+    val retTypAnnotationUnchecked = func.returnType.map(inferTypeAnnotation)
+    val retTypeAnnotation = retTypAnnotationUnchecked match {
+      case Some(retTyp) =>
+        getKindOfType(retTyp.meta.typ) match {
+          case Kind.Star =>
+            retTypAnnotationUnchecked
+          case k =>
+            retTypAnnotationUnchecked.map(r => r.withMeta(
+              r.meta.withDiagnostic(
+                Diagnostic(
+                  loc = r.loc,
+                  severity = Severity.Error,
+                  variant = KindMismatch(Kind.Star, k)
+                )
+              )
+            ))
+
+        }
+      case None => None
+    }
+    val body = retTypeAnnotation match {
       case Some(annot) => checkExpr(annot.meta.typ)(func.body)
       case None => inferExpr(func.body)
 
@@ -374,7 +393,7 @@ final class TypeChecker(
       func.funcScope,
       genericParams,
       params,
-      retTypAnnotation,
+      retTypeAnnotation,
       body
     )
   }
@@ -438,6 +457,8 @@ final class TypeChecker(
       case Uninferred => t
       case Module(types, values) =>
         Module(types, values.mapValues(resolveType))
+      case TApplication(tFunc, tArg) =>
+        TApplication(resolveType(tFunc), resolveType(tArg))
       case _ => t
     }
   }
@@ -796,8 +817,21 @@ final class TypeChecker(
         val inferredAnnotation = inferTypeAnnotation(typeAnnotation)
         val checkedInnerPattern =
           checkPattern(inferredAnnotation.meta.typ)(innerPattern)
+        val kind = getKindOfType(inferredAnnotation.meta.typ)
+        val errors = kind match {
+          case Kind.Star =>
+            Array.empty[Diagnostic]
+          case _ =>
+            Array(Diagnostic(
+              loc = typeAnnotation.loc,
+              severity = Severity.Error,
+              variant = KindMismatch(Kind.Star, kind)
+            ))
+        }
         T.Pattern.Annotated(
-          meta.typed(inferredAnnotation.meta.typ),
+          meta.typed(inferredAnnotation.meta.typ).withDiagnostics(
+            errors
+          ),
           checkedInnerPattern,
           inferredAnnotation
         )
@@ -978,7 +1012,7 @@ final class TypeChecker(
         )
       case t: P.TypeAnnotation.TApplication =>
         val func = inferTypeAnnotation(t.tFunc)
-        val args = t.args.map(inferTypeAnnotation)
+        val args = checkTypeApplication(getKindOfType(func.meta.typ), t.args)
         val typ = args.foldLeft(func.meta.typ)((f, arg) =>
           TApplication(f, arg.meta.typ))
         T.TypeAnnotation.TApplication(
@@ -994,6 +1028,51 @@ final class TypeChecker(
           inferredInner
         )
 
+    }
+  }
+
+  def checkTypeApplication(
+    fKind: Kind,
+    annotations: Array[P.TypeAnnotation]
+  ): Array[T.TypeAnnotation] = {
+    if (annotations.length == 0) {
+      Array.empty
+    } else {
+      val head = inferTypeAnnotation(annotations(0))
+      val tail = annotations.tail
+      val headKind = getKindOfType(head.meta.typ)
+      (fKind, headKind) match {
+        case (Kind.KFun(from, to), _) if headKind == from =>
+          head +: checkTypeApplication(to, tail)
+        case (Kind.KFun(from, to), _) =>
+          head.withMeta(
+            head.meta.withDiagnostic(
+              Diagnostic(
+                loc = head.loc,
+                severity = Severity.Error,
+                variant = KindMismatch(
+                  from,
+                  headKind
+                )
+              )
+            )
+          ) +: checkTypeApplication(to, tail)
+
+      }
+    }
+  }
+
+  def getKindOfType(t: Type): Kind = {
+    t match {
+      case Var(v) => getKindOfSymbol(v).get
+      case Constructor(_, kind) => kind
+      case Forall(_, inner) => getKindOfType(inner)
+      case Func(_, _) => Kind.Star
+      case TApplication(f, arg) =>
+        getKindOfType(f) match {
+          case Kind.KFun(_, to) => to
+          case Kind.Star => Kind.Star
+        }
     }
   }
 
