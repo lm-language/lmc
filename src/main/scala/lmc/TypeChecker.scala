@@ -25,6 +25,8 @@ final class TypeChecker(
 
   private val _genericInstances = collection.mutable.WeakHashMap.empty[Int, Type]
 
+  private var _declStack = List.empty[Int]
+
   def inferSourceFile(sourceFile: P.SourceFile): T.SourceFile = {
     val inferredDeclarations = sourceFile.declarations.map(inferDeclaration)
     T.SourceFile(
@@ -81,7 +83,9 @@ final class TypeChecker(
     _checkedDecls.get(decl.meta.id) match {
       case Some(d) => d
       case None =>
+        _declStack = decl.meta.id::_declStack
         val inferred = inferDeclarationWorker(decl)
+        _declStack = _declStack.tail
         _checkedDecls.update(decl.meta.id, inferred)
         inferred
     }
@@ -1111,7 +1115,22 @@ final class TypeChecker(
     getTypeDeclOf(ident.name, ident) match {
       case Some(decl) =>
         Debug.log(s"$name: found declaration")
-        inferDeclaration(decl)
+        if (_declStack.headOption.contains(decl.meta.id)) {
+          val symbol = ctx.makeSymbol(ident.name)
+          return T.Ident(
+            meta = ident.meta.typed(Var(symbol)).withDiagnostic(
+              Diagnostic(
+                loc = ident.loc,
+                severity = Severity.Error,
+                variant = RecursiveTypeAlias(ident.name)
+              )
+            ),
+            symbol
+          )
+
+        } else {
+          inferDeclaration(decl)
+        }
       case None => ()
     }
     val result = ident.scope.resolveTypeEntry(ident.name) match {

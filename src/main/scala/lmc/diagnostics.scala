@@ -50,6 +50,7 @@ object diagnostics {
   case object NoSuchVariant extends Variant
   case object DuplicateRestParam extends Variant
   case object MissingPatternParams extends Variant
+  case class RecursiveTypeAlias(name: String) extends Variant
 
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {
