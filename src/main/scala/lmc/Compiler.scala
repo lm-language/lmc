@@ -192,12 +192,15 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
 
   private def getHoverInfoForIdent(ident: Typed.Ident): Option[String] = {
     val symbol = ident.name
-    if (inType(getParsedNode(ident.meta.id).get)) {
-      checker.getKindOfSymbol(ident.name).map(_.toString)
-    } else {
-      checker.getTypeOfSymbol(symbol).map(_.toString)
+
+    checker.getTypeOfSymbol(symbol).map(_.toString) match {
+      case Some(t) => Some(t)
+      case None =>
+        checker.getKindOfSymbol(ident.name).map(_.toString)
     }
   }
+
+
 
   private def inType(node: Parsed.Node): Boolean = {
     node match {

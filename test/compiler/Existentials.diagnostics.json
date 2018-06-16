@@ -41,6 +41,34 @@
       },
       "severity":"Error",
       "message":"TypeMismatch(Bool,Int)"
+    },
+    {
+      "loc":{
+        "start":{
+          "line":18,
+          "column":33
+        },
+        "end":{
+          "line":18,
+          "column":36
+        }
+      },
+      "severity":"Error",
+      "message":"KindMismatch(*,([*] => *))"
+    },
+    {
+      "loc":{
+        "start":{
+          "line":18,
+          "column":39
+        },
+        "end":{
+          "line":18,
+          "column":41
+        }
+      },
+      "severity":"Error",
+      "message":"KindMismatch(([*] => ([*] => *)),*)"
     }
   ]
 }

@@ -15,4 +15,4 @@ let intList: List[Int] = emptyList;
 extern let cons: [Item] => fn(hd: Item, tl: List[Item]) => List[Item];
 let consErr = cons(true, intList);
 let consInt = cons(1, intList);
-
+extern type KindError = DeepHKT[List, Int];

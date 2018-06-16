@@ -305,12 +305,16 @@ trait Syntax {
           tf +: args
         case Paren(_, a) => Array(a)
         case Prop(_, e, prop) => Array(e, prop)
+        case Error(_) => Array()
       }
 
     def withMeta(meta: Meta): TypeAnnotation = this match {
       case Var(_, ident) => Var(meta, ident)
       case Forall(_, scope, p, body) =>
         Forall(meta, scope, p, body)
+      case Func(_, fs, gp, body) => Func(meta, fs, gp, body)
+      case TApplication(_, f, args) => TApplication(meta, f, args)
+      case Error(_) => Error(meta)
     }
   }
   object TypeAnnotation {

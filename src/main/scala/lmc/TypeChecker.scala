@@ -1027,6 +1027,10 @@ final class TypeChecker(
           meta.typed(inferredInner.meta.typ),
           inferredInner
         )
+      case  P.TypeAnnotation.Error(meta) =>
+        T.TypeAnnotation.Error(
+          meta.typed(Uninferred)
+        )
 
     }
   }
@@ -1064,15 +1068,17 @@ final class TypeChecker(
 
   def getKindOfType(t: Type): Kind = {
     t match {
-      case Var(v) => getKindOfSymbol(v).get
+      case Var(v) => getKindOfSymbol(v).getOrElse(Kind.Star)
       case Constructor(_, kind) => kind
       case Forall(_, inner) => getKindOfType(inner)
       case Func(_, _) => Kind.Star
-      case TApplication(f, arg) =>
+      case TApplication(f, _) =>
         getKindOfType(f) match {
           case Kind.KFun(_, to) => to
           case Kind.Star => Kind.Star
         }
+      case Uninferred =>
+        Kind.Star
     }
   }
 
@@ -1287,6 +1293,7 @@ final class TypeChecker(
     case alias: P.Declaration.TypeAlias if alias.ident.name == typeName => true
     case _: P.Declaration.TypeAlias => false
     case _: P.Declaration.Let => false
+    case _: P.Declaration.Error => false
   }
 
 

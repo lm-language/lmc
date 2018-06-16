@@ -41,6 +41,7 @@
   "types":{
     "ListAlias":"([*] => *)",
     "DeepHKT":"([*] => ([([*] => ([*] => *))] => ([*] => *)))",
+    "KindError":"*",
     "KindMismatch":"*",
     "List":"([*] => *)",
     "String":"*"
@@ -159,7 +160,30 @@
       "types":{
         "Item":"*"
       },
-      "children":[]
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":15,
+              "column":28
+            },
+            "end":{
+              "line":15,
+              "column":69
+            }
+          },
+          "symbols":{
+            "tl":{
+              "typ":"Var(List)[Var(Item)]"
+            },
+            "hd":{
+              "typ":"Var(Item)"
+            }
+          },
+          "types":{},
+          "children":[]
+        }
+      ]
     }
   ]
 }
