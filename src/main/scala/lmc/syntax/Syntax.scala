@@ -133,6 +133,8 @@ trait Syntax {
             case None => ()
           }
           result.toArray
+        case Declaration.Module(_, _, ident, _, genericParams, body) =>
+          (ident +: genericParams) ++ body
         case Declaration.Error(_, _) =>
           Array()
       }
@@ -182,6 +184,14 @@ trait Syntax {
       cases: Array[Enum.Case]
     ) extends Declaration
 
+    case class Module(
+      meta: Meta,
+      modifiers: Set[Declaration.Modifier],
+      ident: Ident,
+      moduleScope: Scope,
+      genericParams: Array[GenericParam],
+      body: Array[Declaration]
+    ) extends Declaration
     case class Error(
       override val meta: Meta,
       override val modifiers: Set[Declaration.Modifier]
@@ -380,6 +390,11 @@ trait Syntax {
       case p: Prop => p.copy(meta)
       case p: Error => p.copy(meta)
       case w: With => w.copy(meta)
+    }
+
+    override def toString: String = this match {
+      case Var(_, ident) => ident.name.toString
+      case _ => super.toString
     }
   }
   object Expression {

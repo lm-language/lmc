@@ -41,7 +41,8 @@ object Parser {
     OVERRIDE -> Declaration.Modifier.Override
   )
   val DECL_PREDICTORS: Set[token.Variant] = Set(
-    LET, EXTERN, TYPE, INCLUDE, ENUM
+    LET, EXTERN, TYPE, INCLUDE, ENUM,
+    MODULE
   ) union DECL_MODIFIERS.keySet
 }
 
@@ -52,7 +53,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
   private var _lastToken: Token = _currentToken
   private var _lookahead: Option[Token] = None
   private def currentToken = _currentToken
-  private var _errors: List[WeakReference[Diagnostic]] = List()
   private var _scopes = List(
     WeakReference(ctx.PrimitiveScope.asInstanceOf[syntax.Parsed._Scope])
   )
@@ -205,16 +205,18 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     node
   }
 
-  def parseDeclaration: Declaration = buildNode((meta, errors) => {
+  def parseDeclaration: Declaration = {
 
-    val modifiersWithTokens = parseModifiers(errors)
+    val modifierErrors = ListBuffer.empty[Diagnostic]
+    val modifiersWithTokens = parseModifiers(modifierErrors)
     val modifiers = modifiersWithTokens.map(_._2).toSet
     val modifierTokens = modifiersWithTokens.map(_._1)
     currentToken.variant match {
       case SEMICOLON =>
         advance()
         parseDeclaration
-      case LET =>
+      case LET => buildNode((meta, errors) => {
+
         advance()
         val pattern = parsePattern()
         val rhs = currentToken.variant match {
@@ -231,7 +233,9 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           pattern,
           rhs
         )
-      case INCLUDE =>
+      })
+      case INCLUDE => buildNode((meta, errors) => {
+
         advance()
         val e = parseExpr()
         expect(errors)(SEMICOLON)
@@ -249,7 +253,10 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           modifiers,
           e
         )
-      case TYPE =>
+
+      })
+      case TYPE => buildNode((meta, errors) => {
+
         advance()
         val ident = parseIdent()
         val kindAnnotation = currentToken.variant match {
@@ -271,7 +278,9 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           modifiers,
           ident, kindAnnotation, rhs
         )
-      case ENUM =>
+      })
+      case ENUM => buildNode((meta, errors) => {
+
         advance()
         val ident = parseIdent()
         withNewScope(enumScope => {
@@ -298,7 +307,39 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
             cases.toArray
           )
         })
-      case _ =>
+
+      })
+      case MODULE => buildNode((meta, errors) => {
+        advance()
+        val ident = parseIdent()
+        withNewScope(moduleScope => {
+          val genericParams = currentToken.variant match {
+            case LSQB =>
+              advance()
+              val params = parseGenericParamsList()
+              expect(errors)(RSQB)
+              params.toArray
+            case _ => Array.empty[GenericParam]
+          }
+          expect(errors)(LBRACE)
+          val body = ListBuffer.empty[Declaration]
+          while (Parser.DECL_PREDICTORS contains currentToken.variant) {
+            body.append(
+              parseDeclaration
+            )
+          }
+          expect(errors)(RBRACE)
+          Declaration.Module(
+            meta, modifiers,
+            ident,
+            moduleScope,
+            genericParams,
+            body.toArray
+          )
+        })
+
+      })
+      case _ => buildNode((meta, errors) => {
         val startTok = currentToken
 
         val skippedDiagnostics = recover()
@@ -313,8 +354,9 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           meta,
           modifiers
         )
+      })
     }
-  })
+  }
 
   private def parseEnumCase(): Declaration.Enum.Case = buildNode((meta, errors) => {
     val name = parseIdent()

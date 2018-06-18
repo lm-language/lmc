@@ -55,7 +55,7 @@ case class TApplication(tFunc: Type, arg: Type) extends Type {
   * Two instances can only match if both their ids are equal.
   */
 case class ExistentialInstance(id: Int, text: String) extends Type {
-  override def toString: String = s"Existential($text)"
+  override def toString: String = s"Existential($id, $text)"
 }
 case class Func(
   from: Array[Func.Param],

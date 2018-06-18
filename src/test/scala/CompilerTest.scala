@@ -30,7 +30,7 @@ class CompilerTest {
     val compiler = new Compiler(paths = List(suitePath))
     for (path <- suiteDir.listFiles()
         filter { _.getName endsWith ".lm" }
-        filter { _.getName contains "RecursiveLet" }
+        filter { _.getName contains "RecursiveModules.lm" }
     ) {
       val filePath = Paths.get(path.getAbsolutePath)
       println(s"Checking $filePath")
@@ -60,7 +60,7 @@ class CompilerTest {
       val symbolFile = File(symbolPath)
       val symbolJSONStr = symbolFile.readAllChars
       val parsedExpectedScope = json.parse(symbolJSONStr)
-      val sourceFile = compiler.getCheckedSourceFile(filePath)
+      val sourceFile = compiler.getParsedSourceFile(filePath)
       val compiledScopeJSON = ScopeJSON.fromScope(compiler)(sourceFile.scope)
       val outputScopeFile = testOutPath.resolve(symbolFileName)
       val compiledScopeJSONString = json.Serialization.writePretty(compiledScopeJSON)
