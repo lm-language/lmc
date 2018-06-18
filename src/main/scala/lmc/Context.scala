@@ -8,6 +8,7 @@ trait Context {
   val PrimitiveScope: Scope
   def makeSymbol(text: String): Symbol
   def getParsedNode(id: Int): Option[Parsed.Node]
+  def getDeclOf(symbol: Symbol): Option[Parsed.Declaration]
 }
 
 object Context {
@@ -16,7 +17,9 @@ object Context {
 
     def setParsedNode(id: Int, node: Parsed.Node): Unit
   }
-  trait Binder extends Context {}
+  trait Binder extends Context {
+    def setDeclOf(symbol: Symbol, decl: Parsed.Declaration): Unit
+  }
   trait Renamer extends Context {}
 
   trait TC extends Context {

@@ -10,7 +10,41 @@ import scala.collection.mutable.ListBuffer
   * of nodes.
   */
 class Binder(
-  ctx: Context
-) {
+  ctx: Context.Binder
+)(implicit error: Diagnostic => Unit) {
+  def bind(node: Node): Unit = {
+    bindWorker(node)
+    node.children.foreach(bind)
+  }
 
+  private def bindWorker(node: Node): Unit = {
+    node match {
+      case m: Declaration.Module =>
+        bindIdentifier(m, m.ident)
+      case p: Pattern.Var =>
+        findDeclParent(p).foreach(parent =>
+          bindIdentifier(parent, p.ident))
+      case _ => ()
+    }
+  }
+
+  private def bindIdentifier(decl: Declaration, ident: Ident): Unit = {
+    ident.meta.scope.get match {
+      case Some(s) =>
+        val symbol = ctx.makeSymbol(ident.name)
+        s.setSymbol(ident.name, ScopeEntry(symbol))
+        ctx.setDeclOf(symbol, decl)
+        s.addDeclaration(symbol, decl.meta.id)
+    }
+  }
+
+  private def findDeclParent(node: Node): Option[Declaration] = {
+    node match {
+      case d: Declaration => Some(d)
+      case _ =>
+        node.meta.parentId
+          .flatMap(ctx.getParsedNode)
+          .flatMap(findDeclParent)
+    }
+  }
 }

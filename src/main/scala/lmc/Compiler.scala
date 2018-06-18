@@ -11,12 +11,14 @@ import diagnostics._
 import io.{File, Stream, StringStream}
 import lmc.syntax.{Named, Parsed, Typed}
 
+import scala.collection.mutable.ListBuffer
 import scala.ref.WeakReference
 
 class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   extends Context
     with Context.TC
-    with Context.Parser {
+    with Context.Parser
+    with Context.Binder {
   private val _charStreams = mutable.Map.empty[Path, Stream[Char]]
   private val _typedSourceFiles = mutable.WeakHashMap.empty[Path, Typed.SourceFile]
   private val _parsedSourceFiles = mutable.WeakHashMap.empty[Path, Parsed.SourceFile]
@@ -26,6 +28,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private var _nextNodeId = 0
   private val _typeVariables = mutable.WeakHashMap.empty[Symbol, (Type, Kind)]
   private val _parsedNodes = mutable.WeakHashMap.empty[Int, Parsed.Node]
+  private val _declarationOf = mutable.HashMap.empty[Symbol, Int]
 
   private val primitiveTypes = Map(
     "Unit" -> Kind.Star,
@@ -92,9 +95,10 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
         sf
       case None =>
         val parsed = getParsedSourceFile(path)
-        val checkedSourceFile = checker.inferSourceFile(parsed)
-        cacheCheckedSourceFile(path, checkedSourceFile)
-        checkedSourceFile
+        ???
+//        val checkedSourceFile = checker.inferSourceFile(parsed)
+//        cacheCheckedSourceFile(path, checkedSourceFile)
+//        checkedSourceFile
     }
   }
 
@@ -121,10 +125,17 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   def getSourceFileDiagnostics(
     path: Path
   ): Iterable[Diagnostic] = {
-    val result = getCheckedSourceFile(path)
-      .errors.toSet union getParsedSourceFile(path).errors.toSet
-
-    result
+    val parsedSourceFile = getParsedSourceFile(path)
+    val result = parsedSourceFile.errors
+    val tcErrors = ListBuffer.empty[Diagnostic]
+    val binder = new Binder(this)(e => {
+      tcErrors.append(e)
+    })
+    binder.bind(parsedSourceFile)
+    checker.check(parsedSourceFile)(e => {
+      tcErrors.append(e)
+    })
+    result ++ tcErrors
   }
 
   def getParsedSourceFile(path: Path): Parsed.SourceFile = {
@@ -248,4 +259,11 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
 
   override def getParsedNode(id: Int): Option[Parsed.Node] =
     _parsedNodes.get(id)
+
+  override def getDeclOf(symbol: Symbol): Option[Parsed.Declaration] =
+    _declarationOf.get(symbol).flatMap(getParsedNode)
+      .asInstanceOf[Option[Parsed.Declaration]]
+
+  override def setDeclOf(symbol: Symbol, decl: Parsed.Declaration): Unit =
+    _declarationOf.update(symbol, decl.meta.id)
 }

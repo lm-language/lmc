@@ -1,0 +1,10 @@
+
+module A {
+  let x = B.x;
+  let y = 10;
+}
+
+module B {
+  let y = A.y;
+  let x = 11;
+}
