@@ -95,15 +95,17 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
         sf
       case None =>
         val parsed = getParsedSourceFile(path)
-        ???
-//        val checkedSourceFile = checker.inferSourceFile(parsed)
-//        cacheCheckedSourceFile(path, checkedSourceFile)
-//        checkedSourceFile
+        val binder = new Binder(this)
+        binder.bind(parsed)
+        val checkedSourceFile = checker.inferSourceFile(parsed)
+        checker.solveConstraints()
+        cacheCheckedSourceFile(path, checkedSourceFile)
+        checkedSourceFile
     }
   }
 
   def getType(symbol: Symbol): Option[Type] = {
-    checker.getTypeOfSymbol(symbol)
+    checker.getTypeOfSymbol(symbol).map(checker.applyEnv)
   }
 
 
@@ -126,16 +128,9 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     path: Path
   ): Iterable[Diagnostic] = {
     val parsedSourceFile = getParsedSourceFile(path)
-    val result = parsedSourceFile.errors
-    val tcErrors = ListBuffer.empty[Diagnostic]
-    val binder = new Binder(this)(e => {
-      tcErrors.append(e)
-    })
-    binder.bind(parsedSourceFile)
-    checker.check(parsedSourceFile)(e => {
-      tcErrors.append(e)
-    })
-    result ++ tcErrors
+    val parsedErrors = parsedSourceFile.errors
+    val checkedSourceFile = getCheckedSourceFile(path)
+    parsedErrors ++ checkedSourceFile.errors
   }
 
   def getParsedSourceFile(path: Path): Parsed.SourceFile = {
@@ -204,7 +199,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private def getHoverInfoForIdent(ident: Typed.Ident): Option[String] = {
     val symbol = ident.name
 
-    checker.getTypeOfSymbol(symbol).map(_.toString) match {
+    checker.getTypeOfSymbol(symbol).map(checker.applyEnv).map(_.toString) match {
       case Some(t) => Some(t)
       case None =>
         checker.getKindOfSymbol(ident.name).map(_.toString)

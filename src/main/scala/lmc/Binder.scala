@@ -11,7 +11,7 @@ import scala.collection.mutable.ListBuffer
   */
 class Binder(
   ctx: Context.Binder
-)(implicit error: Diagnostic => Unit) {
+) {
   def bind(node: Node): Unit = {
     bindWorker(node)
     node.children.foreach(bind)

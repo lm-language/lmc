@@ -165,7 +165,7 @@ object ScopeJSON {
           compiler.getType(e.symbol) match {
             case Some(t) => t.toString
             case None =>
-              throw new Error(s"""CompilerBug: No type for symbol ${e.symbol.text}""")
+              throw new Error(s"""CompilerBug: No type for symbol ${e.symbol.text}:${e.symbol.id}""")
           }
         })
         .mapValues(SymbolEntryJSON)
