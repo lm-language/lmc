@@ -27,17 +27,18 @@ final class TypeChecker(
 
   private val _constraints = mutable.ListBuffer.empty[Constraint]
 
+  def symbolTypes = _symbolTypes
+  def generics = _generics
+
   def addConstraint(constraint: Constraint): Unit = {
     _constraints.append(constraint)
   }
 
+  def constraints: Iterable[Constraint] = _constraints
+
   def inferSourceFile(sourceFile: P.SourceFile): T.SourceFile = {
     val typ = ctx.makeGenericType(sourceFile.loc.path.toString)
     val declarations = sourceFile.declarations.map(d => inferDeclaration(d, None))
-    solveConstraints()
-    for ((k, t) <- _symbolTypes) {
-      _symbolTypes.update(k, applyEnv(t))
-    }
     T.SourceFile(
       meta = sourceFile.meta.typed(typ),
       scope = sourceFile.scope,
@@ -63,9 +64,87 @@ final class TypeChecker(
           typedPattern,
           Some(typedRhs)
         )
+      case P.Declaration.Let(meta, modifiers, p: P.Pattern.Annotated, Some(rhs)) =>
+        val typedPattern = inferPattern(p, moduleType)
+        val typedRhs = checkExpression(rhs, typedPattern.meta.typ)
+        T.Declaration.Let(
+          meta.typed(typedRhs.meta.typ),
+          modifiers.map(_.typed),
+          typedPattern,
+          Some(typedRhs)
+        )
     }
   }
 
+  private def inferPattern(p: P.Pattern, moduleType: Option[Type]): T.Pattern = {
+    p match {
+      case P.Pattern.Annotated(meta, inner, annotation) =>
+        val typedAnnotation = inferTypeAnnotation(annotation)
+        val typedInner = checkPattern(inner, typedAnnotation.meta.typ, moduleType)
+        T.Pattern.Annotated(
+          meta.typed(typedAnnotation.meta.typ),
+          typedInner,
+          typedAnnotation
+        )
+    }
+  }
+
+  private def inferTypeAnnotation(annotation: P.TypeAnnotation): T.TypeAnnotation = {
+    annotation match {
+      case P.TypeAnnotation.Var(meta, ident) =>
+        val typedIdent = inferTypeVarIdent(ident)
+        T.TypeAnnotation.Var(
+          meta.typed(typedIdent.meta.typ),
+          typedIdent
+        )
+    }
+  }
+
+  private def checkTypeAnnotation(annotation: P.TypeAnnotation, t: Type): T.TypeAnnotation = {
+    val inferred = inferTypeAnnotation(annotation)
+    addConstraint(Unifies(annotation.loc, t, inferred.meta.typ))
+    inferred
+  }
+
+  private def inferTypeVarIdent(ident: P.Ident): T.Ident = {
+    ident.scope.resolveTypeEntry(ident.name) match {
+      case Some(TypeEntry(symbol)) =>
+        val typ = resolveTypeVar(symbol)
+        T.Ident(
+          ident.meta.typed(typ),
+          symbol
+        )
+      case None =>
+        T.Ident(
+          ident.meta.typed(Uninferred).withDiagnostic(
+            Diagnostic(
+              loc = ident.loc,
+              severity = Severity.Error,
+              variant = UnBoundTypeVar(ident.name)
+            )
+          ),
+          ctx.makeSymbol(ident.name)
+        )
+    }
+  }
+
+  private def resolveTypeVar(symbol: Symbol): Type = {
+    _typeVars.get(symbol) match {
+      case Some(Var(sym)) =>
+        resolveTypeVar(sym)
+      case Some(t) => t
+      case None => Var(symbol)
+    }
+  }
+
+  private def checkExpression(e: P.Expression, typ: Type): T.Expression = {
+    e match {
+      case _ =>
+        val typed = inferExpression(e)
+        addConstraint(Unifies(e.loc, typ, typed.meta.typ))
+        typed
+    }
+  }
   private def inferExpression(e: P.Expression): T.Expression = e match {
     case P.Expression.Literal(meta, P.Expression.Literal.LInt(x)) =>
       T.Expression.Literal(meta.typed(Primitive.Int), T.Expression.Literal.LInt(x))
@@ -110,12 +189,31 @@ final class TypeChecker(
         meta.typed(typ),
         checkBindingVarIdent(ident, typ, moduleType)
       )
+    case P.Pattern.Paren(meta, inner) =>
+      val typedInner = checkPattern(inner, typ, moduleType)
+      T.Pattern.Paren(
+        meta.typed(typ),
+        typedInner
+      )
+    case P.Pattern.Annotated(meta, inner, annotation) =>
+      val typedAnnotation = checkTypeAnnotation(annotation, typ)
+      val typedInner = checkPattern(
+        inner,
+        typedAnnotation.meta.typ,
+        moduleType)
+      T.Pattern.Annotated(
+        meta.typed(typedAnnotation.meta.typ),
+        typedInner,
+        typedAnnotation
+      )
   }
 
   private def checkBindingVarIdent(ident: P.Ident, t: Type, moduleType: Option[Type]): T.Ident = {
     moduleType match {
       case Some(modTyp) =>
         addConstraint(HasDeclaration(ident.loc, modTyp, ident.name, t))
+      case None =>
+        ()
     }
     ident.scope.symbols.get(ident.name) match {
       case Some(ScopeEntry(symbol, _)) =>
@@ -166,46 +264,6 @@ final class TypeChecker(
     )
   }
 
-
-  def solveConstraints(constraints: List[Constraint] = this._constraints.toList): Unit = {
-    constraints match {
-      case Nil => Nil
-      case hd::tl =>
-        hd match {
-          case h: HasDeclaration =>
-            solveConstraints(hasDeclaration(h, tl))
-          case u: Unifies =>
-            solveConstraints(unifies(u, tl))
-          case h: HasProperty =>
-            solveConstraints(hasProperty(h, tl))
-        }
-    }
-  }
-
-  private def unifies(u: Unifies, constraints: List[Constraint]): List[Constraint] = {
-    (u.expected, u.found) match {
-      case (ExistentialInstance(id, _), t) =>
-        _generics.update(id, t)
-        constraints.map(applyEnv)
-      case (t, ExistentialInstance(id, _)) =>
-        _generics.update(id, t)
-        constraints.map(applyEnv)
-      case _ =>
-        constraints
-    }
-  }
-
-  private def applyEnv(constraint: Constraint): Constraint = {
-    constraint match {
-      case HasProperty(loc, t1, prop, t2) =>
-        HasProperty(loc, applyEnv(t1), prop, applyEnv(t2))
-      case HasDeclaration(loc, t1, prop, t2) =>
-        HasDeclaration(loc, applyEnv(t1), prop, applyEnv(t2))
-      case Unifies(loc, t1, t2) =>
-        Unifies(loc, applyEnv(t1), applyEnv(t2))
-    }
-  }
-
   def applyEnv(t: Type): Type = t match {
     case e@ExistentialInstance(i, n) =>
       _generics.get(i) match {
@@ -216,23 +274,6 @@ final class TypeChecker(
       Module(types, values.mapValues(applyEnv))
     case _ => t
   }
-
-  private def hasDeclaration(hasDecl: HasDeclaration, constraints: List[Constraint]): List[Constraint] = {
-    constraints.map({
-      case hasProp: HasProperty if hasProp.t == hasDecl.t && hasProp.prop == hasDecl.prop =>
-        Unifies(hasProp.loc, hasProp.propType, hasDecl.propType)
-      case c => c
-    })
-  }
-
-  private def hasProperty(hasProp: HasProperty, constraints: List[Constraint]): List[Constraint] = {
-    constraints.flatMap({
-      case hasDecl: HasDeclaration if hasProp.t == hasDecl.t && hasProp.prop == hasDecl.prop =>
-        List(Unifies(hasProp.loc, hasDecl.propType, hasProp.propType), hasDecl)
-      case c => List(c)
-    })
-  }
-
 
   @tailrec def isBindingIdent(ident: P.Ident, _current: Option[P.Node] = None): Boolean = {
     val current = _current.getOrElse(ident)

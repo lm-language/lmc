@@ -97,9 +97,22 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
         val parsed = getParsedSourceFile(path)
         val binder = new Binder(this)
         binder.bind(parsed)
-        val checkedSourceFile = checker.inferSourceFile(parsed)
-        checker.solveConstraints()
-        cacheCheckedSourceFile(path, checkedSourceFile)
+        var checkedSourceFile = checker.inferSourceFile(parsed)
+        val errors = ListBuffer.empty[Diagnostic]
+        val solver = new ConstraintSolver(checker, error => {
+          errors.append(error)
+        })
+
+        solver.solveConstraints(checker.constraints.toList)
+        if (errors.nonEmpty) {
+          checkedSourceFile = checkedSourceFile.copy(
+            meta = checkedSourceFile.meta.withDiagnostics(errors)
+          )
+        }
+        cacheCheckedSourceFile(
+          path,
+          checkedSourceFile
+        )
         checkedSourceFile
     }
   }
