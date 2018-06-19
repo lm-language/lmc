@@ -50,7 +50,35 @@ final class TypeChecker(
     decl match {
       case mod: P.Declaration.Module => inferModuleDeclaration(mod)
       case let: P.Declaration.Let => inferLetDeclaration(let, moduleType)
+      case alias: P.Declaration.TypeAlias =>
+        inferTypeAliasDeclaration(alias, moduleType)
     }
+  }
+
+  private def inferTypeAliasDeclaration(
+    d: P.Declaration.TypeAlias, moduleType: Option[Type]
+  ): T.Declaration.TypeAlias = {
+    d match {
+      case P.Declaration.TypeAlias(
+        meta, modifiers, ident, kindAnnotation, Some(rhs)
+      ) =>
+        val typedIdent = inferBindingTypeVarIdent(ident)
+        val typedKindAnnotation = kindAnnotation.map(inferKindAnnotation)
+        val typedRhs = inferTypeAnnotation(rhs)
+        setTypeVar(typedIdent.name, typedRhs.meta.typ)
+        setKindOfSymbol(typedIdent.name, Kind.Star)
+        T.Declaration.TypeAlias(
+          meta.typed(Primitive.Unit),
+          modifiers.map(_.typed),
+          typedIdent,
+          typedKindAnnotation,
+          Some(typedRhs)
+        )
+    }
+  }
+
+  private def inferKindAnnotation(k: P.KindAnnotation): T.KindAnnotation = {
+    ???
   }
 
   private def inferLetDeclaration(let: P.Declaration.Let, moduleType: Option[Type]): T.Declaration.Let = {
@@ -174,9 +202,25 @@ final class TypeChecker(
           case None =>
             ctx.makeGenericType(symbol.text)
         }
+
+        val error = ctx.getDeclOf(symbol) match {
+          case Some(d: P.Declaration.Let) =>
+            if (d.loc.start > ident.loc.start) {
+              Some(
+                Diagnostic(
+                  loc = ident.loc,
+                  severity = Severity.Error,
+                  variant = UseBeforeAssignment(symbol.text)
+                )
+              )
+            } else {
+              None
+            }
+          case None => None
+        }
         setTypeOfSymbol(symbol, typ)
         T.Ident(
-          ident.meta.typed(typ),
+          ident.meta.typed(typ).withDiagnostics(error),
           symbol
         )
       case None => ???
@@ -266,24 +310,22 @@ final class TypeChecker(
 
   def applyEnv(t: Type): Type = t match {
     case e@ExistentialInstance(i, n) =>
-      _generics.get(i) match {
-        case Some(t1) => t1
-        case None => e
-      }
+      _generics.get(i).map(applyEnv).getOrElse(e)
+    case v@Var(symbol) =>
+      getTypeVar(symbol).map(applyEnv).getOrElse(v)
     case Module(types, values) =>
       Module(types, values.mapValues(applyEnv))
     case _ => t
   }
 
-  @tailrec def isBindingIdent(ident: P.Ident, _current: Option[P.Node] = None): Boolean = {
-    val current = _current.getOrElse(ident)
-    val parentOpt = current.meta.parentId.flatMap(ctx.getParsedNode)
-    parentOpt match {
-      case Some(p: P.Pattern) => true
-      case Some(mod: P.Declaration.Module) if ident.meta.id == mod.ident.meta.id =>
-        true
-      case Some(node) => isBindingIdent(ident, Some(node))
-      case None => false
+  def inferBindingTypeVarIdent(ident: P.Ident): T.Ident = {
+    ident.scope.resolveTypeEntry(ident.name) match {
+      case Some(TypeEntry(symbol)) =>
+        T.Ident(
+          ident.meta.typed(Primitive.Unit),
+          symbol
+        )
+      case None => ???
     }
   }
 
@@ -319,6 +361,10 @@ final class TypeChecker(
     _typeVars .update(symbol, typ)
   }
 
+  def getTypeVar(symbol: Symbol): Option[Type] = {
+    _typeVars.get(symbol)
+  }
+
 
   def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
     _symbolKinds.get(symbol)
@@ -341,3 +387,4 @@ sealed trait Constraint {
 case class Unifies(loc: Loc, expected: Type, found: Type) extends Constraint
 case class HasProperty(loc: Loc, t: Type, prop: String, propType: Type) extends Constraint
 case class HasDeclaration(loc: Loc, t: Type, prop: String, propType: Type) extends Constraint
+case class IsAliasFor(loc: Loc, symbol: Symbol, typ: Type) extends Constraint

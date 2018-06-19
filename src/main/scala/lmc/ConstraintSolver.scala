@@ -36,6 +36,22 @@ class ConstraintSolver(
         constraints
       case (Var(s1), Var(s2)) if s1.id == s2.id =>
         constraints
+      case (t, Var(s1)) if checker.getTypeVar(s1).isDefined =>
+         checker.getTypeVar(s1) match {
+          case Some(t1) =>
+            Unifies(u.loc, t, t1)::constraints
+          case None =>
+            //
+            constraints
+        }
+      case (Var(s1), t) if checker.getTypeVar(s1).isDefined =>
+         checker.getTypeVar(s1) match {
+          case Some(t1) =>
+            Unifies(u.loc, t1, t)::constraints
+          case None =>
+            //
+            constraints
+        }
       case (ExistentialInstance(id, _), t) =>
         checker.generics.update(id, t)
         constraints.map(applyEnv)

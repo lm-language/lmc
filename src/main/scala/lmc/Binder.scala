@@ -24,6 +24,8 @@ class Binder(
       case p: Pattern.Var =>
         findDeclParent(p).foreach(parent =>
           bindIdentifier(parent, p.ident))
+      case a: Declaration.TypeAlias =>
+        bindTypeAlias(a)
       case _ => ()
     }
   }
@@ -36,6 +38,11 @@ class Binder(
         ctx.setDeclOf(symbol, decl)
         s.addDeclaration(symbol, decl.meta.id)
     }
+  }
+
+  private def bindTypeAlias(alias: Declaration.TypeAlias): Unit = {
+    val symbol = ctx.makeSymbol(alias.ident.name)
+    alias.scope.setTypeVar(alias.ident.name, TypeEntry(symbol))
   }
 
   private def findDeclParent(node: Node): Option[Declaration] = {
