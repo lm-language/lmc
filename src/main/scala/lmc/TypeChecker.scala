@@ -223,7 +223,18 @@ final class TypeChecker(
           ident.meta.typed(typ).withDiagnostics(error),
           symbol
         )
-      case None => ???
+      case None =>
+        val symbol = ctx.makeSymbol(ident.name)
+        T.Ident(
+          ident.meta.typed(Uninferred).withDiagnostic(
+            Diagnostic(
+              loc = ident.loc,
+              severity = Severity.Error,
+              variant = UnBoundVar(ident.name)
+            )
+          ),
+          symbol
+        )
     }
   }
 
