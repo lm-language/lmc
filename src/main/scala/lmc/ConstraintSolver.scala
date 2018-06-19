@@ -1,16 +1,22 @@
 package lmc
 
-import lmc.diagnostics.{Diagnostic, Severity, TypeMismatch}
+import lmc.diagnostics._
 import lmc.types._
 
 class ConstraintSolver(
   checker: TypeChecker,
-  error: Diagnostic => Unit
+  error: Diagnostic => Unit,
 ) {
-
   def solveConstraints(
     constraints: List[Constraint]
   ): Unit = {
+
+//    println("\n=================")
+//    println("solve constraints")
+//    println("=================")
+    for (constraint <- constraints) {
+//      println(constraint)
+    }
     constraints match {
       case Nil =>
         for ((k, v) <- checker.symbolTypes) {
@@ -24,7 +30,36 @@ class ConstraintSolver(
             solveConstraints(unifies(u, tl))
           case h: HasProperty =>
             solveConstraints(hasProperty(h, tl))
+          case h: HasKind =>
+            solveConstraints(hasKind(h, tl))
         }
+    }
+  }
+
+  private def hasKind(
+    h: HasKind, constraints: List[Constraint]
+  ): List[Constraint] = {
+    val kind = getKindOfType(h.t)
+    if (kind != h.kind) {
+      error(
+        Diagnostic(
+          loc = h.loc,
+          severity = Severity.Error,
+          variant = KindMismatch(h.kind, kind)
+        )
+      )
+    }
+    constraints
+  }
+
+  private def getKindOfType(t: Type): Kind = {
+    t match {
+      case Var(name) =>
+        checker.getKindOfSymbol(name).getOrElse(Kind.Star)
+      case Constructor(_, kind) =>
+        kind
+      case Func(_, _) => Kind.Star
+      case Forall(_, to) => getKindOfType(to)
     }
   }
 
@@ -49,7 +84,6 @@ class ConstraintSolver(
           case Some(t1) =>
             Unifies(u.loc, t1, t)::constraints
           case None =>
-            //
             constraints
         }
       case (ExistentialInstance(id, _), t) =>

@@ -94,14 +94,17 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
       case Some(sf) =>
         sf
       case None =>
-        val parsed = getParsedSourceFile(path)
-        val binder = new Binder(this)
-        binder.bind(parsed)
-        var checkedSourceFile = checker.inferSourceFile(parsed)
+
         val errors = ListBuffer.empty[Diagnostic]
-        val solver = new ConstraintSolver(checker, error => {
+        val addErrors = (error: Diagnostic) => {
           errors.append(error)
-        })
+        }
+        val parsed = getParsedSourceFile(path)
+        val binder = new Binder(this, addErrors)
+        binder.bind(parsed)
+        checker.clearConstraints()
+        var checkedSourceFile = checker.inferSourceFile(parsed)
+        val solver = new ConstraintSolver(checker, addErrors)
 
         solver.solveConstraints(checker.constraints.toList)
         if (errors.nonEmpty) {

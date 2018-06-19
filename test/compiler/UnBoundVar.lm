@@ -1,1 +1,2 @@
 let x = a;
+type A = B;

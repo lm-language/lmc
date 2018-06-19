@@ -25,7 +25,7 @@ final class TypeChecker(
   private val _checked = mutable.Set.empty[Int]
   private val _generics = mutable.HashMap.empty[Int, Type]
 
-  private val _constraints = mutable.ListBuffer.empty[Constraint]
+  private var _constraints = mutable.ListBuffer.empty[Constraint]
 
   def symbolTypes = _symbolTypes
   def generics = _generics
@@ -35,6 +35,10 @@ final class TypeChecker(
   }
 
   def constraints: Iterable[Constraint] = _constraints
+
+  def clearConstraints(): Unit = {
+    _constraints = ListBuffer.empty
+  }
 
   def inferSourceFile(sourceFile: P.SourceFile): T.SourceFile = {
     val typ = ctx.makeGenericType(sourceFile.loc.path.toString)
@@ -64,11 +68,16 @@ final class TypeChecker(
       ) =>
         val typedIdent = inferBindingTypeVarIdent(ident)
         val typedKindAnnotation = kindAnnotation.map(inferKindAnnotation)
+        val kind = typedKindAnnotation.map(kindAnnotationToKind)
+          .getOrElse(Kind.Star)
         val typedRhs = inferTypeAnnotation(rhs)
-        setTypeVar(typedIdent.name, typedRhs.meta.typ)
-        setKindOfSymbol(typedIdent.name, Kind.Star)
+        addConstraint(HasKind(typedRhs.loc, typedRhs.meta.typ, kind))
+        val errors = assignTypeToTVar(rhs.loc, typedIdent.name, typedRhs.meta.typ)
+        setKindOfSymbol(typedIdent.name, kind)
+        None
+
         T.Declaration.TypeAlias(
-          meta.typed(Primitive.Unit),
+          meta.typed(Primitive.Unit).withDiagnostics(errors),
           modifiers.map(_.typed),
           typedIdent,
           typedKindAnnotation,
@@ -77,8 +86,35 @@ final class TypeChecker(
     }
   }
 
+  private def kindAnnotationToKind(
+    kindAnnotation: T.KindAnnotation
+  ): Kind = {
+    kindAnnotation match {
+      case T.KindAnnotation.Star(_) => Kind.Star
+      case T.KindAnnotation.Func(_, from, to) =>
+        from
+          .map(kindAnnotationToKind)
+          .foldRight(kindAnnotationToKind(to))(
+            Kind.KFun.apply
+          )
+    }
+  }
+
   private def inferKindAnnotation(k: P.KindAnnotation): T.KindAnnotation = {
-    ???
+    k match {
+      case P.KindAnnotation.Star(meta) =>
+        T.KindAnnotation.Star(meta.typed(Primitive.Unit))
+      case P.KindAnnotation.Func(meta, from, to) =>
+        T.KindAnnotation.Func(
+          meta.typed(Primitive.Unit),
+          from.map(inferKindAnnotation),
+          inferKindAnnotation(to)
+        )
+      case P.KindAnnotation.Error(meta) =>
+        T.KindAnnotation.Error(
+          meta.typed(Primitive.Unit)
+        )
+    }
   }
 
   private def inferLetDeclaration(let: P.Declaration.Let, moduleType: Option[Type]): T.Declaration.Let = {
@@ -117,7 +153,9 @@ final class TypeChecker(
     }
   }
 
-  private def inferTypeAnnotation(annotation: P.TypeAnnotation): T.TypeAnnotation = {
+  private def inferTypeAnnotation(
+    annotation: P.TypeAnnotation,
+  ): T.TypeAnnotation = {
     annotation match {
       case P.TypeAnnotation.Var(meta, ident) =>
         val typedIdent = inferTypeVarIdent(ident)
@@ -125,8 +163,60 @@ final class TypeChecker(
           meta.typed(typedIdent.meta.typ),
           typedIdent
         )
+      case P.TypeAnnotation.Forall(meta, scope, params, body) =>
+        val typedParams = inferGenericParams(params)
+        val typedBody = inferTypeAnnotation(body)
+        T.TypeAnnotation.Forall(
+          meta.typed(Primitive.Unit),
+          scope,
+          typedParams,
+          typedBody
+        )
+      case P.TypeAnnotation.Func(meta, funcScope, from, to) =>
+        val typedFrom = from.map({
+          case (Some(ident), to) =>
+            val typedTo = inferTypeAnnotation(to)
+            (Some(T.Ident(
+              meta.typed(typedTo.meta.typ),
+              ctx.makeSymbol(ident.name)
+            )), typedTo)
+          case (None, to) =>
+            (None, inferTypeAnnotation(to))
+        })
+        val typedTo = inferTypeAnnotation(to)
+        val typ = Func(
+          typedFrom.map({
+            case (label, annot) =>
+              label.map(_.name) -> annot.meta.typ
+          }),
+          typedTo.meta.typ
+        )
+        T.TypeAnnotation.Func(
+          meta.typed(typ),
+          funcScope,
+          typedFrom,
+          typedTo
+        )
     }
   }
+
+  private def inferGenericParams(params: Array[P.GenericParam]): Array[T.GenericParam] = {
+    params.map(inferGenericParam)
+  }
+
+  private def inferGenericParam(param: P.GenericParam): T.GenericParam = {
+    val ident = inferBindingTypeVarIdent(param.ident)
+    val kindAnnotation = param.kindAnnotation.map(inferKindAnnotation)
+    val kind = kindAnnotation.map(kindAnnotationToKind).getOrElse(Kind.Star)
+    setKindOfSymbol(ident.name, kind)
+    T.GenericParam(
+      param.meta.typed(Primitive.Unit),
+      ident,
+      kindAnnotation
+    )
+  }
+
+
 
   private def checkTypeAnnotation(annotation: P.TypeAnnotation, t: Type): T.TypeAnnotation = {
     val inferred = inferTypeAnnotation(annotation)
@@ -368,6 +458,36 @@ final class TypeChecker(
     }
   }
 
+  def assignTypeToTVar(loc: Loc, symbol: Symbol, typ: Type): Iterable[Diagnostic] = {
+    if (occursIn(symbol, typ)) {
+      Some(
+        Diagnostic(
+          loc = loc,
+          severity = Severity.Error,
+          variant = CyclicType
+        )
+      )
+    } else {
+      _typeVars.update(symbol, typ)
+      None
+    }
+  }
+
+  private def occursIn(symbol: Symbol, typ: Type): Boolean = {
+    typ match {
+      case Var(s) if s == symbol => true
+      case Var(_) => false
+      case Constructor(_, _) | Uninferred | ErrorType => false
+      case Func(from, to) =>
+        from.map(_._2).exists(t => occursIn(symbol, t)) ||
+          occursIn(symbol, to)
+      case TApplication(f, arg) =>
+        occursIn(symbol, f) || occursIn(symbol, arg)
+      case Module(_, values) =>
+        values.values.exists(t => occursIn(symbol, t))
+    }
+  }
+
   def setTypeVar(symbol: Symbol, typ: Type): Unit = {
     _typeVars .update(symbol, typ)
   }
@@ -375,7 +495,6 @@ final class TypeChecker(
   def getTypeVar(symbol: Symbol): Option[Type] = {
     _typeVars.get(symbol)
   }
-
 
   def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
     _symbolKinds.get(symbol)
@@ -393,9 +512,10 @@ sealed trait Constraint {
     case Unifies(_, expected, found) => s"$expected == $found"
     case HasDeclaration(_, t, prop, propType) => s"let $t.$prop: $propType"
     case HasProperty(_, t, prop, propType) => s"$t.$prop == $propType"
+    case HasKind(_, t, kind) => s"$t : $kind"
   }
 }
 case class Unifies(loc: Loc, expected: Type, found: Type) extends Constraint
 case class HasProperty(loc: Loc, t: Type, prop: String, propType: Type) extends Constraint
 case class HasDeclaration(loc: Loc, t: Type, prop: String, propType: Type) extends Constraint
-case class IsAliasFor(loc: Loc, symbol: Symbol, typ: Type) extends Constraint
+case class HasKind(loc: Loc, t: Type, kind: Kind) extends Constraint

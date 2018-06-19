@@ -1,18 +1,32 @@
 {
-  "diagnostics" : [
+  "diagnostics":[
     {
-      "loc" : {
-        "start" : {
-          "line" : 1,
-          "column" : 9
+      "loc":{
+        "start":{
+          "line":1,
+          "column":9
         },
-        "end" : {
-          "line" : 1,
-          "column" : 9
+        "end":{
+          "line":1,
+          "column":9
         }
       },
-      "severity" : "Error",
-      "message" : "UnBoundVar(a)"
+      "severity":"Error",
+      "message":"UnBoundVar(a)"
+    },
+    {
+      "loc":{
+        "start":{
+          "line":2,
+          "column":10
+        },
+        "end":{
+          "line":2,
+          "column":10
+        }
+      },
+      "severity":"Error",
+      "message":"UnBoundTypeVar(B)"
     }
   ]
 }

@@ -1,16 +1,16 @@
 package lmc
 
-import lmc.common.{Pos, ScopeBuilder, ScopeEntry, Scope, TypeEntry}
+import lmc.common.{ScopeEntry, TypeEntry}
 import lmc.syntax.Parsed._
 import lmc.diagnostics._
-import scala.collection.mutable.ListBuffer
 
 /**
   * Adds String -> Symbol mappings in scopes
   * of nodes.
   */
 class Binder(
-  ctx: Context.Binder
+  ctx: Context.Binder,
+  error: Diagnostic => Unit
 ) {
   def bind(node: Node): Unit = {
     bindWorker(node)
@@ -22,7 +22,8 @@ class Binder(
       case m: Declaration.Module =>
         bindIdentifier(m, m.ident)
       case p: Pattern.Var =>
-        findDeclParent(p).foreach(parent =>
+        val decl = findDeclParent(p)
+        decl.foreach(parent =>
           bindIdentifier(parent, p.ident))
       case a: Declaration.TypeAlias =>
         bindTypeAlias(a)
@@ -32,16 +33,39 @@ class Binder(
 
   private def bindIdentifier(decl: Declaration, ident: Ident): Unit = {
     ident.meta.scope.get match {
-      case Some(s) =>
+      case Some(scope) =>
         val symbol = ctx.makeSymbol(ident.name)
-        s.setSymbol(ident.name, ScopeEntry(symbol))
+        scope.getSymbol(ident.name) match {
+          case Some(_) =>
+            error(
+              Diagnostic(
+                loc = ident.loc,
+                severity = Severity.Error,
+                variant = DuplicateBinding(ident.name)
+              )
+            )
+          case None => ()
+        }
+
+        scope.setSymbol(ident.name, ScopeEntry(symbol))
         ctx.setDeclOf(symbol, decl)
-        s.addDeclaration(symbol, decl.meta.id)
+        scope.addDeclaration(symbol, decl.meta.id)
     }
   }
 
   private def bindTypeAlias(alias: Declaration.TypeAlias): Unit = {
     val symbol = ctx.makeSymbol(alias.ident.name)
+    alias.scope.typeSymbols.get(alias.ident.name) match {
+      case Some(_) =>
+        error(
+          Diagnostic(
+            loc = alias.ident.loc,
+            severity = Severity.Error,
+            variant = DuplicateBinding(alias.ident.name)
+          )
+        )
+      case None => ()
+    }
     alias.scope.setTypeVar(alias.ident.name, TypeEntry(symbol))
   }
 

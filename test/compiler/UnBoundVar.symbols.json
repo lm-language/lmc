@@ -1,22 +1,21 @@
 {
-  "loc" : {
-    "start" : {
-      "line" : 1,
-      "column" : 1
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
     },
-    "end" : {
-      "line" : 2,
-      "column" : 1
+    "end":{
+      "line":3,
+      "column":1
     }
   },
-  "symbols" : {
-    "x" : {
-      "typ" : "Uninferred"
+  "symbols":{
+    "x":{
+      "typ":"Uninferred"
     }
   },
-  "types" : {
-    
+  "types":{
+    "A":"*"
   },
-  "children" : [
-  ]
+  "children":[]
 }
