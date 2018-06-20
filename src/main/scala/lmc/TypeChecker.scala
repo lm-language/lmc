@@ -303,10 +303,62 @@ final class TypeChecker(
         meta.typed(typedIdent.meta.typ),
         typedIdent
       )
+    case c: P.Expression.Call =>
+      inferCall(c)
     case f:P.Expression.Func =>
       inferFunc(f)
   }
 
+  private def inferCall(call: P.Expression.Call): T.Expression = {
+    val func = inferExpression(call.func)
+    addConstraint(IsFunction(func.meta.loc, func.meta.typ))
+    val args = call.args.zipWithIndex.map({
+      case (P.Expression.Call.Arg(meta, label, value), index) =>
+        val typedValue = inferExpression(value)
+        val typedLabel = label.map(l => inferArgLabelIdent(l, typedValue.meta.typ))
+        addConstraint(typedLabel match {
+          case Some(l) =>
+            TakesLabeledArg(
+              typedValue.loc,
+              func.meta.typ,
+              label = (l.loc, l.name.text),
+              typedValue.meta.typ
+            )
+          case None =>
+            TakesPositionalArg(
+              typedValue.loc,
+              func.meta.typ,
+              index = index,
+              typedValue.meta.typ
+            )
+        })
+        T.Expression.Call.Arg(
+          meta.typed(typedValue.meta.typ),
+          typedLabel,
+          typedValue
+        )
+    })
+    addConstraint(FunctionApplication(func.loc, func.meta.typ, args.map(arg => {
+      (arg.loc, arg.label.map(p => p.name.text -> p.loc), arg.meta.typ)
+    })))
+    val returnType = ctx.makeGenericType("T")
+    addConstraint(
+      HasReturnType(loc = call.loc, func.meta.typ, returnType)
+    )
+    T.Expression.Call(
+      call.meta.typed(returnType),
+      func,
+      args
+    )
+  }
+
+  private def inferArgLabelIdent(ident: P.Ident, typ: Type): T.Ident = {
+    val symbol = ctx.makeSymbol(ident.name)
+    T.Ident(
+      ident.meta.typed(typ),
+      symbol
+    )
+  }
 
   private def checkFunc(func: P.Expression.Func, typ: Type): T.Expression = {
     typ match {
@@ -690,9 +742,38 @@ sealed trait Constraint {
     case HasDeclaration(_, t, prop, propType) => s"let $t.$prop: $propType"
     case HasProperty(_, t, prop, propType) => s"$t.$prop == $propType"
     case HasKind(_, t, kind) => s"$t : $kind"
+    case TakesPositionalArg(_, t, i, argType) => s"$t takes positional arg $i: $argType"
+    case TakesLabeledArg(_, t, (_, label), argType) =>
+      s"$t takes arg ($label: $argType)"
+    case IsFunction(_, t) => s"$t is a function"
+    case HasReturnType(_, f, r) => s"$f: fn(..) => $r"
   }
 }
 case class Unifies(loc: Loc, expected: Type, found: Type) extends Constraint
 case class HasProperty(loc: Loc, t: Type, prop: String, propType: Type) extends Constraint
 case class HasDeclaration(loc: Loc, t: Type, prop: String, propType: Type) extends Constraint
 case class HasKind(loc: Loc, t: Type, kind: Kind) extends Constraint
+case class TakesLabeledArg(
+  loc: Loc,
+  t: Type,
+  label: (Loc, String),
+  paramTyp: Type
+) extends Constraint
+case class TakesPositionalArg(
+  loc: Loc,
+  t: Type,
+  index: Int,
+  argType: Type
+) extends Constraint
+case class HasReturnType(
+  loc: Loc,
+  t: Type,
+  returnType: Type
+) extends Constraint
+case class IsFunction(loc: Loc, typ: Type) extends Constraint
+case class FunctionApplication(
+  loc: Loc,
+  func: Type,
+  args: Array[(Loc, Option[(String, Loc)], Type)]
+) extends Constraint
+

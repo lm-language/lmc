@@ -6,7 +6,7 @@ import lmc.common._
 
 import scala.concurrent.Future
 import scala.collection._
-import lmc.types.{ExistentialInstance, Kind, Type}
+import lmc.types.{ExistentialInstance, Kind, Type, Uninferred}
 import diagnostics._
 import io.{File, Stream, StringStream}
 import lmc.syntax.{Named, Parsed, Typed}
@@ -121,7 +121,12 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   }
 
   def getType(symbol: Symbol): Option[Type] = {
-    checker.getTypeOfSymbol(symbol).map(checker.applyEnv)
+    checker.getTypeOfSymbol(symbol)
+      .map(checker.applyEnv)
+      .map({
+        case ExistentialInstance(_, _) => Uninferred
+        case t => t
+      })
   }
 
 
