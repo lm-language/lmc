@@ -7,15 +7,22 @@ class ConstraintSolver(
   checker: TypeChecker,
   error: Diagnostic => Unit,
 ) {
+  var i = 0
+  val MAX_LOOPS = 500
+
   def solveConstraints(
     constraints: List[Constraint]
   ): Unit = {
-
-//    println("\n=================")
-//    println("solve constraints")
-//    println("=================")
-    for (constraint <- constraints) {
-//      println(constraint)
+    i += 1
+    if (i > MAX_LOOPS) {
+      error(
+        Diagnostic(
+          loc = constraints.head.loc,
+          severity = Severity.Error,
+          variant = ConstraintLoopOverflow
+        )
+      )
+      return
     }
     constraints match {
       case Nil =>
@@ -76,7 +83,6 @@ class ConstraintSolver(
           case Some(t1) =>
             Unifies(u.loc, t, t1)::constraints
           case None =>
-            //
             constraints
         }
       case (Var(s1), t) if checker.getTypeVar(s1).isDefined =>
@@ -92,6 +98,9 @@ class ConstraintSolver(
       case (t, ExistentialInstance(id, _)) =>
         checker.generics.update(id, t)
         constraints.map(applyEnv)
+      case (Func(from1, to1), Func(from2, to2)) =>
+        // TODO: unify params as well
+        Unifies(u.loc, to1, to2)::constraints
       case _ =>
         error(Diagnostic(
           loc = u.loc,

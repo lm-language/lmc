@@ -26,7 +26,7 @@
       "typ":"(fn(a:Int) => Bool)"
     },
     "uninferred":{
-      "typ":"(fn(a:Uninferred) => Uninferred)"
+      "typ":"(fn(a:Existential(1, a)) => Existential(1, a))"
     },
     "fstIntBool":{
       "typ":"(fn(a:Int, b:Bool) => Int)"
@@ -119,11 +119,7 @@
           "column":39
         }
       },
-      "symbols":{
-        "a":{
-          "typ":"Int"
-        }
-      },
+      "symbols":{},
       "types":{},
       "children":[]
     },
@@ -153,11 +149,7 @@
           "column":42
         }
       },
-      "symbols":{
-        "a":{
-          "typ":"Int"
-        }
-      },
+      "symbols":{},
       "types":{},
       "children":[]
     },
@@ -194,14 +186,7 @@
           "column":45
         }
       },
-      "symbols":{
-        "b":{
-          "typ":"Bool"
-        },
-        "a":{
-          "typ":"Int"
-        }
-      },
+      "symbols":{},
       "types":{},
       "children":[]
     },
@@ -240,7 +225,7 @@
       },
       "symbols":{
         "a":{
-          "typ":"Uninferred"
+          "typ":"Existential(1, a)"
         }
       },
       "types":{},
