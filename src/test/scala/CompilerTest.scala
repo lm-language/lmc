@@ -30,7 +30,7 @@ class CompilerTest {
     val compiler = new Compiler(paths = List(suitePath))
     for (path <- suiteDir.listFiles()
         filter { _.getName endsWith ".lm" }
-        filter { _.getName contains "FunctionCalls" }
+        filter { _.getName contains "TypeAlias.lm" }
     ) {
       val filePath = Paths.get(path.getAbsolutePath)
       println(s"Checking $filePath")
@@ -52,7 +52,7 @@ class CompilerTest {
         println(Console.RED)
         println(s"""Errors don't match for $filePath""")
         println(Console.RESET)
-        showDiff(parsedDiagnosticsJSON, compiledDiagnosticsJSONV)
+        showDiff(diagnosticsFilePath.toString, outputDiagnosticFile.toString)
       }
 
       val symbolFileName = filePath.getFileName.toString dropRight 3 concat ".symbols.json"
@@ -71,36 +71,18 @@ class CompilerTest {
         println(s"""Symbols don't match for $symbolPath and $outputScopeFile""")
         println(Console.RESET)
         showDiff(
-          parsedExpectedScope,
-          json.parse(compiledScopeJSONString)
+          symbolPath.toString, outputScopeFile.toString
         )
       }
     }
   }
 
-  private def showDiff(expected: json.JValue, found: json.JValue): Unit = {
-    val json.Diff(changed, added, deleted) =
-      expected.diff(json.parse(json.Serialization.write(found)))
-    changed match {
-      case json.JNothing => ()
-      case _ =>
-        println(Console.BLUE)
-        println(s"Changed: ${json.prettyRender(changed)}")
-    }
-    added match {
-      case json.JNothing => ()
-      case _ =>
-        println(Console.GREEN)
-        println(s"Added: ${json.prettyRender(added)}")
-    }
-    deleted match {
-      case json.JNothing => ()
-      case _ =>
-        println(Console.RED)
-        println(s"Deleted: ${json.prettyRender(deleted)}")
-    }
-    println(Console.RESET)
-}
+  private def showDiff(expected: String, found: String): Unit = {
+    val envDiff = System.getenv("DIFF")
+    println(envDiff)
+    val command = if (envDiff == null) "diff" else envDiff
+    runCommand(s"$command $expected $found")
+  }
 
   def runCommand(command: String): Unit = {
     val proc = Runtime.getRuntime.exec(command)

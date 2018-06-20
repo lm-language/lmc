@@ -77,7 +77,7 @@ final class TypeChecker(
           .getOrElse(Kind.Star)
         val typedRhs = inferTypeAnnotation(rhs)
         addConstraint(HasKind(typedRhs.loc, typedRhs.meta.typ, kind))
-        val errors = assignTypeToTVar(rhs.loc, typedIdent.name, typedRhs.meta.typ)
+        val errors = assignTypeToTVar(ident.loc, typedIdent.name, typedRhs.meta.typ)
         setKindOfSymbol(typedIdent.name, kind)
         None
 
@@ -87,6 +87,18 @@ final class TypeChecker(
           typedIdent,
           typedKindAnnotation,
           Some(typedRhs)
+        )
+      case P.Declaration.TypeAlias(
+        meta, modifiers, ident, kindAnnotation, None
+      ) =>
+        val typedIdent = inferBindingTypeVarIdent(ident)
+        val typedKindAnnotation = kindAnnotation.map(inferKindAnnotation)
+        T.Declaration.TypeAlias(
+          meta.typed(Primitive.Unit),
+          modifiers.map(_.typed),
+          typedIdent,
+          typedKindAnnotation,
+          None
         )
     }
   }
@@ -142,6 +154,13 @@ final class TypeChecker(
           typedPattern,
           Some(typedRhs)
         )
+      case P.Declaration.Let(meta, modifiers, pattern, None) =>
+        val typedPattern = inferPattern(pattern, moduleType)
+        T.Declaration.Let(
+          meta.typed(Primitive.Unit),
+          modifiers.map(_.typed),
+          typedPattern, None
+        )
     }
   }
 
@@ -170,6 +189,8 @@ final class TypeChecker(
           typedInner,
           typedAnnotation
         )
+      case P.Pattern.Error(m) =>
+        T.Pattern.Error(m.typed(Uninferred))
     }
   }
 
@@ -186,8 +207,10 @@ final class TypeChecker(
       case P.TypeAnnotation.Forall(meta, scope, params, body) =>
         val typedParams = inferGenericParams(params)
         val typedBody = inferTypeAnnotation(body)
+        val typ = typedParams.map(_.ident.name)
+            .foldRight(typedBody.meta.typ)(Forall.apply)
         T.TypeAnnotation.Forall(
-          meta.typed(Primitive.Unit),
+          meta.typed(typ),
           scope,
           typedParams,
           typedBody
@@ -217,6 +240,8 @@ final class TypeChecker(
           typedFrom,
           typedTo
         )
+      case P.TypeAnnotation.Error(meta) =>
+        T.TypeAnnotation.Error(meta.typed(Primitive.Unit))
     }
   }
 
@@ -714,6 +739,7 @@ final class TypeChecker(
         occursIn(symbol, f) || occursIn(symbol, arg)
       case Module(_, values) =>
         values.values.exists(t => occursIn(symbol, t))
+      case Forall(_, t) => occursIn(symbol, t)
     }
   }
 

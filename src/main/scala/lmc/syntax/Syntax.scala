@@ -234,6 +234,7 @@ trait Syntax {
         case Pattern.Paren(_, inner) => Array(inner)
         case Pattern.Annotated(_, inner, annotation) =>
           Array(inner, annotation)
+        case Pattern.Error(_) => Array()
       }
 
     def withMeta(meta: Meta): Pattern = this match {
