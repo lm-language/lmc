@@ -1,10 +1,18 @@
 
 module A {
-  let x = B.x;
-  let y = 10;
+  let a1 = B.b2;
+  let a2 = 10;
 }
 
 module B {
-  let y = A.y;
-  let x = 11;
+  let b1 = A.a2;
+  let b2 = 11;
+  let b3 = X.Z.z1;
+}
+
+module X {
+  let x1 = B.b1;
+  module Z {
+    let z1 = B.b1;
+  }
 }

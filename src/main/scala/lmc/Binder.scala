@@ -15,6 +15,37 @@ class Binder(
   def bind(node: Node): Unit = {
     bindWorker(node)
     node.children.foreach(bind)
+    postBind(node)
+  }
+
+  private def postBind(node: Node): Unit = {
+    node match {
+      case Declaration.Let(_, _,  pattern, Some(rhs)) =>
+        assignRhsToPattern(pattern, rhs)
+      case m: Declaration.Module =>
+        m.scope.getSymbol(m.ident.name) match {
+          case Some(symbol) =>
+            for ((name, ScopeEntry(s, _)) <- m.moduleScope.symbols) {
+              println(s"updating member $name $s")
+              symbol.members.update(name, s)
+            }
+        }
+      case _ => ()
+    }
+  }
+
+  private def assignRhsToPattern(pattern: Pattern, expression: Expression): Unit = {
+    pattern match {
+      case Pattern.Var(_, ident) =>
+        ident.scope.getSymbol(ident.name) match {
+          case Some(symbol) =>
+            ctx.setAssociatedSymbol(ident.meta.id, symbol)
+            ctx.setAssociatedSymbol(expression.meta.id, symbol)
+            ctx.setAssociatedSymbol(pattern.meta.id, symbol)
+        }
+      case Pattern.Annotated(_, inner, _) =>
+        assignRhsToPattern(inner, expression)
+    }
   }
 
   private def bindWorker(node: Node): Unit = {

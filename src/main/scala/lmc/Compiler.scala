@@ -29,6 +29,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private val _typeVariables = mutable.WeakHashMap.empty[Symbol, (Type, Kind)]
   private val _parsedNodes = mutable.WeakHashMap.empty[Int, Parsed.Node]
   private val _declarationOf = mutable.HashMap.empty[Symbol, Int]
+  private val _associatedSymbols = mutable.WeakHashMap.empty[Int, Symbol]
 
   private val primitiveTypes = Map(
     "Unit" -> Kind.Star,
@@ -282,4 +283,10 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
 
   override def setDeclOf(symbol: Symbol, decl: Parsed.Declaration): Unit =
     _declarationOf.update(symbol, decl.meta.id)
+
+  override def getAssociatedSymbol(nodeId: Int): Option[Symbol] =
+    _associatedSymbols.get(nodeId)
+
+  override def setAssociatedSymbol(nodeId: Int, associated: Symbol): Unit =
+    _associatedSymbols.update(nodeId, associated)
 }

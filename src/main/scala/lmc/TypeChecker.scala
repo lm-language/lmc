@@ -139,6 +139,7 @@ final class TypeChecker(
       case P.Declaration.Let(meta, modifiers, p: P.Pattern.Var, Some(rhs)) =>
         val typedRhs = inferExpression(rhs)
         val typedPattern = checkPattern(p, typedRhs.meta.typ, moduleType)
+        assignExprToPattern(typedRhs, typedPattern)
         T.Declaration.Let(
           meta.typed(Primitive.Unit),
           modifiers.map(_.typed),
@@ -164,9 +165,19 @@ final class TypeChecker(
     }
   }
 
+  private def assignExprToPattern(e: T.Expression, p: T.Pattern): Unit = {
+    p.meta.typ match {
+      case ExistentialInstance(id, _) =>
+        _generics.update(id, e.meta.typ)
+      case _ => ()
+    }
+  }
+
   private def inferPattern(p: P.Pattern, moduleType: Option[Type]): T.Pattern = {
+    println("inferPattern")
     p match {
       case P.Pattern.Var(meta, ident) =>
+        println(s"inferPattern(var)(${ident.name})")
         var typedIdent = inferBindingVarIdent(ident)
         typedIdent = typedIdent.copy(
           meta = typedIdent.meta.withDiagnostic(
@@ -315,7 +326,7 @@ final class TypeChecker(
       T.Expression.Literal(meta.typed(Primitive.Int), T.Expression.Literal.LInt(x))
     case P.Expression.Prop(meta, expr, prop) =>
       val typedExpr = inferExpression(expr)
-      val typedProp = inferBindingVarIdent(prop)
+      val typedProp = inferProp(typedExpr, prop)
       addConstraint(HasProperty(typedProp.loc, typedExpr.meta.typ, prop.name, typedProp.meta.typ))
       T.Expression.Prop(
         meta.typed(typedProp.meta.typ),
@@ -332,6 +343,41 @@ final class TypeChecker(
       inferCall(c)
     case f:P.Expression.Func =>
       inferFunc(f)
+  }
+
+  private def inferProp(lhs: T.Expression, rhs: P.Ident): T.Ident = {
+    lhs match {
+      case T.Expression.Var(_, ident) =>
+        ident.name.members.get(rhs.name) match {
+          case Some(propSymbol) =>
+            val typ = getTypeOfSymbol(propSymbol) match {
+              case Some(t) => t
+              case None => ctx.makeGenericType(propSymbol.text)
+            }
+            T.Ident(
+              rhs.meta.typed(typ),
+              propSymbol
+            )
+          case None =>
+            ???
+        }
+      case T.Expression.Prop(_, _, p) =>
+        println(p.name.members, rhs.name)
+        p.name.members.get(rhs.name) match {
+          case Some(propSymbol) =>
+            val typ = getTypeOfSymbol(propSymbol) match {
+              case Some(t) => t
+              case None =>
+                ctx.makeGenericType(propSymbol.text)
+            }
+            T.Ident(
+              rhs.meta.typed(typ),
+              propSymbol
+            )
+          case None =>
+            ???
+        }
+    }
   }
 
   private def inferCall(call: P.Expression.Call): T.Expression = {
@@ -527,6 +573,7 @@ final class TypeChecker(
   private def makeForall(paramNames: Iterable[Symbol], resultType: Type): Type = {
     paramNames.foldRight(resultType)((current, prev) => Forall(current, prev))
   }
+
   private def inferVarIdent(ident: P.Ident): T.Ident = {
     ident.scope.resolveSymbol(ident.name) match {
       case Some(symbol) =>
@@ -550,6 +597,8 @@ final class TypeChecker(
             } else {
               None
             }
+          case Some(_) =>
+            None
           case None => None
         }
         setTypeOfSymbol(symbol, typ)
@@ -606,6 +655,11 @@ final class TypeChecker(
     }
     ident.scope.symbols.get(ident.name) match {
       case Some(ScopeEntry(symbol, _)) =>
+        getTypeOfSymbol(symbol) match {
+          case Some(ExistentialInstance(id, _)) =>
+            _generics.update(id, t)
+          case None => ()
+        }
         setTypeOfSymbol(symbol, t)
         T.Ident(
           ident.meta.typed(t),
@@ -625,9 +679,15 @@ final class TypeChecker(
     val ident = inferBindingVarIdent(module.ident)
     val declarations = module.body.map(d => inferDeclaration(d, Some(ident.meta.typ)))
     val modTyp = Module(Map.empty, module.moduleScope.symbols.map({
-      case (k, t) => t.symbol -> getTypeOfSymbol(t.symbol).getOrElse(ctx.makeGenericType(t.symbol.text))
+      case (k, entry) =>
+        val typ = getTypeOfSymbol(entry.symbol).getOrElse({
+          val t = ctx.makeGenericType(entry.symbol.text)
+          setTypeOfSymbol(entry.symbol, t)
+          t
+        })
+        entry.symbol -> typ
     }).toMap)
-    addConstraint(Unifies(ident.loc, ident.meta.typ, modTyp))
+//    addConstraint(Unifies(ident.loc, ident.meta.typ, modTyp))
 //    val genericIdents = inferGenericIdents()
     T.Declaration.Module(
       meta = module.meta.typed(ident.meta.typ),
@@ -641,10 +701,19 @@ final class TypeChecker(
 
 
   private def inferBindingVarIdent(ident: P.Ident): T.Ident = {
+    println(s"inferBindingVarIdent(${ident.name})")
     val symbol = ident.scope.getSymbol(ident.name).get
+    println(symbol)
+    if (ident.name == "z1") {
+      Debug.start()
+    }
     val typ = getTypeOfSymbol(symbol) match {
-      case Some(t) => t
-      case None => ctx.makeGenericType(ident.name)
+      case Some(t) =>
+        Debug.log(t)
+        t
+      case None =>
+        Debug.log("None")
+        ctx.makeGenericType(ident.name)
     }
     setTypeOfSymbol(symbol, typ)
     T.Ident(

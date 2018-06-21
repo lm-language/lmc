@@ -9,6 +9,7 @@ trait Context {
   def makeSymbol(text: String): Symbol
   def getParsedNode(id: Int): Option[Parsed.Node]
   def getDeclOf(symbol: Symbol): Option[Parsed.Declaration]
+  def getAssociatedSymbol(nodeId: Int): Option[Symbol]
 }
 
 object Context {
@@ -19,6 +20,8 @@ object Context {
   }
   trait Binder extends Context {
     def setDeclOf(symbol: Symbol, decl: Parsed.Declaration): Unit
+
+    def setAssociatedSymbol(nodeId: Int, associated: Symbol): Unit
   }
   trait Renamer extends Context {}
 
