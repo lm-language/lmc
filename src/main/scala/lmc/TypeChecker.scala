@@ -147,9 +147,6 @@ final class TypeChecker(
         | (Primitive.Bool, Primitive.Bool)
       => ()
       case (_, ExistentialInstance(i, _)) =>
-        if (_generics.contains(i)) {
-          throw new Error(s"Compiler bug: Tried to instantiate type hole twice")
-        }
         _generics.update(i, found)
       case _ =>
         errors.append(
