@@ -11,19 +11,18 @@
   },
   "symbols":{
     "A_alias":{
-      "typ":"Module(Map(),Map(a1 -> Int, a2 -> Int))"
+      "typ":"Module(Map(a1 -> Int, a2 -> Int))"
     },
     "A":{
-      "typ":"Module(Map(),Map(a1 -> Int, a2 -> Int))"
+      "typ":"Module(Map(a1 -> Int, a2 -> Int))"
     },
     "X":{
-      "typ":"Module(Map(),Map(x1 -> Int, Z -> Module(Map(),Map(z1 -> Int))))"
+      "typ":"Module(Map(x1 -> Int, Z -> Module(Map(z1 -> Int))))"
     },
     "B":{
-      "typ":"Module(Map(),Map(b3 -> Int, b2 -> Int, b1 -> Int))"
+      "typ":"Module(Map(b3 -> Int, b2 -> Int, b1 -> Int))"
     }
   },
-  "types":{},
   "children":[
     {
       "loc":{
@@ -44,7 +43,6 @@
           "typ":"Int"
         }
       },
-      "types":{},
       "children":[]
     },
     {
@@ -69,7 +67,6 @@
           "typ":"Int"
         }
       },
-      "types":{},
       "children":[]
     },
     {
@@ -88,10 +85,9 @@
           "typ":"Int"
         },
         "Z":{
-          "typ":"Module(Map(),Map(z1 -> Int))"
+          "typ":"Module(Map(z1 -> Int))"
         }
       },
-      "types":{},
       "children":[
         {
           "loc":{
@@ -109,7 +105,6 @@
               "typ":"Int"
             }
           },
-          "types":{},
           "children":[]
         }
       ]

@@ -8,20 +8,15 @@ case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
 
 case class Module(
-  types: Map[Symbol, Kind],
   values: Map[Symbol, Type],
 ) extends Type {
-  val kindOfString: Map[String, Kind] =
-    types.map(entry => entry._1.text -> entry._2)
   val typeOfString: Map[String, Type] =
     values.map(entry => entry._1.text -> entry._2)
   val symbolOfString: Map[String, Symbol] =
-    types.map(entry => entry._1.text -> entry._1) ++
     values.map(entry => entry._1.text -> entry._1)
 }
 
 case class Abstract(
-  abstractTypes: Map[Symbol, Kind],
   abstractValues: Map[Symbol, Type],
   innerType: Type
 ) extends Type
@@ -58,27 +53,17 @@ case class ExistentialInstance(id: Int, text: String) extends Type {
   override def toString: String = s"Existential($id, $text)"
 }
 case class Func(
-  from: Array[Func.Param],
+  label: Option[Symbol],
+  from: Type,
   to: Type
 ) extends Type {
   override def toString: String = {
-    s"""(fn(${
-      from.foldLeft("")((prev, current) => {
-        val (symbolOpt, typ) = current
-        symbolOpt match {
-          case Some(symbol) =>
-            prev
-              .concat(", ")
-              .concat(symbol.text)
-              .concat(":")
-              .concat(typ.toString)
-          case None =>
-            prev
-              .concat(", ")
-              .concat(typ.toString)
-        }
-      }).drop(2)
-    }) => $to)"""
+    label match {
+      case Some(l) =>
+        s"($l:$from -> $to)"
+      case None =>
+        s"($from -> $to)"
+    }
   }
 }
 object Func {
@@ -105,10 +90,6 @@ case class Forall(param: Symbol, typ: Type) extends Type {
     }
   }
 }
+case object Star
 case object Uninferred extends Type
-
-sealed trait Variance
-case object CoVariance
-case object ContraVariance
-case object InVariance
 

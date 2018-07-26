@@ -12,10 +12,11 @@
   "symbols":{
     "x":{
       "typ":"Uninferred"
+    },
+
+    "A": {
+      "typ":"Uninferred"
     }
-  },
-  "types":{
-    "A":"*"
   },
   "children":[]
 }

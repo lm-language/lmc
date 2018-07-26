@@ -101,19 +101,7 @@ class Binder(
   }
 
   private def bindTypeAlias(alias: Declaration.TypeAlias): Unit = {
-    val symbol = ctx.makeSymbol(alias.ident.name)
-    alias.scope.typeSymbols.get(alias.ident.name) match {
-      case Some(_) =>
-        error(
-          Diagnostic(
-            loc = alias.ident.loc,
-            severity = Severity.Error,
-            variant = DuplicateBinding(alias.ident.name)
-          )
-        )
-      case None => ()
-    }
-    alias.scope.setTypeVar(alias.ident.name, TypeEntry(symbol))
+    bindIdentifier(alias, alias.ident)
   }
 
   private def findDeclParent(node: Node): Option[Declaration] = {

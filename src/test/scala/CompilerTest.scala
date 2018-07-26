@@ -30,7 +30,7 @@ class CompilerTest {
     val compiler = new Compiler(paths = List(suitePath))
     for (path <- suiteDir.listFiles()
         filter { _.getName endsWith ".lm" }
-        filter { _.getName contains "PrimitiveLetBindings.lm" }
+        filter { _.getName contains "RecursiveModules.lm" }
     ) {
       val filePath = Paths.get(path.getAbsolutePath)
       println(s"Checking $filePath")
@@ -134,7 +134,6 @@ case class SymbolEntryJSON(
 case class ScopeJSON(
   loc: LocJSON,
   symbols: Map[String, SymbolEntryJSON],
-  types: Map[String, String],
   children: List[ScopeJSON]
 )
 object ScopeJSON {
@@ -147,18 +146,10 @@ object ScopeJSON {
           compiler.getType(e.symbol) match {
             case Some(t) => t.toString
             case None =>
-              throw new Error(s"""CompilerBug: No type for symbol ${e.symbol.text}:${e.symbol.id}""")
+              throw new Error(s"CompilerBug: No type for symbol ${e.symbol.text}:${e.symbol.id}")
           }
         })
         .mapValues(SymbolEntryJSON)
-        .toMap,
-      types = scope.typeSymbols.mapValues(sym => {
-        compiler.getKindOfSymbol(sym.symbol) match {
-          case Some(t) => t.toString
-          case None =>
-            throw new Error(s"""CompilerBug: No kind for symbol ${sym.symbol.text}(${sym.symbol.id})""")
-        }
-      })
         .toMap,
       children = scope.children
         .map(_.get)

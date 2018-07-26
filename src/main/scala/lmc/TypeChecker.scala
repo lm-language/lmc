@@ -48,6 +48,7 @@ final class TypeChecker(
     declaration match  {
       case l: P.Declaration.Let => inferLetDeclaration(l)
       case m: P.Declaration.Module => inferModuleDeclaration(m)
+      case d: P.Declaration.TypeAlias => inferTypeAlias(d)
     }
   }
 
@@ -84,6 +85,35 @@ final class TypeChecker(
 
   private def inferGenericParam(param: P.GenericParam): T.GenericParam = {
     ???
+  }
+
+
+
+  private def inferTypeAnnotation(annotation: P.TypeAnnotation): T.TypeAnnotation = {
+    annotation match {
+      case P.TypeAnnotation.Var(meta, ident) =>
+        val typedIdent = inferIdent(ident)
+        T.TypeAnnotation.Var(
+          meta.typed(typedIdent.meta.typ),
+          typedIdent
+        )
+    }
+  }
+
+  private def inferTypeAlias(alias: P.Declaration.TypeAlias): T.Declaration.TypeAlias = {
+    alias match {
+      case P.Declaration.TypeAlias(meta, modifiers, ident, None, Some(rhs)) =>
+        val typedRhs = inferTypeAnnotation(rhs)
+        val typedIdent = checkBindingVarIdent(typedRhs.meta.typ)(ident)
+        val typedModifiers = modifiers.map(_.typed)
+        T.Declaration.TypeAlias(
+          meta.typed(typedIdent.meta.typ),
+          typedModifiers,
+          typedIdent,
+          None,
+          Some(typedRhs)
+        )
+    }
   }
 
   private def inferLetDeclaration(let: P.Declaration.Let): T.Declaration = {
@@ -164,24 +194,35 @@ final class TypeChecker(
             ???
         }
       case E.Var(meta, ident) =>
-        expr.scope.resolve(ident.name) match {
-          case Some((typ, symbol)) =>
-            T.Expression.Var(
-              meta.typed(typ),
-              T.Ident(ident.meta.typed(typ), symbol)
+        val typedIdent = inferIdent(ident)
+
+        T.Expression.Var(
+          meta.typed(typedIdent.meta.typ),
+          typedIdent
+        )
+    }
+  }
+
+  private def inferIdent(ident: P.Ident): T.Ident = {
+    ident.scope.resolve(ident.name) match {
+      case Some((typ, symbol)) =>
+        T.Ident(ident.meta.typed(typ), symbol)
+      case None =>
+        T.Ident(
+          ident.meta.typed(Uninferred).withDiagnostic(
+            Diagnostic(
+              severity = Severity.Error,
+              loc = ident.loc,
+              variant = UnBoundVar(ident.name)
             )
-          case None =>
-            T.Expression.Var(
-              meta.typed(Uninferred),
-              T.Ident(ident.meta.typed(Uninferred), ctx.makeSymbol(ident.name))
-            )
-        }
+          ),
+          ctx.makeSymbol(ident.name)
+        )
     }
   }
 
   private def getModuleType(scope: Scope): Type = {
     Module(
-      Map(),
       scope.typeMap.map({
         case (_, (t, sym)) =>
             sym -> t
@@ -203,6 +244,10 @@ final class TypeChecker(
         val symbol = getSymbol(m.ident)
         val typ = ctx.makeGenericType(m.ident.name)
         m.scope.setType(m.ident.name, symbol, typ)
+      case m: P.Declaration.TypeAlias =>
+        val symbol = getSymbol(m.ident)
+        val typ = ctx.makeGenericType(m.ident.name)
+        m.scope.setType(m.ident.name, symbol, typ)
       case _ => ()
     }
     node.children.foreach(assignHoles)
@@ -210,7 +255,6 @@ final class TypeChecker(
     node match {
       case m: P.Declaration.Module =>
         val modTyp = Module(
-          Map(),
           m.moduleScope.typeMap.map({
             case (_, (t, sym)) => sym -> t
           }).toMap
@@ -247,9 +291,8 @@ final class TypeChecker(
         }
       case v@Var(symbol) =>
         getTypeVar(symbol).map(t => applyEnv(t, errors)).getOrElse(v)
-      case Module(types, values) =>
+      case Module(values) =>
         Module(
-          types,
           values.mapValues(ty => {
             applyEnv(ty, errors)
           })
@@ -263,12 +306,12 @@ final class TypeChecker(
       case Var(s) if s == symbol => true
       case Var(_) => false
       case Constructor(_, _) | Uninferred | ErrorType => false
-      case Func(from, to) =>
-        from.map(_._2).exists(t => occursIn(symbol, t)) ||
+      case Func(label, from, to) =>
+        occursIn(symbol, from) ||
           occursIn(symbol, to)
       case TApplication(f, arg) =>
         occursIn(symbol, f) || occursIn(symbol, arg)
-      case Module(_, values) =>
+      case Module(values) =>
         values.values.exists(t => occursIn(symbol, t))
       case Forall(_, t) => occursIn(symbol, t)
     }
@@ -289,7 +332,7 @@ final class TypeChecker(
             t match {
               case ExistentialInstance(id, name) if e.id == id =>
                 _symbolTypes.update(k, typ)
-              case Module(_, values) =>
+              case Module(values) =>
                 values.values.foreach(go)
               case _ => ()
             }
