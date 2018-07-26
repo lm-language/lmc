@@ -9,7 +9,7 @@ case class Var(symbol: Symbol) extends Type
 
 case class Module(
   types: Map[Symbol, Kind],
-  values: Map[Symbol, Type]
+  values: Map[Symbol, Type],
 ) extends Type {
   val kindOfString: Map[String, Kind] =
     types.map(entry => entry._1.text -> entry._2)

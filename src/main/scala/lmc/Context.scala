@@ -10,6 +10,8 @@ trait Context {
   def getParsedNode(id: Int): Option[Parsed.Node]
   def getDeclOf(symbol: Symbol): Option[Parsed.Declaration]
   def getAssociatedSymbol(nodeId: Int): Option[Symbol]
+  def getDefIdentId(symbol: Symbol): Option[Int]
+  def getAssociatedSymbol(symbol: Symbol): Option[Symbol]
 }
 
 object Context {
@@ -20,8 +22,11 @@ object Context {
   }
   trait Binder extends Context {
     def setDeclOf(symbol: Symbol, decl: Parsed.Declaration): Unit
+    def initializeTypeOfSymbol(symbol: Symbol): Unit
 
     def setAssociatedSymbol(nodeId: Int, associated: Symbol): Unit
+    def setAssociatedSymbol(symbol: Symbol, associated: Symbol): Unit
+    def setDefIdentId(symbol: Symbol, defIdentId: Int): Unit
   }
   trait Renamer extends Context {}
 

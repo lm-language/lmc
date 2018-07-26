@@ -4,6 +4,8 @@ import java.nio.file.Paths
 import scala.collection._
 import scala.ref.WeakReference
 
+import lmc.types._
+
 sealed trait Scope extends HasLoc {
   def getSymbol(name: String): Option[Symbol] = {
     getEntry(name) map (_.symbol)
@@ -18,6 +20,8 @@ sealed trait Scope extends HasLoc {
 
   def declMap: collection.Map[Symbol, Int]
 
+  def typeMap: collection.Map[String, (Type, Symbol)]
+
   def resolveTypeEntry(name: String): Option[TypeEntry] = {
     typeSymbols.get(name) match {
       case Some(n) => Some(n)
@@ -29,6 +33,13 @@ sealed trait Scope extends HasLoc {
         } yield symbol
     }
   }
+
+
+  def resolve(name: String): Option[(Type, Symbol)] =
+    typeMap.get(name) match {
+      case Some(result) => Some(result)
+      case None => parent.flatMap(_.get).flatMap(_.resolve(name))
+    }
 
   def resolveEntry(name: String): Option[ScopeEntry] = {
     getEntry(name) match {
@@ -69,6 +80,8 @@ case class ScopeBuilder(
   private var _children: List[WeakReference[Scope]] = List()
   private var _loc: Loc = _
 
+  private val _typeMap: mutable.HashMap[String, (Type, Symbol)] = mutable.HashMap.empty
+
   private val _declMap = mutable.HashMap.empty[Symbol, Int]
 
   override def loc: Loc = _loc
@@ -77,6 +90,12 @@ case class ScopeBuilder(
     _loc = loc
 
   override def typeSymbols: Map[String, TypeEntry] = _typeSymbols
+
+  override def typeMap: Map[String, (Type, Symbol)] =
+    _typeMap
+
+  def setType(name: String, symbol: Symbol, typ: Type) =
+    _typeMap.update(name, (typ, symbol))
 
   override def declMap: collection.Map[Symbol, Int] =
     _declMap

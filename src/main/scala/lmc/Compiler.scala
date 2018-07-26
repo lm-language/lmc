@@ -30,6 +30,8 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private val _parsedNodes = mutable.WeakHashMap.empty[Int, Parsed.Node]
   private val _declarationOf = mutable.HashMap.empty[Symbol, Int]
   private val _associatedSymbols = mutable.WeakHashMap.empty[Int, Symbol]
+  private val _defIdent = mutable.WeakHashMap.empty[Symbol, Int]
+  private val _associatedSymbolOfSymbol = mutable.WeakHashMap.empty[Symbol, Symbol]
 
   private val primitiveTypes = Map(
     "Unit" -> Kind.Star,
@@ -103,11 +105,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
         val parsed = getParsedSourceFile(path)
         val binder = new Binder(this, addErrors)
         binder.bind(parsed)
-        checker.clearConstraints()
         var checkedSourceFile = checker.inferSourceFile(parsed)
-        val solver = new ConstraintSolver(checker, addErrors)
-
-        solver.solveConstraints(checker.constraints.toList)
         if (errors.nonEmpty) {
           checkedSourceFile = checkedSourceFile.copy(
             meta = checkedSourceFile.meta.withDiagnostics(errors)
@@ -121,11 +119,17 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     }
   }
 
+  override def initializeTypeOfSymbol(symbol: Symbol): Unit = {
+    val typ = makeGenericType(symbol.text)
+    checker.setTypeOfSymbol(symbol, typ)
+  }
+
   def getType(symbol: Symbol): Option[Type] = {
     checker.getTypeOfSymbol(symbol)
-      .map(checker.applyEnv)
+      .map(t => checker.applyEnv(t))
       .map({
-        case ExistentialInstance(_, _) => Uninferred
+        case ExistentialInstance(_, _) =>
+          Uninferred
         case t => t
       })
   }
@@ -214,14 +218,17 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
     info <- node match {
       case i: Typed.Ident =>
         getHoverInfoForIdent(i)
-      case _ => None
+      case _ =>
+        None
     }
   } yield info
 
   private def getHoverInfoForIdent(ident: Typed.Ident): Option[String] = {
     val symbol = ident.name
 
-    checker.getTypeOfSymbol(symbol).map(checker.applyEnv).map(_.toString) match {
+    checker.getTypeOfSymbol(symbol)
+      .map(t => checker.applyEnv(t))
+      .map(_.toString) match {
       case Some(t) => Some(t)
       case None =>
         checker.getKindOfSymbol(ident.name).map(_.toString)
@@ -289,4 +296,17 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
 
   override def setAssociatedSymbol(nodeId: Int, associated: Symbol): Unit =
     _associatedSymbols.update(nodeId, associated)
+
+  override def setDefIdentId(symbol: Symbol, defIdentId: Int): Unit =
+    _defIdent.update(symbol, defIdentId)
+
+  override def getDefIdentId(symbol: Symbol): Option[Int] =
+    _defIdent.get(symbol)
+
+  override def setAssociatedSymbol(symbol: Symbol, associated: Symbol): Unit =
+    _associatedSymbolOfSymbol.update(symbol, associated)
+
+  override def getAssociatedSymbol(symbol: Symbol): Option[Symbol] =
+    _associatedSymbolOfSymbol.get(symbol)
+
 }

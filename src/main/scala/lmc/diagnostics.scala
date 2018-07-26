@@ -52,6 +52,7 @@ object diagnostics {
   case object MissingPatternParams extends Variant
   case class RecursiveTypeAlias(name: String) extends Variant
   case object ConstraintLoopOverflow extends Variant
+  case class NotAssignableTo(found: Type, expected: Type) extends Variant
 
   case class MissingArguments(params: Iterable[(Option[String], Type)]) extends Variant {
     override def toString: String = {

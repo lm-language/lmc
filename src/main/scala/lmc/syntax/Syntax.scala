@@ -394,7 +394,8 @@ trait Syntax {
     }
 
     override def toString: String = this match {
-      case Var(_, ident) => ident.name.toString
+      case Var(_, ident) => s"${ident.name.toString}, ${meta.loc}"
+      case Prop(_, e, prop) => s"$e.$prop, ${meta.loc}"
       case _ => super.toString
     }
   }

@@ -10,7 +10,7 @@ case class Symbol(
     id.hashCode
   }
 
-  override def toString: String = if (true)
+  override def toString: String = if (Debug.isDebugging)
     s"$text:$id"
   else text
 

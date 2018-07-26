@@ -4,8 +4,10 @@ module A {
   let a2 = 10;
 }
 
+let A_alias = A;
+
 module B {
-  let b1 = A.a2;
+  let b1 = A_alias.a2;
   let b2 = 11;
   let b3 = X.Z.z1;
 }

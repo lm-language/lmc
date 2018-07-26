@@ -26,7 +26,6 @@ class Binder(
         m.scope.getSymbol(m.ident.name) match {
           case Some(symbol) =>
             for ((name, ScopeEntry(s, _)) <- m.moduleScope.symbols) {
-              println(s"updating member $name $s")
               symbol.members.update(name, s)
             }
         }
@@ -35,13 +34,27 @@ class Binder(
   }
 
   private def assignRhsToPattern(pattern: Pattern, expression: Expression): Unit = {
+    expression match {
+      case v: Expression.Var =>
+        v.ident.scope.getSymbol(v.ident.name) match {
+          case Some(associated) =>
+            ctx.setAssociatedSymbol(v.meta.id, associated)
+            ctx.setAssociatedSymbol(v.ident.meta.id, associated)
+          case None =>
+            ()
+        }
+      case _ => ()
+    }
     pattern match {
       case Pattern.Var(_, ident) =>
-        ident.scope.getSymbol(ident.name) match {
-          case Some(symbol) =>
-            ctx.setAssociatedSymbol(ident.meta.id, symbol)
-            ctx.setAssociatedSymbol(expression.meta.id, symbol)
-            ctx.setAssociatedSymbol(pattern.meta.id, symbol)
+        ctx.getAssociatedSymbol(expression.meta.id) match {
+          case Some(associated) =>
+            ident.scope.getSymbol(ident.name) match {
+              case Some(symbol) =>
+                ctx.setAssociatedSymbol(symbol, associated)
+            }
+          case None =>
+            ()
         }
       case Pattern.Annotated(_, inner, _) =>
         assignRhsToPattern(inner, expression)
@@ -79,7 +92,10 @@ class Binder(
         }
 
         scope.setSymbol(ident.name, ScopeEntry(symbol))
+        ctx.setDefIdentId(symbol, ident.meta.id)
+
         ctx.setDeclOf(symbol, decl)
+        ctx.initializeTypeOfSymbol(symbol)
         scope.addDeclaration(symbol, decl.meta.id)
     }
   }

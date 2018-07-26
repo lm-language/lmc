@@ -5,16 +5,22 @@
       "column":1
     },
     "end":{
-      "line":10,
+      "line":20,
       "column":2
     }
   },
   "symbols":{
+    "A_alias":{
+      "typ":"Module(Map(),Map(a1 -> Int, a2 -> Int))"
+    },
     "A":{
-      "typ":"Module(Map(),Map(y -> Int, x -> Int))"
+      "typ":"Module(Map(),Map(a1 -> Int, a2 -> Int))"
+    },
+    "X":{
+      "typ":"Module(Map(),Map(x1 -> Int, Z -> Module(Map(),Map(z1 -> Int))))"
     },
     "B":{
-      "typ":"Module(Map(),Map(y -> Int, x -> Int))"
+      "typ":"Module(Map(),Map(b3 -> Int, b2 -> Int, b1 -> Int))"
     }
   },
   "types":{},
@@ -31,10 +37,10 @@
         }
       },
       "symbols":{
-        "y":{
+        "a1":{
           "typ":"Int"
         },
-        "x":{
+        "a2":{
           "typ":"Int"
         }
       },
@@ -44,24 +50,69 @@
     {
       "loc":{
         "start":{
-          "line":7,
+          "line":9,
           "column":10
         },
         "end":{
-          "line":10,
+          "line":13,
           "column":1
         }
       },
       "symbols":{
-        "y":{
+        "b3":{
           "typ":"Int"
         },
-        "x":{
+        "b2":{
+          "typ":"Int"
+        },
+        "b1":{
           "typ":"Int"
         }
       },
       "types":{},
       "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":15,
+          "column":10
+        },
+        "end":{
+          "line":20,
+          "column":1
+        }
+      },
+      "symbols":{
+        "x1":{
+          "typ":"Int"
+        },
+        "Z":{
+          "typ":"Module(Map(),Map(z1 -> Int))"
+        }
+      },
+      "types":{},
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":17,
+              "column":12
+            },
+            "end":{
+              "line":19,
+              "column":3
+            }
+          },
+          "symbols":{
+            "z1":{
+              "typ":"Int"
+            }
+          },
+          "types":{},
+          "children":[]
+        }
+      ]
     }
   ]
 }
