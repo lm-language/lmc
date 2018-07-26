@@ -58,6 +58,8 @@ class Binder(
         }
       case Pattern.Annotated(_, inner, _) =>
         assignRhsToPattern(inner, expression)
+      case Pattern.Paren(_, inner) =>
+        assignRhsToPattern(inner, expression)
     }
   }
 

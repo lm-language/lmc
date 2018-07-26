@@ -22,6 +22,8 @@ sealed trait Scope extends HasLoc {
 
   def typeMap: collection.Map[String, (Type, Symbol)]
 
+  def typeScope: collection.Map[Symbol, Type]
+
   def resolveTypeEntry(name: String): Option[TypeEntry] = {
     typeSymbols.get(name) match {
       case Some(n) => Some(n)
@@ -40,6 +42,14 @@ sealed trait Scope extends HasLoc {
       case Some(result) => Some(result)
       case None => parent.flatMap(_.get).flatMap(_.resolve(name))
     }
+
+
+  def resolveTypeVar(symbol: Symbol): Option[Type] = {
+    typeScope.get(symbol) match {
+      case Some(result) => Some(result)
+      case None => parent.flatMap(_.get).flatMap(_.resolveTypeVar(symbol))
+    }
+  }
 
   def resolveEntry(name: String): Option[ScopeEntry] = {
     getEntry(name) match {
@@ -83,6 +93,7 @@ case class ScopeBuilder(
   private val _typeMap: mutable.HashMap[String, (Type, Symbol)] = mutable.HashMap.empty
 
   private val _declMap = mutable.HashMap.empty[Symbol, Int]
+  private val _typeScope = mutable.HashMap.empty[Symbol, Type]
 
   override def loc: Loc = _loc
 
@@ -97,12 +108,19 @@ case class ScopeBuilder(
   def setType(name: String, symbol: Symbol, typ: Type) =
     _typeMap.update(name, (typ, symbol))
 
+  override def typeScope: Map[Symbol, Type] =
+    _typeScope
+
+  def addToTypeScope(name: Symbol, typ: Type) =
+    _typeScope.update(name, typ)
+
   override def declMap: collection.Map[Symbol, Int] =
     _declMap
 
   def addDeclaration(symbol: Symbol, nodeId: Int): Unit = {
     _declMap.put(symbol, nodeId)
   }
+
 
   override def children: Iterable[WeakReference[Scope]] = _children
 

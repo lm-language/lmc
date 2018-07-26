@@ -20,7 +20,7 @@
       "typ":"Int"
     },
     "b":{
-      "typ":"Uninferred"
+      "typ":"Var(SDF)"
     },
     "c":{
       "typ":"Bool"
@@ -32,6 +32,5 @@
       "typ":"Bool"
     }
   },
-  "types":{},
   "children":[]
 }

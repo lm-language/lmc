@@ -23,7 +23,7 @@ case class Abstract(
 
 // a type constructor; Like a type variable but is not substitutable
 // or assignable to any other type constructor
-case class Constructor(symbol: Symbol, kind: Kind) extends Type {
+case class Constructor(symbol: Symbol) extends Type {
   override def toString: String = symbol.text
 }
 case class TApplication(tFunc: Type, arg: Type) extends Type {
@@ -90,6 +90,6 @@ case class Forall(param: Symbol, typ: Type) extends Type {
     }
   }
 }
-case object Star
+case object Star extends Type
 case object Uninferred extends Type
 

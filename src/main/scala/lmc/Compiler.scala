@@ -6,7 +6,7 @@ import lmc.common._
 
 import scala.concurrent.Future
 import scala.collection._
-import lmc.types.{ExistentialInstance, Kind, Type, Uninferred}
+import lmc.types.{ExistentialInstance, Type, Uninferred, Star, Constructor}
 import diagnostics._
 import io.{File, Stream, StringStream}
 import lmc.syntax.{Named, Parsed, Typed}
@@ -26,7 +26,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private var _id = 0
   private var _nextGenericId = 0
   private var _nextNodeId = 0
-  private val _typeVariables = mutable.WeakHashMap.empty[Symbol, (Type, Kind)]
   private val _parsedNodes = mutable.WeakHashMap.empty[Int, Parsed.Node]
   private val _declarationOf = mutable.HashMap.empty[Symbol, Int]
   private val _associatedSymbols = mutable.WeakHashMap.empty[Int, Symbol]
@@ -34,12 +33,13 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private val _associatedSymbolOfSymbol = mutable.WeakHashMap.empty[Symbol, Symbol]
 
   private val primitiveTypes = Map(
-    "Unit" -> Kind.Star,
-    "Int" -> Kind.Star,
-    "Bool" -> Kind.Star
-  ).map((tuple) => {
-    val symbol = makeSymbol(tuple._1)
-    (tuple._1, (lmc.types.Constructor(symbol, tuple._2), tuple._2))
+    "Unit" -> Star,
+    "Int" -> Star,
+    "Bool" -> Star
+  ).map({
+    case (name, kind) =>
+    val symbol = makeSymbol(name)
+    (name, (lmc.types.Constructor(symbol), kind))
   })
 
   private def primitive(str: String): Type = {
@@ -74,10 +74,11 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
       scopeBuilder.setType(name, symbol, typ)
       checker.setTypeOfSymbol(symbol, typ)
     }
+
     for ((name, (t, kind)) <- primitiveTypes) {
       val symbol = t.symbol
-      scopeBuilder.setTypeVar(name, TypeEntry(symbol))
-      setTypeVar(symbol, t, kind)
+      scopeBuilder.setType(name, symbol, kind)
+      scopeBuilder.addToTypeScope(symbol, Constructor(symbol))
     }
     scopeBuilder
   }
@@ -135,15 +136,8 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
       })
   }
 
-
-  def setTypeVar(symbol: Symbol, typ: Type, kind: Kind): Unit = {
-    _typeVariables.update(symbol, typ -> kind)
-    checker.setKindOfSymbol(symbol, kind)
-    checker.setTypeVar(symbol, typ)
-  }
-
-  def getKindOfSymbol(symbol: Symbol): Option[Kind] = {
-    checker.getKindOfSymbol(symbol)
+  def getKindOfSymbol(symbol: Symbol): Option[Type] = {
+    getType(symbol)
   }
 
 

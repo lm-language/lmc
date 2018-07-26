@@ -128,6 +128,49 @@ final class TypeChecker(
           typedPattern,
           Some(typedRhs)
         )
+      case P.Declaration.Let(meta, modifiers, pattern, Some(rhs)) =>
+        val typedPattern = inferPattern(pattern)
+        val typedRhs = checkExpression(typedPattern.meta.typ)(rhs)
+        val typedModifiers = modifiers.map(_.typed)
+        T.Declaration.Let(
+          meta.typed(typedPattern.meta.typ),
+          typedModifiers,
+          typedPattern,
+          Some(typedRhs)
+        )
+    }
+  }
+
+  private def inferPattern(pattern: P.Pattern): T.Pattern = {
+    pattern match {
+      case P.Pattern.Annotated(meta, innerPattern, typeAnnotation) =>
+        val typedAnnotation = inferTypeAnnotation(typeAnnotation)
+        val typ = evalTypeAnnotation(typedAnnotation)
+        val typedInner =
+            checkPattern(typ)(innerPattern)
+        T.Pattern.Annotated(
+          meta.typed(typ),
+          typedInner,
+          typedAnnotation
+        )
+      case P.Pattern.Paren(meta, inner) =>
+        val typedInner = inferPattern(inner)
+        T.Pattern.Paren(
+          meta.typed(typedInner.meta.typ),
+          typedInner
+        )
+    }
+  }
+
+  private def checkExpression(expected: Type)(expr: P.Expression): T.Expression = {
+    expr match {
+      case _ =>
+        val typedExpr = inferExpression(expr)
+        val errors = ListBuffer.empty[Diagnostic]
+        assertAssignability(errors, expr.loc)(typedExpr.meta.typ, expected)
+        typedExpr.withMeta(
+          meta = typedExpr.meta.withDiagnostics(errors)
+        )
     }
   }
 
@@ -136,7 +179,45 @@ final class TypeChecker(
       case P.Pattern.Var(meta, ident) =>
         val typedIdent = checkBindingVarIdent(typ)(ident)
         T.Pattern.Var(meta.typed(typedIdent.meta.typ), typedIdent)
+      case P.Pattern.Paren(meta, inner) =>
+        val typedInner = checkPattern(typ)(inner)
+        T.Pattern.Paren(
+          meta.typed(typedInner.meta.typ),
+          typedInner
+        )
+      case P.Pattern.Annotated(meta, inner, annotation) =>
+        // annotation should be a type
+        val typedAnnotation = checkTypeAnnotation(Star)(annotation)
+        val annotType = evalTypeAnnotation(typedAnnotation)
+        val errors = ListBuffer.empty[Diagnostic]
+        assertAssignability(errors, annotation.loc)(annotType, typ)
+        val typedInner = checkPattern(annotType)(inner)
+        T.Pattern.Annotated(
+          meta.typed(typ).withDiagnostics(errors),
+          typedInner,
+          typedAnnotation
+        )
     }
+  }
+
+  private def evalTypeAnnotation(annotation: T.TypeAnnotation): Type = {
+    annotation match {
+      case T.TypeAnnotation.Var(_, ident) =>
+        annotation.scope.resolveTypeVar(ident.name) match {
+          case Some(t) => t
+          case None =>
+            Var(ident.name)
+        }
+    }
+  }
+
+  private def checkTypeAnnotation(t: Type)(annotation: P.TypeAnnotation) = {
+    val typedAnnotation = inferTypeAnnotation(annotation)
+    val errors = ListBuffer.empty[Diagnostic]
+    assertAssignability(errors, annotation.loc)(typedAnnotation.meta.typ, t)
+    typedAnnotation.withMeta(
+      typedAnnotation.meta.withDiagnostics(errors)
+    )
   }
 
   private def assertAssignability(errors: ListBuffer[diagnostics.Diagnostic], loc: Loc)
@@ -145,9 +226,12 @@ final class TypeChecker(
       case
         (Primitive.Int, Primitive.Int)
         | (Primitive.Bool, Primitive.Bool)
+        | (Primitive.Unit, Primitive.Unit)
+        | (Star, Star)
       => ()
       case (_, ExistentialInstance(i, _)) =>
         _generics.update(i, found)
+      case (Var(a), Var(b)) if a == b => ()
       case _ =>
         errors.append(
           Diagnostic(
@@ -313,7 +397,7 @@ final class TypeChecker(
     typ match {
       case Var(s) if s == symbol => true
       case Var(_) => false
-      case Constructor(_, _) | Uninferred | ErrorType => false
+      case Constructor(_) | Uninferred | ErrorType => false
       case Func(label, from, to) =>
         occursIn(symbol, from) ||
           occursIn(symbol, to)
