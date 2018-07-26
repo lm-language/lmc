@@ -171,8 +171,10 @@ final class TypeChecker(
               T.Ident(ident.meta.typed(typ), symbol)
             )
           case None =>
-            // unbound var
-            ???
+            T.Expression.Var(
+              meta.typed(Uninferred),
+              T.Ident(ident.meta.typed(Uninferred), ctx.makeSymbol(ident.name))
+            )
         }
     }
   }
