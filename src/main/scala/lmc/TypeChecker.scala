@@ -92,7 +92,7 @@ final class TypeChecker(
   private def inferTypeAnnotation(annotation: P.TypeAnnotation): T.TypeAnnotation = {
     annotation match {
       case P.TypeAnnotation.Var(meta, ident) =>
-        val typedIdent = inferIdent(ident)
+        val typedIdent = inferIdent(ident, isType = true)
         T.TypeAnnotation.Var(
           meta.typed(typedIdent.meta.typ),
           typedIdent
@@ -194,7 +194,7 @@ final class TypeChecker(
             ???
         }
       case E.Var(meta, ident) =>
-        val typedIdent = inferIdent(ident)
+        val typedIdent = inferIdent(ident, isType = false)
 
         T.Expression.Var(
           meta.typed(typedIdent.meta.typ),
@@ -203,10 +203,21 @@ final class TypeChecker(
     }
   }
 
-  private def inferIdent(ident: P.Ident): T.Ident = {
+  private def inferIdent(ident: P.Ident, isType: Boolean): T.Ident = {
     ident.scope.resolve(ident.name) match {
       case Some((typ, symbol)) =>
-        T.Ident(ident.meta.typed(typ), symbol)
+        val error = ctx.getDeclOf(symbol) match {
+          case Some(d) if !isType && d.loc.start >= ident.loc.end =>
+            Some(
+              Diagnostic(
+                loc = ident.loc,
+                severity = Severity.Error,
+                variant = UseBeforeAssignment(ident.name)
+              )
+            )
+          case _ => None
+        }
+        T.Ident(ident.meta.typed(typ).withDiagnostics(error), symbol)
       case None =>
         T.Ident(
           ident.meta.typed(Uninferred).withDiagnostic(

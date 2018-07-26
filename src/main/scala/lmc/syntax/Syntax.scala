@@ -116,6 +116,10 @@ trait Syntax {
 
   sealed trait Declaration extends Node with Expression.Block.Member {
     def modifiers: Set[Declaration.Modifier]
+    override def toString = this match {
+      case Declaration.Let(_, _, pattern, rhs) =>
+        s"let $pattern = $rhs"
+    }
     override def children: Array[Node] =
       this match {
         case Declaration.Let(_, _, ident, Some(rhs)) =>
@@ -225,6 +229,9 @@ trait Syntax {
   }
 
   sealed trait Pattern extends Node {
+    override def toString = this match {
+      case Pattern.Var(_, ident) => ident.name.toString
+    }
     override def children: Array[Node] =
       this match {
         case Pattern.Var(_, ident) => Array(ident)
