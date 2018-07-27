@@ -7,7 +7,7 @@ object diagnostics {
   sealed trait Variant
   case class ExpectedToken(variant: syntax.token.Variant) extends Variant
   case class DeclarationExpected() extends Variant
-  case class ExpressionExpected() extends Variant
+  case object TermExpected extends Variant
   case class PatternExpected() extends Variant
   case class TypeExpected() extends Variant
   case object ModifierOnInclude extends Variant

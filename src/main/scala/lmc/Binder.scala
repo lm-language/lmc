@@ -33,9 +33,9 @@ class Binder(
     }
   }
 
-  private def assignRhsToPattern(pattern: Pattern, expression: Expression): Unit = {
+  private def assignRhsToPattern(pattern: Pattern, expression: Term): Unit = {
     expression match {
-      case v: Expression.Var =>
+      case v: Term.Var =>
         v.ident.scope.getSymbol(v.ident.name) match {
           case Some(associated) =>
             ctx.setAssociatedSymbol(v.meta.id, associated)

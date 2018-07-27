@@ -50,6 +50,8 @@ final class TypeChecker(
       case l: P.Declaration.Let => inferLetDeclaration(l)
       case m: P.Declaration.Module => inferModuleDeclaration(m)
       case d: P.Declaration.TypeAlias => inferTypeAlias(d)
+      case e: P.Declaration.Error =>
+        T.Declaration.Error(e.meta.typed(Uninferred), e.modifiers.map(_.typed))
     }
   }
 
@@ -89,43 +91,10 @@ final class TypeChecker(
     ???
   }
 
-
-
-  private def inferTypeAnnotation(annotation: P.TypeAnnotation): T.TypeAnnotation = {
-    annotation match {
-      case P.TypeAnnotation.Var(meta, ident) =>
-        val typedIdent = inferIdent(ident, isType = true)
-        T.TypeAnnotation.Var(
-          meta.typed(typedIdent.meta.typ),
-          typedIdent
-        )
-      case P.TypeAnnotation.Func(meta, scope, label, from, to) =>
-        val typedFrom = inferTypeAnnotation(from)
-        val typedTo = inferTypeAnnotation(to)
-        val typedLabel = label.map(ident => {
-          val name = ctx.makeSymbol(ident.name)
-          T.Ident(
-            meta = ident.meta.typed(evalTypeAnnotation(typedFrom)),
-            name
-          )
-        })
-        T.TypeAnnotation.Func(
-          meta.typed(Star),
-          scope,
-          typedLabel,
-          typedFrom,
-          typedTo
-        )
-      case P.TypeAnnotation.Paren(meta, inner) =>
-        val typedInner = inferTypeAnnotation(inner)
-        T.TypeAnnotation.Paren(meta.typed(typedInner.meta.typ), typedInner)
-    }
-  }
-
   private def inferTypeAlias(alias: P.Declaration.TypeAlias): T.Declaration.TypeAlias = {
     alias match {
       case P.Declaration.TypeAlias(meta, modifiers, ident, None, Some(rhs)) =>
-        val typedRhs = inferTypeAnnotation(rhs)
+        val typedRhs = inferTerm(rhs)
         val typedIdent = checkBindingVarIdent(typedRhs.meta.typ)(ident)
         val typedModifiers = modifiers.map(_.typed)
         T.Declaration.TypeAlias(
@@ -143,7 +112,7 @@ final class TypeChecker(
       case P.Declaration.Let(meta, modifiers, pattern, Some(rhs))
         if getPatternAnnotation(pattern).isDefined =>
         val typedPattern = inferPattern(pattern)
-        val typedRhs = checkExpression(typedPattern.meta.typ)(rhs)
+        val typedRhs = checkTerm(typedPattern.meta.typ)(rhs)
         val typedModifiers = modifiers.map(_.typed)
         T.Declaration.Let(
           meta.typed(typedPattern.meta.typ),
@@ -153,7 +122,7 @@ final class TypeChecker(
         )
 
       case P.Declaration.Let(meta, modifiers, pattern, Some(rhs)) =>
-        val typedRhs = inferExpression(rhs)
+        val typedRhs = inferTerm(rhs)
         val typedPattern = checkPattern(typedRhs.meta.typ)(pattern)
         val typedModifiers = modifiers.map(_.typed)
         T.Declaration.Let(
@@ -162,10 +131,29 @@ final class TypeChecker(
           typedPattern,
           Some(typedRhs)
         )
+      case P.Declaration.Let(
+        meta,
+        modifiers,
+        P.Pattern.Annotated(pMeta, pVar: P.Pattern.Var, annotation),
+        None
+      ) =>
+        val typedAnnotation = checkTerm(Star)(annotation)
+        val typ = evalTypeAnnotation(typedAnnotation)
+        val typedPVar = checkPattern(typ)(pVar)
+        T.Declaration.Let(
+          meta.typed(typ),
+          modifiers.map(_.typed),
+          T.Pattern.Annotated(
+            pMeta.typed(typedPVar.meta.typ),
+            typedPVar,
+            typedAnnotation
+          ),
+          None
+        )
     }
   }
 
-  private def getPatternAnnotation(p: P.Pattern): Option[P.TypeAnnotation] = {
+  private def getPatternAnnotation(p: P.Pattern): Option[P.Term] = {
     p match {
       case _: P.Pattern.Var => None
       case P.Pattern.Annotated(_, _, annotation) => Some(annotation)
@@ -176,7 +164,7 @@ final class TypeChecker(
   private def inferPattern(pattern: P.Pattern): T.Pattern = {
     pattern match {
       case P.Pattern.Annotated(meta, innerPattern, typeAnnotation) =>
-        val typedAnnotation = inferTypeAnnotation(typeAnnotation)
+        val typedAnnotation = inferTerm(typeAnnotation)
         val typ = evalTypeAnnotation(typedAnnotation)
         val typedInner =
             checkPattern(typ)(innerPattern)
@@ -213,12 +201,12 @@ final class TypeChecker(
     )
   }
 
-  private def checkExpression(expected: Type)(expr: P.Expression): T.Expression = {
+  private def checkTerm(expected: Type)(expr: P.Term): T.Term = {
     expr match {
-      case f: P.Expression.Func =>
+      case f: P.Term.Func =>
         checkFunc(expected)(f)
       case _ =>
-        val typedExpr = inferExpression(expr)
+        val typedExpr = inferTerm(expr)
         val errors = ListBuffer.empty[Diagnostic]
         assertAssignability(errors, expr.loc)(typedExpr.meta.typ, expected)
         typedExpr.withMeta(
@@ -227,7 +215,7 @@ final class TypeChecker(
     }
   }
 
-  private def checkFunc(expected: Type)(f: P.Expression.Func): T.Expression = {
+  private def checkFunc(expected: Type)(f: P.Term.Func): T.Term = {
     applyEnv(expected) match {
       case Func(label, from, to) =>
         val typedGenericParams = inferGenericParams(f.genericParams)
@@ -235,7 +223,7 @@ final class TypeChecker(
         val expectedReturnTyp = getExpectedReturnType(expected)
         val errors = ListBuffer.empty[Diagnostic]
         var i = 0
-        val typedParams = ListBuffer.empty[T.Expression.Param]
+        val typedParams = ListBuffer.empty[T.Term.Param]
         for ((expectedLabel, expectedTyp) <- expectedParams) {
           if (i >= f.params.length) {
             // missing param
@@ -274,7 +262,7 @@ final class TypeChecker(
                 None
             }
             typedParams.append(
-              T.Expression.Param(
+              T.Term.Param(
                 typedPattern.withMeta(
                   meta = typedPattern.meta.withDiagnostics(labelError)
                 )
@@ -287,7 +275,7 @@ final class TypeChecker(
           val param = f.params(i)
           val typedPattern = inferPattern(param.pattern)
           typedParams.append(
-            T.Expression.Param(
+            T.Term.Param(
               typedPattern.withMeta(
                 typedPattern.meta.withDiagnostic(
                   Diagnostic(
@@ -301,7 +289,7 @@ final class TypeChecker(
           )
           i += 1
         }
-        val typedRetTypAnnotation = f.returnType.map(checkTypeAnnotation(Star))
+        val typedRetTypAnnotation = f.returnType.map(checkTerm(Star))
         typedRetTypAnnotation match {
           case Some(retTypAnnot) =>
             assertAssignability(
@@ -312,8 +300,8 @@ final class TypeChecker(
         val bodyExpectedTyp = typedRetTypAnnotation
           .map(evalTypeAnnotation)
           .getOrElse(expectedReturnTyp)
-        val typedBody = checkExpression(bodyExpectedTyp)(f.body)
-        T.Expression.Func(
+        val typedBody = checkTerm(bodyExpectedTyp)(f.body)
+        T.Term.Func(
           f.meta.typed(expected).withDiagnostics(errors),
           f.fnToken,
           f.scope,
@@ -355,7 +343,7 @@ final class TypeChecker(
         )
       case P.Pattern.Annotated(meta, inner, annotation) =>
         // annotation should be a type
-        val typedAnnotation = checkTypeAnnotation(Star)(annotation)
+        val typedAnnotation = checkTerm(Star)(annotation)
         val annotType = evalTypeAnnotation(typedAnnotation)
         val errors = ListBuffer.empty[Diagnostic]
         assertAssignability(errors, annotation.loc)(annotType, typ)
@@ -368,33 +356,25 @@ final class TypeChecker(
     }
   }
 
-  private def evalTypeAnnotation(annotation: T.TypeAnnotation): Type = {
+  private def evalTypeAnnotation(annotation: T.Term): Type = {
     annotation match {
-      case T.TypeAnnotation.Var(_, ident) =>
+      case T.Term.Var(_, ident) =>
         annotation.scope.resolveTypeVar(ident.name) match {
           case Some(t) => t
           case None =>
             Var(ident.name)
         }
-      case T.TypeAnnotation.Func(_, _, label, from, returnType) =>
+      case T.Term.Arrow(_, _, label, from, returnType) =>
         Func(
           label.map(_.name),
           evalTypeAnnotation(from),
           evalTypeAnnotation(returnType)
         )
-      case T.TypeAnnotation.Paren(_, inner) =>
-        evalTypeAnnotation(inner)
+      case T.Term.Error(_) =>
+        Uninferred
     }
   }
 
-  private def checkTypeAnnotation(t: Type)(annotation: P.TypeAnnotation) = {
-    val typedAnnotation = inferTypeAnnotation(annotation)
-    val errors = ListBuffer.empty[Diagnostic]
-    assertAssignability(errors, annotation.loc)(typedAnnotation.meta.typ, t)
-    typedAnnotation.withMeta(
-      typedAnnotation.meta.withDiagnostics(errors)
-    )
-  }
 
   private def assertAssignability(errors: ListBuffer[diagnostics.Diagnostic], loc: Loc)
     (found: Type, expected: Type): Unit = {
@@ -409,10 +389,10 @@ final class TypeChecker(
         _generics.update(i, found)
       case (Var(a), Var(b)) if a == b => ()
       case (Func(label1, from1, to1), Func(label2, from2, to2))
-        if (
-          label2.isEmpty ||
-          label1.map(_.text) == label2.map(_.text)
-        )=>
+        if
+          label2.isEmpty
+          || label1.map(_.text) == label2.map(_.text)
+        =>
         assertAssignability(errors, loc)(to1, to2)
         assertAssignability(errors, loc)(from2, from1)
         ()
@@ -427,13 +407,13 @@ final class TypeChecker(
     }
   }
 
-  private def inferExpression(expr: P.Expression): T.Expression = {
-    import P.{Expression => E}
+  private def inferTerm(expr: P.Term): T.Term = {
+    import P.{Term => E}
     expr match {
       case E.Literal(meta, E.Literal.LInt(x)) =>
-        T.Expression.Literal(meta.typed(Primitive.Int), T.Expression.Literal.LInt(x))
+        T.Term.Literal(meta.typed(Primitive.Int), T.Term.Literal.LInt(x))
       case E.Prop(meta, lhs, prop) =>
-        val inferredLhs = inferExpression(lhs)
+        val inferredLhs = inferTerm(lhs)
         applyEnv(inferredLhs.meta.typ) match {
           case m: Module =>
             m.symbolOfString.get(prop.name) match {
@@ -441,7 +421,7 @@ final class TypeChecker(
                 m.values.get(symbol) match {
                   case Some(t) =>
                     val typedProp = T.Ident(prop.meta.typed(t), symbol)
-                    T.Expression.Prop(
+                    T.Term.Prop(
                       meta.typed(t),
                       inferredLhs,
                       typedProp
@@ -461,24 +441,45 @@ final class TypeChecker(
       case E.Var(meta, ident) =>
         val typedIdent = inferIdent(ident, isType = false)
 
-        T.Expression.Var(
+        T.Term.Var(
           meta.typed(typedIdent.meta.typ),
           typedIdent
         )
+      case E.Arrow(meta, scope, label, from, to) =>
+        val typedFrom = inferTerm(from)
+        val typedTo = inferTerm(to)
+        val typedLabel = label.map(ident => {
+          val name = ctx.makeSymbol(ident.name)
+          T.Ident(
+            meta = ident.meta.typed(evalTypeAnnotation(typedFrom)),
+            name
+          )
+        })
+        T.Term.Arrow(
+          meta.typed(Star),
+          scope,
+          typedLabel,
+          typedFrom,
+          typedTo
+        )
       case f: E.Func => inferFunc(f)
+      case E.Error(meta) =>
+        T.Term.Error(
+          meta.typed(Uninferred)
+        )
     }
   }
 
-  private def inferFunc(func: P.Expression.Func): T.Expression = {
+  private def inferFunc(func: P.Term.Func): T.Term = {
     val checkedGenericParams = inferGenericParams(func.genericParams)
     val checkedParams = func.params.map(inferFuncParam)
-    val checkedRetTyp = func.returnType.map(inferTypeAnnotation)
+    val checkedRetTyp = func.returnType.map(inferTerm)
     val checkedBody = checkedRetTyp match {
       case Some(typeAnnotation) =>
         val t = evalTypeAnnotation(typeAnnotation)
-        checkExpression(t)(func.body)
+        checkTerm(t)(func.body)
       case None =>
-        inferExpression(func.body)
+        inferTerm(func.body)
     }
     var typ = applyEnv(checkedBody.meta.typ)
     for (param <- checkedParams.reverse) {
@@ -490,7 +491,7 @@ final class TypeChecker(
       case _ =>
         typ = Func(None, Primitive.Unit, typ)
     }
-    T.Expression.Func(
+    T.Term.Func(
       meta = func.meta.typed(typ),
       fnToken =  func.fnToken,
       func.scope,
@@ -514,16 +515,16 @@ final class TypeChecker(
     getPatternLabelIdent(pattern).map(_.name)
   }
 
-  private def inferFuncParam(param: P.Expression.Param): T.Expression.Param = {
+  private def inferFuncParam(param: P.Term.Param): T.Term.Param = {
     val checkedPattern = inferPattern(param.pattern)
-    T.Expression.Param(checkedPattern)
+    T.Term.Param(checkedPattern)
   }
 
   private def inferIdent(ident: P.Ident, isType: Boolean): T.Ident = {
     ident.scope.resolve(ident.name) match {
       case Some((typ, symbol)) =>
         val error = ctx.getDeclOf(symbol) match {
-          case Some(d) if !isType && d.loc.start >= ident.loc.end =>
+          case Some(d: P.Declaration.Let) if !isType && d.loc.start >= ident.loc.end =>
             Some(
               Diagnostic(
                 loc = ident.loc,

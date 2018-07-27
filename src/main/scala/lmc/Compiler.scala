@@ -231,19 +231,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   }
 
 
-
-  private def inType(node: Parsed.Node): Boolean = {
-    node match {
-      case _: Parsed.TypeAnnotation => true
-      case _ => (for {
-        parentId <- node.meta.parentId
-        parent <- getParsedNode(parentId)
-        isInType = inType(parent)
-      } yield isInType).contains(true)
-    }
-
-  }
-
   private def findNodeAtPos(path: Path, pos: Pos): Option[Typed.Node] = {
     findDeclAtPos(path, pos).flatMap(d => findNodeInNode(d, pos))
   }

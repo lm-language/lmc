@@ -117,7 +117,7 @@ trait Syntax {
       name.toString
   }
 
-  sealed trait Declaration extends Node with Expression.Block.Member {
+  sealed trait Declaration extends Node with Term.Block.Member {
     def modifiers: Set[Declaration.Modifier]
     override def toString = this match {
       case Declaration.Let(_, _, pattern, rhs) =>
@@ -171,7 +171,7 @@ trait Syntax {
       override val meta: Meta,
       override val modifiers: Set[Declaration.Modifier],
       pattern: Pattern,
-      rhs: Option[Expression]
+      rhs: Option[Term]
     ) extends Declaration
 
     case class TypeAlias(
@@ -179,13 +179,13 @@ trait Syntax {
       override val modifiers: Set[Declaration.Modifier],
       ident: Ident,
       kindAnnotation: Option[KindAnnotation],
-      rhs: Option[TypeAnnotation]
+      rhs: Option[Term]
     ) extends Declaration
 
     case class Include(
       override val meta: Meta,
       override val modifiers: Set[Declaration.Modifier],
-      expr: Expression
+      expr: Term
     ) extends Declaration
 
     case class Enum(
@@ -223,7 +223,7 @@ trait Syntax {
       case class Case(
         override val meta: Meta,
         ident: Ident,
-        params: Array[(Option[Ident], TypeAnnotation)]
+        params: Array[(Option[Ident], Term)]
       ) extends Node {
         override def children: Array[Node] = {
           val paramPatterns: Array[Node] = params.flatMap({
@@ -275,7 +275,7 @@ trait Syntax {
     case class Annotated(
       meta: Meta,
       innerPattern: Pattern,
-      typeAnnotation: TypeAnnotation
+      typeAnnotation: Term
     ) extends Pattern
     case class DotName(
       meta: Meta,
@@ -315,80 +315,9 @@ trait Syntax {
     }
   }
 
-  sealed trait TypeAnnotation extends Node {
-    import TypeAnnotation._
-    override def toString = this match {
-      case TypeAnnotation.Var(_, ident) => ident.toString
-      case TypeAnnotation.Func(_, _, Some(label), from, to) =>
-        s"(~($label: $from) -> $to)"
-      case TypeAnnotation.Func(_, _, None, from, to) =>
-        s"($from -> $to)"
-      case TypeAnnotation.Error(_) => "<ERROR>"
-    }
-    override def children: Array[Node] =
-      this match {
-        case Var(_, ident) => Array(ident)
-        case Forall(_, _, genericParams, body) =>
-          genericParams :+ body
-        case Func(_, _, Some(label), from, to) =>
-          Array(label, from, to)
-        case Func(_, _, None, from, to) =>
-          Array(from, to)
-        case TApplication(_, tf, args) =>
-          tf +: args
-        case Paren(_, a) => Array(a)
-        case Prop(_, e, prop) => Array(e, prop)
-        case Error(_) => Array()
-      }
 
-    def withMeta(meta: Meta): TypeAnnotation = this match {
-      case Var(_, ident) => Var(meta, ident)
-      case Forall(_, scope, p, body) =>
-        Forall(meta, scope, p, body)
-      case Func(_, fs, label, from, to) =>
-          Func(meta, fs, label, from, to)
-      case TApplication(_, f, args) => TApplication(meta, f, args)
-      case Error(_) => Error(meta)
-    }
-  }
-  object TypeAnnotation {
-    case class Var(
-      meta: Meta,
-      ident: Ident
-    ) extends TypeAnnotation
-    case class TApplication(
-      meta: Meta,
-      tFunc: TypeAnnotation,
-      args: Array[TypeAnnotation]
-    ) extends TypeAnnotation
-    case class Paren(
-      meta: Meta,
-      inner: TypeAnnotation
-    ) extends TypeAnnotation
-    case class Forall(
-      meta: Meta,
-      forallScope: _Scope,
-      genericParams: Array[GenericParam],
-      inner: TypeAnnotation
-    ) extends TypeAnnotation
-    case class Func(
-      meta: Meta,
-      funcScope: Scope,
-      label: Option[Ident],
-      from: TypeAnnotation,
-      returnType: TypeAnnotation
-    ) extends TypeAnnotation
-    case class Prop(
-      meta: Meta,
-      expr: Expression,
-      prop: Ident
-    ) extends TypeAnnotation
-    case class Error(meta: Meta) extends TypeAnnotation
-  }
-
-
-  sealed trait Expression extends Node with Expression.Block.Member {
-    import Expression._
+  sealed trait Term extends Node with Term.Block.Member {
+    import Term._
     override def children: Array[Node] =
       this match {
         case Literal(_, _) => Array.empty
@@ -402,9 +331,18 @@ trait Syntax {
         case Prop(_, e, p) => Array(e, p)
         case m: Module =>
           m.declarations.toArray
+        case Forall(_, _, genericParams, body) =>
+            genericParams :+ body
+        case Arrow(_, _, Some(label), from, to) =>
+          Array(label, from, to)
+        case Arrow(_, _, None, from, to) =>
+          Array(from, to)
+        case TApplication(_, tf, args) =>
+            tf +: args
+        case Error(_) => Array()
       }
 
-    def withMeta(meta: Meta): Expression = this match {
+    def withMeta(meta: Meta): Term = this match {
       case Literal(_, a) => Literal(meta, a)
       case Var(_, a) => Var(meta, a)
       case c: Call => c.copy(meta)
@@ -415,6 +353,8 @@ trait Syntax {
       case p: Prop => p.copy(meta)
       case p: Error => p.copy(meta)
       case w: With => w.copy(meta)
+      case a: Arrow => a.copy(meta)
+      case f: Forall => f.copy(meta)
     }
 
     override def toString: String = this match {
@@ -425,66 +365,88 @@ trait Syntax {
         s"fn$genericParams($params): $returnType => $body"
       case Func(_, _, _, genericParams, params, None, body) =>
         s"fn[${joinIterable(genericParams)}](${joinIterable(params)}) => $body"
+      case Arrow(_, _, Some(label), from, to) =>
+        s"(~($label: $from) -> $to)"
+      case Arrow(_, _, None, from, to) =>
+        s"($from -> $to)"
     }
   }
-  object Expression {
+  object Term {
     case class Literal(
       meta: Meta,
       variant: Literal.Variant
-    ) extends Expression
+    ) extends Term
     case class Var(
       meta: Meta,
       ident: Ident
-    ) extends Expression
+    ) extends Term
     case class Func(
       meta: Meta,
       fnToken: Token,
       funcScope: _Scope,
       genericParams: Array[GenericParam],
       params: Array[Param],
-      returnType: Option[TypeAnnotation],
-      body: Expression
-    ) extends Expression
+      returnType: Option[Term],
+      body: Term
+    ) extends Term
     case class Block(
       override val meta: Meta,
       blockScope: _Scope,
       members: Array[Block.Member]
-    ) extends Expression
+    ) extends Term
     case class Module(
       meta: Meta,
       moduleScope: _Scope,
       declarations: Array[Declaration]
-    ) extends Expression
+    ) extends Term
     case class If(
       meta: Meta,
-      predicate: Expression,
-      trueBranch: Expression,
-      falseBranch: Option[Expression]
-    ) extends Expression
+      predicate: Term,
+      trueBranch: Term,
+      falseBranch: Option[Term]
+    ) extends Term
     case class Match(
       meta: Meta,
-      expr: Expression,
+      expr: Term,
       branches: Array[Match.Branch]
-    ) extends Expression
+    ) extends Term
     case class Call(
       meta: Meta,
-      func: Expression,
+      func: Term,
       args: Array[Call.Arg]
-    ) extends Expression
+    ) extends Term
     case class Prop(
       meta: Meta,
-      expr: Expression,
+      expr: Term,
       prop: Ident
-    ) extends Expression
+    ) extends Term
     case class With(
       meta: Meta,
-      e1: Expression,
-      e2: Expression
-    ) extends Expression
-    case class Error(meta: Meta) extends Expression
+      e1: Term,
+      e2: Term
+    ) extends Term
+    case class Forall(
+      meta: Meta,
+      forallScope: _Scope,
+      genericParams: Array[GenericParam],
+      inner: Term
+    ) extends Term
+    case class Arrow(
+      meta: Meta,
+      funcScope: Scope,
+      label: Option[Ident],
+      from: Term,
+      returnType: Term
+    ) extends Term
+    case class TApplication(
+      meta: Meta,
+      tFunc: Term,
+      args: Array[Term]
+    ) extends Term
+    case class Error(meta: Meta) extends Term
 
     object Call {
-      case class Arg(meta: Meta, label: Option[Ident], value: Expression) extends Node {
+      case class Arg(meta: Meta, label: Option[Ident], value: Term) extends Node {
         override def children: Array[Node] =
           label match {
             case Some(ident) => Array(ident, value)
@@ -495,7 +457,7 @@ trait Syntax {
 
     object Match {
       case class Branch(
-        meta: Meta, branchScope: Scope, pattern: Pattern, expr: Expression
+        meta: Meta, branchScope: Scope, pattern: Pattern, expr: Term
       ) extends Node {
         override def children: Array[Node] =
           Array(pattern, expr)
