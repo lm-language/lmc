@@ -2,7 +2,11 @@ package lmc.types
 import lmc.common.Symbol
 import lmc.utils
 
-sealed trait Type
+sealed trait Type {
+  def show(withParens: Boolean = false) = {
+    this.toString
+  }
+}
 
 case object ErrorType extends Type
 case class Var(symbol: Symbol) extends Type
@@ -57,13 +61,23 @@ case class Func(
   from: Type,
   to: Type
 ) extends Type {
-  override def toString: String = {
-    label match {
+  override def show(withParens: Boolean = false) = {
+    val inner = label match {
       case Some(l) =>
-        s"($l:$from -> $to)"
+        s"~($l:${from.show()}) -> ${to.show()}"
       case None =>
-        s"($from -> $to)"
+        s"${from.show(withParens = true)} -> $to"
     }
+    if (withParens) {
+      s"($inner)"
+    } else {
+      inner
+    }
+  }
+
+
+  override def toString: String = {
+    show()
   }
 }
 object Func {

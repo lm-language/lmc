@@ -1,6 +1,7 @@
 package lmc.syntax
 
 import lmc.common._
+import lmc.utils.joinIterable
 import lmc.diagnostics.Diagnostic
 import lmc.syntax.token.Token
 
@@ -112,6 +113,8 @@ trait Syntax {
     name: Name
   ) extends Node {
     val children = Array()
+    override def toString =
+      name.toString
   }
 
   sealed trait Declaration extends Node with Expression.Block.Member {
@@ -149,6 +152,12 @@ trait Syntax {
     ident: Ident,
     kindAnnotation: Option[KindAnnotation]
   ) extends Node {
+    override def toString: String =
+      kindAnnotation match {
+        case Some(annotation) =>
+          s"$ident: $annotation"
+        case None => ident.toString
+      }
     override def children: Array[Node] =
       this match {
         case GenericParam(_, i, Some(annotation)) =>
@@ -231,6 +240,8 @@ trait Syntax {
   sealed trait Pattern extends Node {
     override def toString = this match {
       case Pattern.Var(_, ident) => ident.name.toString
+      case Pattern.Annotated(_, inner, annotation) =>
+          s"$inner: $annotation"
     }
     override def children: Array[Node] =
       this match {
@@ -306,19 +317,23 @@ trait Syntax {
 
   sealed trait TypeAnnotation extends Node {
     import TypeAnnotation._
+    override def toString = this match {
+      case TypeAnnotation.Var(_, ident) => ident.toString
+      case TypeAnnotation.Func(_, _, Some(label), from, to) =>
+        s"(~($label: $from) -> $to)"
+      case TypeAnnotation.Func(_, _, None, from, to) =>
+        s"($from -> $to)"
+      case TypeAnnotation.Error(_) => "<ERROR>"
+    }
     override def children: Array[Node] =
       this match {
         case Var(_, ident) => Array(ident)
         case Forall(_, _, genericParams, body) =>
           genericParams :+ body
-        case Func(_, _, from, to) =>
-          from.flatMap({
-            case (Some(ident), annotation) =>
-              Array[Node](ident, annotation)
-            case (None, annotation) =>
-              Array[Node](annotation)
-          }) :+ to
-
+        case Func(_, _, Some(label), from, to) =>
+          Array(label, from, to)
+        case Func(_, _, None, from, to) =>
+          Array(from, to)
         case TApplication(_, tf, args) =>
           tf +: args
         case Paren(_, a) => Array(a)
@@ -330,7 +345,8 @@ trait Syntax {
       case Var(_, ident) => Var(meta, ident)
       case Forall(_, scope, p, body) =>
         Forall(meta, scope, p, body)
-      case Func(_, fs, gp, body) => Func(meta, fs, gp, body)
+      case Func(_, fs, label, from, to) =>
+          Func(meta, fs, label, from, to)
       case TApplication(_, f, args) => TApplication(meta, f, args)
       case Error(_) => Error(meta)
     }
@@ -358,7 +374,8 @@ trait Syntax {
     case class Func(
       meta: Meta,
       funcScope: Scope,
-      params: Array[(Option[Ident], TypeAnnotation)],
+      label: Option[Ident],
+      from: TypeAnnotation,
       returnType: TypeAnnotation
     ) extends TypeAnnotation
     case class Prop(
@@ -401,9 +418,13 @@ trait Syntax {
     }
 
     override def toString: String = this match {
-      case Var(_, ident) => s"${ident.name.toString}, ${meta.loc}"
+      case Literal(_, Literal.LInt(x)) => x.toString
+      case Var(_, ident) => ident.name.toString
       case Prop(_, e, prop) => s"$e.$prop, ${meta.loc}"
-      case _ => super.toString
+      case Func(_, _, _, genericParams, params, Some(returnType), body) =>
+        s"fn$genericParams($params): $returnType => $body"
+      case Func(_, _, _, genericParams, params, None, body) =>
+        s"fn[${joinIterable(genericParams)}](${joinIterable(params)}) => $body"
     }
   }
   object Expression {
@@ -492,7 +513,9 @@ trait Syntax {
 
     case class Param(
       pattern: Pattern
-    )
+    ) {
+      override def toString: String = pattern.toString
+    }
   }
 
   sealed trait KindAnnotation extends Node {

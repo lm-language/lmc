@@ -42,6 +42,7 @@ object Lexer {
   val OPERATOR_TOKENS = Map(
     "==" -> EQEQ,
     "=>" -> FATARROW,
+    "->" -> ARROW,
     "=" -> EQ,
     "+" -> PLUS,
     "*" -> STAR,
@@ -58,7 +59,8 @@ object Lexer {
     ':' -> COLON,
     ',' -> COMMA,
     '[' -> LSQB,
-    ']' -> RSQB
+    ']' -> RSQB,
+    '~' -> TILDE,
   )
 
   val PUNCTUATION_CHARS: Set[Char] =

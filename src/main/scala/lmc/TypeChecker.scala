@@ -5,6 +5,7 @@ import lmc.diagnostics._
 import lmc.types._
 import lmc.utils.Debug
 
+import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 import scala.collection.mutable
 
@@ -72,6 +73,7 @@ final class TypeChecker(
         assertAssignability(errors, ident.loc)(typ, forwardType)
         val t = applyEnv(forwardType, Some(errors))
         setTypeOfSymbol(symbol, t)
+        ident.scope.setType(ident.name, symbol, t)
         T.Ident(ident.meta.typed(t), symbol)
       case None =>
         // compiler bug
@@ -97,6 +99,26 @@ final class TypeChecker(
           meta.typed(typedIdent.meta.typ),
           typedIdent
         )
+      case P.TypeAnnotation.Func(meta, scope, label, from, to) =>
+        val typedFrom = inferTypeAnnotation(from)
+        val typedTo = inferTypeAnnotation(to)
+        val typedLabel = label.map(ident => {
+          val name = ctx.makeSymbol(ident.name)
+          T.Ident(
+            meta = ident.meta.typed(evalTypeAnnotation(typedFrom)),
+            name
+          )
+        })
+        T.TypeAnnotation.Func(
+          meta.typed(Star),
+          scope,
+          typedLabel,
+          typedFrom,
+          typedTo
+        )
+      case P.TypeAnnotation.Paren(meta, inner) =>
+        val typedInner = inferTypeAnnotation(inner)
+        T.TypeAnnotation.Paren(meta.typed(typedInner.meta.typ), typedInner)
     }
   }
 
@@ -118,17 +140,8 @@ final class TypeChecker(
 
   private def inferLetDeclaration(let: P.Declaration.Let): T.Declaration = {
     let match {
-      case P.Declaration.Let(meta, modifiers, pattern: P.Pattern.Var, Some(rhs)) =>
-        val typedRhs = inferExpression(rhs)
-        val typedPattern = checkPattern(typedRhs.meta.typ)(pattern)
-        val typedModifiers = modifiers.map(_.typed)
-        T.Declaration.Let(
-          meta.typed(typedPattern.meta.typ),
-          typedModifiers,
-          typedPattern,
-          Some(typedRhs)
-        )
-      case P.Declaration.Let(meta, modifiers, pattern, Some(rhs)) =>
+      case P.Declaration.Let(meta, modifiers, pattern, Some(rhs))
+        if getPatternAnnotation(pattern).isDefined =>
         val typedPattern = inferPattern(pattern)
         val typedRhs = checkExpression(typedPattern.meta.typ)(rhs)
         val typedModifiers = modifiers.map(_.typed)
@@ -138,6 +151,25 @@ final class TypeChecker(
           typedPattern,
           Some(typedRhs)
         )
+
+      case P.Declaration.Let(meta, modifiers, pattern, Some(rhs)) =>
+        val typedRhs = inferExpression(rhs)
+        val typedPattern = checkPattern(typedRhs.meta.typ)(pattern)
+        val typedModifiers = modifiers.map(_.typed)
+        T.Declaration.Let(
+          meta.typed(typedPattern.meta.typ),
+          typedModifiers,
+          typedPattern,
+          Some(typedRhs)
+        )
+    }
+  }
+
+  private def getPatternAnnotation(p: P.Pattern): Option[P.TypeAnnotation] = {
+    p match {
+      case _: P.Pattern.Var => None
+      case P.Pattern.Annotated(_, _, annotation) => Some(annotation)
+      case P.Pattern.Paren(_, inner) => getPatternAnnotation(inner)
     }
   }
 
@@ -159,11 +191,32 @@ final class TypeChecker(
           meta.typed(typedInner.meta.typ),
           typedInner
         )
+      case P.Pattern.Var(meta, ident) =>
+        val typedIdent = inferBindingVarIdent(ident)
+        T.Pattern.Var(
+          meta.typed(typedIdent.meta.typ),
+          typedIdent
+        )
     }
+  }
+
+  private def inferBindingVarIdent(ident: P.Ident): T.Ident = {
+    val checkedIdent = checkBindingVarIdent(ctx.makeGenericType(ident.name))(ident)
+    checkedIdent.copy(
+      meta = checkedIdent.meta.withDiagnostic(
+        Diagnostic(
+          severity = Severity.Error,
+          loc = ident.loc,
+          variant = MissingTypeAnnotation
+        )
+      )
+    )
   }
 
   private def checkExpression(expected: Type)(expr: P.Expression): T.Expression = {
     expr match {
+      case f: P.Expression.Func =>
+        checkFunc(expected)(f)
       case _ =>
         val typedExpr = inferExpression(expr)
         val errors = ListBuffer.empty[Diagnostic]
@@ -171,6 +224,121 @@ final class TypeChecker(
         typedExpr.withMeta(
           meta = typedExpr.meta.withDiagnostics(errors)
         )
+    }
+  }
+
+  private def checkFunc(expected: Type)(f: P.Expression.Func): T.Expression = {
+    applyEnv(expected) match {
+      case Func(label, from, to) =>
+        val typedGenericParams = inferGenericParams(f.genericParams)
+        val expectedParams = getExpectedParams(expected)
+        val expectedReturnTyp = getExpectedReturnType(expected)
+        val errors = ListBuffer.empty[Diagnostic]
+        var i = 0
+        val typedParams = ListBuffer.empty[T.Expression.Param]
+        for ((expectedLabel, expectedTyp) <- expectedParams) {
+          if (i >= f.params.length) {
+            // missing param
+            errors.append(
+              Diagnostic(
+                severity = Severity.Error,
+                loc = f.fnToken.loc,
+                variant = MissingParam(
+                  expectedLabel.map(_.text),
+                  expectedTyp
+                )
+              )
+            )
+          } else {
+            val param = f.params(i)
+            val typedPattern = checkPattern(expectedTyp)(param.pattern)
+            val labelError = (expectedLabel, getPatternLabelIdent(typedPattern)) match {
+              case (Some(expectedL), Some(foundLabelIdent)) =>
+                val foundLabel = foundLabelIdent.name
+                if (expectedL.text != foundLabel.text) {
+                  Some(Diagnostic(
+                    severity = Severity.Error,
+                    loc = foundLabelIdent.loc,
+                    variant = FuncParamLabelMismatch(expectedL.text)
+                  ))
+                } else {
+                  None
+                }
+              case (Some(expectedL), None) =>
+                Some(Diagnostic(
+                  severity = Severity.Error,
+                  loc = typedPattern.loc,
+                  variant = MissingParamLabel(expectedL.toString)
+                ))
+              case (None, _) =>
+                None
+            }
+            typedParams.append(
+              T.Expression.Param(
+                typedPattern.withMeta(
+                  meta = typedPattern.meta.withDiagnostics(labelError)
+                )
+              )
+            )
+          }
+          i += 1
+        }
+        while (i < f.params.length) {
+          val param = f.params(i)
+          val typedPattern = inferPattern(param.pattern)
+          typedParams.append(
+            T.Expression.Param(
+              typedPattern.withMeta(
+                typedPattern.meta.withDiagnostic(
+                  Diagnostic(
+                    severity = Severity.Error,
+                    loc = typedPattern.loc,
+                    variant = ExtraParam
+                  )
+                )
+              )
+            )
+          )
+          i += 1
+        }
+        val typedRetTypAnnotation = f.returnType.map(checkTypeAnnotation(Star))
+        typedRetTypAnnotation match {
+          case Some(retTypAnnot) =>
+            assertAssignability(
+              errors, retTypAnnot.loc
+            )(expectedReturnTyp, evalTypeAnnotation(retTypAnnot))
+          case None => ()
+        }
+        val bodyExpectedTyp = typedRetTypAnnotation
+          .map(evalTypeAnnotation)
+          .getOrElse(expectedReturnTyp)
+        val typedBody = checkExpression(bodyExpectedTyp)(f.body)
+        T.Expression.Func(
+          f.meta.typed(expected).withDiagnostics(errors),
+          f.fnToken,
+          f.scope,
+          typedGenericParams,
+          typedParams.toArray,
+          typedRetTypAnnotation,
+          typedBody
+        )
+    }
+  }
+
+  private def getExpectedParams(typ: Type): List[(Option[Symbol], Type)] = {
+    typ match {
+      case Func(label, from, to) =>
+        (label, from)::getExpectedParams(to)
+      case _ => List()
+    }
+  }
+
+  @tailrec
+  private def getExpectedReturnType(typ: Type): Type = {
+    typ match {
+      case Func(label, from, to) =>
+        getExpectedReturnType(to)
+      case t => t
     }
   }
 
@@ -208,6 +376,14 @@ final class TypeChecker(
           case None =>
             Var(ident.name)
         }
+      case T.TypeAnnotation.Func(_, _, label, from, returnType) =>
+        Func(
+          label.map(_.name),
+          evalTypeAnnotation(from),
+          evalTypeAnnotation(returnType)
+        )
+      case T.TypeAnnotation.Paren(_, inner) =>
+        evalTypeAnnotation(inner)
     }
   }
 
@@ -221,8 +397,8 @@ final class TypeChecker(
   }
 
   private def assertAssignability(errors: ListBuffer[diagnostics.Diagnostic], loc: Loc)
-    (found: Type, expected: Type) = {
-    (found, expected) match {
+    (found: Type, expected: Type): Unit = {
+    (applyEnv(found), expected) match {
       case
         (Primitive.Int, Primitive.Int)
         | (Primitive.Bool, Primitive.Bool)
@@ -232,6 +408,14 @@ final class TypeChecker(
       case (_, ExistentialInstance(i, _)) =>
         _generics.update(i, found)
       case (Var(a), Var(b)) if a == b => ()
+      case (Func(label1, from1, to1), Func(label2, from2, to2))
+        if (
+          label2.isEmpty ||
+          label1.map(_.text) == label2.map(_.text)
+        )=>
+        assertAssignability(errors, loc)(to1, to2)
+        assertAssignability(errors, loc)(from2, from1)
+        ()
       case _ =>
         errors.append(
           Diagnostic(
@@ -281,7 +465,58 @@ final class TypeChecker(
           meta.typed(typedIdent.meta.typ),
           typedIdent
         )
+      case f: E.Func => inferFunc(f)
     }
+  }
+
+  private def inferFunc(func: P.Expression.Func): T.Expression = {
+    val checkedGenericParams = inferGenericParams(func.genericParams)
+    val checkedParams = func.params.map(inferFuncParam)
+    val checkedRetTyp = func.returnType.map(inferTypeAnnotation)
+    val checkedBody = checkedRetTyp match {
+      case Some(typeAnnotation) =>
+        val t = evalTypeAnnotation(typeAnnotation)
+        checkExpression(t)(func.body)
+      case None =>
+        inferExpression(func.body)
+    }
+    var typ = applyEnv(checkedBody.meta.typ)
+    for (param <- checkedParams.reverse) {
+      val label = getPatternLabel(param.pattern)
+      typ = Func(label, param.pattern.meta.typ, typ)
+    }
+    typ match {
+      case _: Func => ()
+      case _ =>
+        typ = Func(None, Primitive.Unit, typ)
+    }
+    T.Expression.Func(
+      meta = func.meta.typed(typ),
+      fnToken =  func.fnToken,
+      func.scope,
+      genericParams = checkedGenericParams,
+      params = checkedParams,
+      checkedRetTyp,
+      checkedBody
+    )
+  }
+
+  private def getPatternLabelIdent(pattern: T.Pattern): Option[T.Ident] = {
+    pattern match {
+      case T.Pattern.Var(_, ident) => Some(ident)
+      case T.Pattern.Paren(_, inner) => getPatternLabelIdent(inner)
+      case T.Pattern.Annotated(_, innerPattern, _) => getPatternLabelIdent(innerPattern)
+      case T.Pattern.Error(_) => None
+    }
+  }
+
+  private def getPatternLabel(pattern: T.Pattern): Option[Symbol] = {
+    getPatternLabelIdent(pattern).map(_.name)
+  }
+
+  private def inferFuncParam(param: P.Expression.Param): T.Expression.Param = {
+    val checkedPattern = inferPattern(param.pattern)
+    T.Expression.Param(checkedPattern)
   }
 
   private def inferIdent(ident: P.Ident, isType: Boolean): T.Ident = {

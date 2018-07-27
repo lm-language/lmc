@@ -809,28 +809,17 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
            )
          })
        })
-       case FN => buildNode((meta, errors) => {
-
+       case TILDE => buildNode((meta, errors) => {
          withNewScope(funcScope => {
-           val startTok = advance()
+           advance()
            expect(errors)(LPAREN)
-           val params = parseCommaSeperatedList(() => {
-             val label = peek.variant match {
-               case COLON =>
-                 val ident = parseIdent()
-                 advance() // consume colon
-                 Some(ident)
-               case _ =>
-                 None
-             }
-             val typ = parseTypeAnnotation()
-             (label, typ)
-           })(Parser.TYPE_PREDICTORS)
+           val label = parseIdent()
+           expect(errors)(COLON)
+           val from = parseTypeAnnotation()
            expect(errors)(RPAREN)
-           expect(errors)(FATARROW)
-           val returnType = parseTypeAnnotation()
-           TypeAnnotation.Func(meta, funcScope, params.toArray, returnType)
-
+           expect(errors)(ARROW)
+           val to = parseTypeAnnotation()
+           TypeAnnotation.Func(meta, funcScope, Some(label), from, to)
          })
        })
        case v if Parser.EXPR_PREDICTORS.contains(v) =>
@@ -889,6 +878,21 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
               )
             )
           })
+        case ARROW =>
+          buildNode(start = Some(head), f = (meta, errors) => withNewScope(scope => {
+            advance()
+            val from = head
+            val to = parseTypeAnnotation()
+            parseTypeAnnotationTail(
+              TypeAnnotation.Func(
+                meta,
+                scope,
+                None,
+                from,
+                to
+              )
+            )
+          }))
         case _ => head
       }
 

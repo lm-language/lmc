@@ -16,10 +16,10 @@ object token {
 
       // Punctuation
       VBAR, LPAREN, RPAREN, LBRACE, RBRACE, SEMICOLON,
-      COLON, COMMA, LSQB, RSQB,
+      COLON, COMMA, LSQB, RSQB, TILDE,
 
       // Operators
-      EQ, EQEQ, PLUS, FATARROW, STAR, DOT, DOTDOT,
+      EQ, EQEQ, PLUS, FATARROW, ARROW, STAR, DOT, DOTDOT,
 
       UNEXPECTED_CHAR,
       INVALID_OPERATOR,

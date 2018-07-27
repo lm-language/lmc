@@ -2,8 +2,9 @@ let f = fn() => 0;
 let f1 = fn(): Int => true;
 let idInt = fn(a: Int) => a;
 let fstIntBool = fn(a: Int, b: Bool) => a;
-let withWrongRetTyp: fn(a: Int) => Bool = fn(): Int => 3;
-let withWrongParamType: fn(a: Int) => Bool =
+let withWrongRetTyp: ~(a: Int) -> Bool = fn(): Int => 3;
+let withWrongParamType: ~(a: Int) -> Bool =
   fn(f: Bool, b: Int): Bool => true;
-let withoutError: fn(a: Int, b: Bool) => Bool = fn(a, b) => b;
+let withoutError: ~(a: Int) -> ~(b: Bool) -> Bool = fn(a, b) => b;
 let uninferred = fn(a) => a;
+let x: (Int -> Int) = idInt;
