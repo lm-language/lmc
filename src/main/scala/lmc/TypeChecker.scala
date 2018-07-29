@@ -359,10 +359,15 @@ final class TypeChecker(
   private def evalTypeAnnotation(annotation: T.Term): Type = {
     annotation match {
       case T.Term.Var(_, ident) =>
-        annotation.scope.resolveTypeVar(ident.name) match {
-          case Some(t) => t
-          case None =>
-            Var(ident.name)
+        ctx.getDeclOf(ident.name) match {
+          case Some(T.Declaration.Let(_, _, _, Some(rhs))) =>
+            evalTypeAnnotation(rhs)
+          case _ =>
+            annotation.scope.resolveTypeVar(ident.name) match {
+              case Some(t) => t
+              case None =>
+                Var(ident.name)
+            }
         }
       case T.Term.Arrow(_, _, label, from, returnType) =>
         Func(
@@ -370,6 +375,9 @@ final class TypeChecker(
           evalTypeAnnotation(from),
           evalTypeAnnotation(returnType)
         )
+      case T.Term.Call(meta, f, args) =>
+        val evaledF = evalTypeAnnotation(f)
+        ???
       case T.Term.Error(_) =>
         Uninferred
     }
@@ -463,11 +471,51 @@ final class TypeChecker(
           typedTo
         )
       case f: E.Func => inferFunc(f)
+      case E.If(meta, pred, trueBranch, Some(falseBranch)) =>
+        val typedPred = checkTerm(Primitive.Bool)(pred)
+        val typedTrueBranch = inferTerm(trueBranch)
+        val typedFalseBranch = checkTerm(typedTrueBranch.meta.typ)(falseBranch)
+        T.Term.If(
+          meta.typed(typedTrueBranch.meta.typ),
+          typedPred,
+          typedTrueBranch,
+          Some(typedFalseBranch)
+        )
+      case c: E.Call => inferCall(c)
       case E.Error(meta) =>
         T.Term.Error(
           meta.typed(Uninferred)
         )
     }
+  }
+
+  private def inferCall(call: P.Term.Call): T.Term = {
+    val typedFunc = inferTerm(call.func)
+    val funcTyp = applyEnv(typedFunc.meta.typ)
+    funcTyp match {
+      case Func(label, from, to) =>
+        val arg = call.args.head
+        val checkedArgTerm = checkTerm(from)(arg.value)
+        T.Term.Call(
+          call.meta.typed(to),
+          typedFunc,
+          Array(
+            T.Term.Call.Arg(
+              arg.meta.typed(checkedArgTerm.meta.typ),
+              arg.label.map(i =>
+                  T.Ident(
+                    i.meta.typed(checkedArgTerm.meta.typ),
+                    ctx.makeSymbol(i.name))
+              ),
+              checkedArgTerm
+            )
+          )
+        )
+      case _ =>
+        // not a function
+        ???
+    }
+
   }
 
   private def inferFunc(func: P.Term.Func): T.Term = {

@@ -339,6 +339,10 @@ trait Syntax {
           Array(from, to)
         case TApplication(_, tf, args) =>
             tf +: args
+        case If(_, p, t, Some(f)) =>
+          Array(p, t, f)
+        case If(_, p, t, None) =>
+          Array(p, t)
         case Error(_) => Array()
       }
 
