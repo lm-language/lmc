@@ -35,26 +35,20 @@ object Parser {
   val TYPE_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, LSQB).union(EXPR_PREDICTORS)
 
   val ARG_PREDICTORS: Set[token.Variant] = EXPR_PREDICTORS
-  val DECL_MODIFIERS: Map[token.Variant, Declaration.Modifier] = Map(
-    EXTERN -> Declaration.Modifier.Extern,
-    ABSTRACT -> Declaration.Modifier.Abstract,
-    OVERRIDE -> Declaration.Modifier.Override
-  )
   val DECL_PREDICTORS: Set[token.Variant] = Set(
     LET, EXTERN, TYPE, INCLUDE, ENUM,
     MODULE
-  ) union DECL_MODIFIERS.keySet
+  )
 }
 
 final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token]) {
-
   type Scope = syntax.Parsed._Scope
   private var _currentToken: Token = tokens.next
   private var _lastToken: Token = _currentToken
   private var _lookahead: Option[Token] = None
   private def currentToken = _currentToken
   private var _scopes = List(
-    WeakReference(ctx.PrimitiveScope.asInstanceOf[syntax.Parsed._Scope])
+    WeakReference[ScopeBuilder](ctx.PreludeScope.asInstanceOf[ScopeBuilder])
   )
   private var _parents = List.empty[Int]
 
@@ -92,7 +86,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
   }
 
 
-  private def withNewScope[T](f: (ScopeBuilder) => T): T = {
+  private def withNewScope[T](f: ScopeBuilder => T): T = {
     val startToken = currentToken
     val parent: Option[ScopeBuilder] = _scopes match {
       case hd :: _ =>
@@ -103,7 +97,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
 
     val scope = common.ScopeBuilder(parent match {
       case Some(p) => Some(WeakReference(p))
-      case None => Some(WeakReference(ctx.PrimitiveScope))
+      case None => Some(WeakReference(null))
     })
     parent match {
       case Some(parentScope) =>
@@ -207,10 +201,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
 
   def parseDeclaration: Declaration = {
 
-    val modifierErrors = ListBuffer.empty[Diagnostic]
-    val modifiersWithTokens = parseModifiers(modifierErrors)
-    val modifiers = modifiersWithTokens.map(_._2).toSet
-    val modifierTokens = modifiersWithTokens.map(_._1)
     currentToken.variant match {
       case SEMICOLON =>
         advance()
@@ -229,7 +219,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         expect(errors)(SEMICOLON)
         Declaration.Let(
           meta,
-          modifiers,
           pattern,
           rhs
         )
@@ -239,18 +228,8 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         advance()
         val e = parseTerm()
         expect(errors)(SEMICOLON)
-        for (modifierTok <- modifierTokens) {
-          errors.append(
-            Diagnostic(
-              loc = modifierTok.loc,
-              severity = Severity.Error,
-              variant = ModifierOnInclude
-            )
-          )
-        }
         Declaration.Include(
           meta,
-          modifiers,
           e
         )
 
@@ -275,7 +254,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         val semicolon = expect(errors)(SEMICOLON)
         Declaration.TypeAlias(
           meta,
-          modifiers,
           ident, kindAnnotation, rhs
         )
       })
@@ -300,7 +278,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           expect(errors)(RBRACE)
           expect(errors)(SEMICOLON)
           Declaration.Enum(
-            meta, modifiers,
+            meta,
             enumScope,
             ident,
             genericParams,
@@ -330,7 +308,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           }
           expect(errors)(RBRACE)
           Declaration.Module(
-            meta, modifiers,
+            meta,
             ident,
             moduleScope,
             genericParams,
@@ -352,7 +330,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         errors.appendAll(skippedDiagnostics)
         Declaration.Error(
           meta,
-          modifiers
         )
       })
     }
@@ -385,29 +362,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
       params
     )
   })
-
-  private def parseModifiers(
-    errors: ListBuffer[Diagnostic],
-    modifiers: Vector[(Token, Declaration.Modifier)] = Vector()
-  ): Vector[(Token, Declaration.Modifier)] = {
-    Parser.DECL_MODIFIERS.get(currentToken.variant) match {
-      case Some(modifier) =>
-        val tok = advance()
-        if (modifiers.contains(modifier)) {
-          errors.append(
-            Diagnostic(
-              loc = tok.loc,
-              severity = Severity.Error,
-              variant = DuplicateModifier(tok.lexeme)
-            )
-          )
-          parseModifiers(errors, modifiers)
-        } else {
-          parseModifiers(errors, modifiers ++ Vector(tok -> modifier))
-        }
-      case _ => modifiers
-    }
-  }
 
   private def parseKindAnnotation(): KindAnnotation = buildNode((meta, errors) => {
     currentToken.variant match {
@@ -482,7 +436,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           meta,
           startTok,
           fnScope,
-          genericParams.toArray,
           params.toArray,
           annotation,
           body

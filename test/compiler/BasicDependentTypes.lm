@@ -1,6 +1,5 @@
-extern let isTrue: Bool -> Bool;
 
-let IntIfTrue = fn (b: Bool): Type => if (isTrue(bool)) Int else Bool;
+let IntIfTrue = fn (b: Bool): Type => if (boolEq(true, b)) Int else Bool;
 
 let intVal: IntIfTrue(true) = 1;
 let boolVal: IntIfTrue(false) = true;

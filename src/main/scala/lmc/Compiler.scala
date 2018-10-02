@@ -5,16 +5,15 @@ import java.nio.file.{Path, Paths}
 import lmc.common._
 
 import scala.concurrent.Future
-import scala.collection._
-import lmc.types.{ExistentialInstance, Type, Uninferred, Star, Constructor}
+import scala.collection.mutable
 import diagnostics._
 import io.{File, Stream, StringStream}
-import lmc.syntax.{Named, Parsed, Typed}
+import lmc.syntax.{Parsed, Typed}
+import lmc.Value.{Type, Constructor}
 
 import scala.collection.mutable.ListBuffer
-import scala.ref.WeakReference
 
-class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
+class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
   extends Context
     with Context.TC
     with Context.Parser
@@ -28,61 +27,65 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   private var _nextNodeId = 0
   private val _parsedNodes = mutable.WeakHashMap.empty[Int, Parsed.Node]
   private val _declarationOf = mutable.HashMap.empty[Symbol, Int]
-  private val _associatedSymbols = mutable.WeakHashMap.empty[Int, Symbol]
-  private val _defIdent = mutable.WeakHashMap.empty[Symbol, Int]
-  private val _associatedSymbolOfSymbol = mutable.WeakHashMap.empty[Symbol, Symbol]
 
-  private val primitiveTypes = Map(
-    "Unit" -> Star,
-    "Int" -> Star,
-    "Bool" -> Star
-  ).map({
-    case (name, kind) =>
-    val symbol = makeSymbol(name)
-    (name, (lmc.types.Constructor(symbol), kind))
-  })
+  private val _types = mutable.HashMap.empty[Symbol, Type]
 
-  private def primitive(str: String): Type = {
-    primitiveTypes.get(str).map(_._1).get
-  }
 
   override val Primitive: Primitive = new Primitive {
-    override val Int: Type = primitive("Int")
-    override val Bool: Type = primitive("Bool")
-    override val Unit: Type = primitive("Unit")
+    override val BoolSymbol: Symbol = makeSymbol("Bool")
+    override val IntSymbol: Symbol = makeSymbol("Int")
+    override val UnitSymbol: Symbol = makeSymbol("Unit")
+    override val TypeSymbol: Symbol = makeSymbol("Type")
+
+    override val Int: Type = makePrimitive(IntSymbol)
+    override val Unit: Type = makePrimitive(UnitSymbol)
+    override val Bool: Type = makePrimitive(BoolSymbol)
+    override val Type: Type = makePrimitive(TypeSymbol)
   }
 
-  val checker = new TypeChecker(this)
+  private val _boolEqSymbol = makeSymbol("boolEq")
+  private val _trueSymbol = makeSymbol("true")
+  private val _falseSymbol = makeSymbol("false")
 
-  override val PrimitiveScope: Scope = {
-    val loc = Loc(
-      path = Paths.get("<builtin>"),
-      start = Pos(0, 0),
-      end = Pos(0, 0))
+  override val PreludeScope: Scope = ScopeBuilder(None, mutable.HashMap(
+    "Int" -> Primitive.IntSymbol,
+    "Bool" -> Primitive.BoolSymbol,
+    "Unit" -> Primitive.UnitSymbol,
+    "Type" -> Primitive.TypeSymbol,
+    "boolEq" -> _boolEqSymbol,
+    "true" -> _trueSymbol,
+    "false" -> _falseSymbol
+  ))
 
-    val entries = Map(
-      "unit" -> Primitive.Unit,
-      "true" -> Primitive.Bool,
-      "false" -> Primitive.Bool
+  private val Prelude: Env = Env(
+    types = Map(
+      Primitive.BoolSymbol -> Primitive.Type,
+      Primitive.IntSymbol -> Primitive.Type,
+      Primitive.UnitSymbol -> Primitive.Type,
+      Primitive.TypeSymbol -> Primitive.Type,
+      _boolEqSymbol -> Value.arrow(Primitive.Bool, Primitive.Bool, Primitive.Bool),
+      _trueSymbol -> Primitive.Bool,
+      _falseSymbol -> Primitive.Bool
+    ),
+    values = Map(
+      Primitive.BoolSymbol -> Primitive.Bool,
+      Primitive.IntSymbol -> Primitive.Int,
+      Primitive.TypeSymbol -> Primitive.Type,
+      Primitive.UnitSymbol -> Primitive.Unit,
+      _boolEqSymbol -> Value.Func(v1 => Value.Func(v2 => {
+        Value.Bool(v1 == v2)
+      })),
+      _trueSymbol -> Value.Bool(true),
+      _falseSymbol -> Value.Bool(false)
     )
+  )
 
-    val scopeBuilder = ScopeBuilder(parent = None)
-    scopeBuilder.setLoc(loc)
-    for ((name, typ) <- entries) {
-      val symbol = makeSymbol(name)
-      scopeBuilder.setSymbol(name, ScopeEntry(symbol, None))
-      scopeBuilder.setType(name, symbol, typ)
-      checker.setTypeOfSymbol(symbol, typ)
-    }
 
-    for ((name, (t, kind)) <- primitiveTypes) {
-      val symbol = t.symbol
-      scopeBuilder.setType(name, symbol, kind)
-      scopeBuilder.addToTypeScope(symbol, Constructor(symbol))
-    }
-    scopeBuilder
+  private val checker = new TypeChecker(this)
+
+  private def makePrimitive(symbol: Symbol): Type = {
+    Constructor(symbol)
   }
-
 
   def compile(): Future[Unit] = {
     Future.unit
@@ -107,7 +110,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
         val parsed = getParsedSourceFile(path)
         val binder = new Binder(this, addErrors)
         binder.bind(parsed)
-        var checkedSourceFile = checker.inferSourceFile(parsed)
+        var checkedSourceFile = checker.inferSourceFile(parsed, Prelude)
         if (errors.nonEmpty) {
           checkedSourceFile = checkedSourceFile.copy(
             meta = checkedSourceFile.meta.withDiagnostics(errors)
@@ -120,26 +123,6 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
         checkedSourceFile
     }
   }
-
-  override def initializeTypeOfSymbol(symbol: Symbol): Unit = {
-    val typ = makeGenericType(symbol.text)
-    checker.setTypeOfSymbol(symbol, typ)
-  }
-
-  def getType(symbol: Symbol): Option[Type] = {
-    checker.getTypeOfSymbol(symbol)
-      .map(t => checker.applyEnv(t))
-      .map({
-        case ExistentialInstance(_, _) =>
-          Uninferred
-        case t => t
-      })
-  }
-
-  def getKindOfSymbol(symbol: Symbol): Option[Type] = {
-    getType(symbol)
-  }
-
 
   def getSourceFileScope(path: Path): Scope = {
     getCheckedSourceFile(path).scope
@@ -205,7 +188,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   def makeGenericType(name: String): Type = {
     val id = _nextGenericId
     _nextGenericId += 1
-    ExistentialInstance(id, name)
+    ???
   }
 
   def getHoverInfo(path: Path, pos: Pos): Option[String] = for {
@@ -220,14 +203,7 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
 
   private def getHoverInfoForIdent(ident: Typed.Ident): Option[String] = {
     val symbol = ident.name
-
-    checker.getTypeOfSymbol(symbol)
-      .map(t => checker.applyEnv(t))
-      .map(_.toString) match {
-      case Some(t) => Some(t)
-      case None =>
-        checker.getKindOfSymbol(ident.name).map(_.toString)
-    }
+    ???
   }
 
 
@@ -266,29 +242,12 @@ class Compiler(paths: Iterable[Path], debug: (String) => Unit = (_) => {})
   override def getParsedNode(id: Int): Option[Parsed.Node] =
     _parsedNodes.get(id)
 
-  override def getDeclOf(symbol: Symbol): Option[Parsed.Declaration] =
-    _declarationOf.get(symbol).flatMap(getParsedNode)
-      .asInstanceOf[Option[Parsed.Declaration]]
-
   override def setDeclOf(symbol: Symbol, decl: Parsed.Declaration): Unit =
     _declarationOf.update(symbol, decl.meta.id)
 
-  override def getAssociatedSymbol(nodeId: Int): Option[Symbol] =
-    _associatedSymbols.get(nodeId)
+  override def getType(symbol: Symbol): Type = {
+    _types.getOrElse(symbol, Value.Uninferred)
+  }
 
-  override def setAssociatedSymbol(nodeId: Int, associated: Symbol): Unit =
-    _associatedSymbols.update(nodeId, associated)
-
-  override def setDefIdentId(symbol: Symbol, defIdentId: Int): Unit =
-    _defIdent.update(symbol, defIdentId)
-
-  override def getDefIdentId(symbol: Symbol): Option[Int] =
-    _defIdent.get(symbol)
-
-  override def setAssociatedSymbol(symbol: Symbol, associated: Symbol): Unit =
-    _associatedSymbolOfSymbol.update(symbol, associated)
-
-  override def getAssociatedSymbol(symbol: Symbol): Option[Symbol] =
-    _associatedSymbolOfSymbol.get(symbol)
-
+  override def setType(symbol: Symbol, typ: Type): Unit = _types.update(symbol, typ)
 }

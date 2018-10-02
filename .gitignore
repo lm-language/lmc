@@ -3,3 +3,6 @@ target
 project/target
 .ensime_cache
 .dotty-ide.json
+.ensime
+ensime-langserver.log
+pc.stdout.log

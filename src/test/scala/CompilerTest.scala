@@ -78,6 +78,7 @@ class CompilerTest {
   }
 
   private def showDiff(expected: String, found: String): Unit = {
+    return
     val envDiff = System.getenv("DIFF")
     println(envDiff)
     val command = if (envDiff == null) "diff" else envDiff
@@ -142,12 +143,8 @@ object ScopeJSON {
     ScopeJSON(
       loc = LocJSON.fromLoc(scope.loc),
       symbols = symbols
-        .mapValues(e => {
-          compiler.getType(e.symbol) match {
-            case Some(t) => t.toString
-            case None =>
-              throw new Error(s"CompilerBug: No type for symbol ${e.symbol.text}:${e.symbol.id}")
-          }
+        .mapValues(s => {
+          compiler.getType(s).toString
         })
         .mapValues(SymbolEntryJSON)
         .toMap,

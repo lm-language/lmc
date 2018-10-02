@@ -22,7 +22,7 @@ trait Syntax {
     def typ: _Type
     def withDiagnostic(diagnostic: Diagnostic): Meta
     def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta
-    def typed(typ: lmc.types.Type): Typed.Meta =
+    def typed(typ: lmc.Value.Type): Typed.Meta =
       Typed.ImmutableMeta(
         id, loc, scope, parentId,
         diagnostics, typ
@@ -88,9 +88,6 @@ trait Syntax {
     }
   }
 
-
-
-
   sealed trait Node extends HasLoc {
     def meta: Meta
 
@@ -118,18 +115,17 @@ trait Syntax {
   }
 
   sealed trait Declaration extends Node with Term.Block.Member {
-    def modifiers: Set[Declaration.Modifier]
     override def toString = this match {
-      case Declaration.Let(_, _, pattern, rhs) =>
+      case Declaration.Let(_, pattern, rhs) =>
         s"let $pattern = $rhs"
     }
     override def children: Array[Node] =
       this match {
-        case Declaration.Let(_, _, ident, Some(rhs)) =>
+        case Declaration.Let(_, ident, Some(rhs)) =>
           Array(ident, rhs)
-        case Declaration.Let(_, _, ident, None) =>
+        case Declaration.Let(_, ident, None) =>
           Array(ident)
-        case Declaration.TypeAlias(_, _, ident, kindAnnotation, rhs) =>
+        case Declaration.TypeAlias(_, ident, kindAnnotation, rhs) =>
           val result: ListBuffer[Node] = ListBuffer(ident)
           kindAnnotation match {
             case Some(t) => result.append(t)
@@ -140,9 +136,9 @@ trait Syntax {
             case None => ()
           }
           result.toArray
-        case Declaration.Module(_, _, ident, _, genericParams, body) =>
+        case Declaration.Module(_, ident, _, genericParams, body) =>
           (ident +: genericParams) ++ body
-        case Declaration.Error(_, _) =>
+        case Declaration.Error(_) =>
           Array()
       }
   }
@@ -169,14 +165,12 @@ trait Syntax {
   object Declaration {
     case class Let(
       override val meta: Meta,
-      override val modifiers: Set[Declaration.Modifier],
       pattern: Pattern,
       rhs: Option[Term]
     ) extends Declaration
 
     case class TypeAlias(
       override val meta: Meta,
-      override val modifiers: Set[Declaration.Modifier],
       ident: Ident,
       kindAnnotation: Option[KindAnnotation],
       rhs: Option[Term]
@@ -184,13 +178,11 @@ trait Syntax {
 
     case class Include(
       override val meta: Meta,
-      override val modifiers: Set[Declaration.Modifier],
       expr: Term
     ) extends Declaration
 
     case class Enum(
       override val meta: Meta,
-      override val modifiers: Set[Declaration.Modifier],
       enumScope: _Scope,
       ident: Ident,
       genericParams: Array[GenericParam],
@@ -199,7 +191,6 @@ trait Syntax {
 
     case class Module(
       meta: Meta,
-      modifiers: Set[Declaration.Modifier],
       ident: Ident,
       moduleScope: Scope,
       genericParams: Array[GenericParam],
@@ -207,17 +198,7 @@ trait Syntax {
     ) extends Declaration
     case class Error(
       override val meta: Meta,
-      override val modifiers: Set[Declaration.Modifier]
     ) extends Declaration
-
-    sealed trait Modifier {
-      def typed: Typed.Declaration.Modifier = this.asInstanceOf[Typed.Declaration.Modifier]
-    }
-    object Modifier {
-      case object Extern extends Modifier
-      case object Abstract extends Modifier
-      case object Override extends Modifier
-    }
 
     object Enum {
       case class Case(
@@ -324,10 +305,10 @@ trait Syntax {
         case Var(_, i) => Array(i)
         case Call(_, expr, args) =>
           expr +: args
-        case Func(_, _, _, genericParams, params, Some(returnType), body) =>
-          genericParams ++ params.map(_.pattern) :+ returnType :+ body
-        case Func(_, _, _, genericParams, params, None, body) =>
-          genericParams ++ params.map(_.pattern) :+ body
+        case Func(_, _, _, params, Some(returnType), body) =>
+          params.map(_.pattern) :+ returnType :+ body
+        case Func(_, _, _, params, None, body) =>
+          params.map(_.pattern) :+ body
         case Prop(_, e, p) => Array(e, p)
         case m: Module =>
           m.declarations.toArray
@@ -365,14 +346,20 @@ trait Syntax {
       case Literal(_, Literal.LInt(x)) => x.toString
       case Var(_, ident) => ident.name.toString
       case Prop(_, e, prop) => s"$e.$prop, ${meta.loc}"
-      case Func(_, _, _, genericParams, params, Some(returnType), body) =>
-        s"fn$genericParams($params): $returnType => $body"
-      case Func(_, _, _, genericParams, params, None, body) =>
-        s"fn[${joinIterable(genericParams)}](${joinIterable(params)}) => $body"
+      case Func(_, _, _, params, Some(returnType), body) =>
+        s"fn($params): $returnType => $body"
+      case Func(_, _, _, params, None, body) =>
+        s"fn(${joinIterable(params)}) => $body"
       case Arrow(_, _, Some(label), from, to) =>
         s"(~($label: $from) -> $to)"
       case Arrow(_, _, None, from, to) =>
         s"($from -> $to)"
+      case If(_, cond, t, Some(f)) =>
+        s"if ($cond) $t else $f"
+      case If(_, cond, t, None) =>
+        s"if ($cond) $t"
+      case Call(_, f, args) =>
+        s"$f(${joinIterable(args)})"
     }
   }
   object Term {
@@ -388,7 +375,6 @@ trait Syntax {
       meta: Meta,
       fnToken: Token,
       funcScope: _Scope,
-      genericParams: Array[GenericParam],
       params: Array[Param],
       returnType: Option[Term],
       body: Term
@@ -451,6 +437,8 @@ trait Syntax {
 
     object Call {
       case class Arg(meta: Meta, label: Option[Ident], value: Term) extends Node {
+        override def toString =
+          value.toString
         override def children: Array[Node] =
           label match {
             case Some(ident) => Array(ident, value)

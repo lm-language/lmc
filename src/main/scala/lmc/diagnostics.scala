@@ -1,7 +1,7 @@
 package lmc
 
 import lmc.common.{HasLoc, Loc}
-import lmc.types.Type
+import lmc.Value.Type
 
 object diagnostics {
   sealed trait Variant
@@ -46,7 +46,7 @@ object diagnostics {
   case class TriedToExtendNonAbstract(typ: Type) extends Variant
   case class ConflictingDecls(name: String) extends Variant
   case class InvalidTypeOverride(expectedKind: lmc.types.Kind, kind: lmc.types.Kind) extends Variant
-  case class InvalidValueOverride(expectedType: lmc.types.Type, kind: lmc.types.Type) extends Variant
+  case class InvalidValueOverride(expectedType: Type, kind: Type) extends Variant
   case object NoSuchVariant extends Variant
   case object DuplicateRestParam extends Variant
   case object MissingPatternParams extends Variant

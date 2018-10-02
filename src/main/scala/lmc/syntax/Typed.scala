@@ -1,11 +1,10 @@
 package lmc.syntax
 
 import lmc.common.{Scope, Symbol}
-import lmc.types.{Kind, Type}
+import lmc.Value.Type
 
 object Typed extends Syntax {
   type Name = Symbol
   type _Scope = Scope
   type _Type = Type
-  type _Kind = Kind
 }

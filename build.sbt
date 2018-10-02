@@ -3,8 +3,9 @@ name := "lmc-scala"
 version := "0.1"
 
 val useDotty = false
+val SCALAC_VERSION = "2.12.7"
 
-scalaVersion := { if (useDotty) "0.8.0-RC1" else "2.12.5" }
+scalaVersion := { if (useDotty) "0.8.0-RC1" else SCALAC_VERSION }
 
 scalacOptions ++= { if (isDotty.value) Seq("-language:Scala2") else Nil }
 
@@ -17,6 +18,8 @@ val dependencies = Seq(
     "net.liftweb" %% "lift-json" % "3.0.2"
   )
 ).flatten
+
+scalaVersion in ThisBuild := SCALAC_VERSION
 
 libraryDependencies ++= {
   if (useDotty)
@@ -32,4 +35,3 @@ packMain := Map("lmc" -> "lmc.Main")
 // Settings for JS build
 // enablePlugins(ScalaJSPlugin)
 // scalaJSUseMainModuleInitializer := true
-

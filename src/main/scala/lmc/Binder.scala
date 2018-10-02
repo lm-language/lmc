@@ -1,6 +1,5 @@
 package lmc
 
-import lmc.common.{ScopeEntry, TypeEntry}
 import lmc.syntax.Parsed._
 import lmc.diagnostics._
 
@@ -20,46 +19,15 @@ class Binder(
 
   private def postBind(node: Node): Unit = {
     node match {
-      case Declaration.Let(_, _,  pattern, Some(rhs)) =>
-        assignRhsToPattern(pattern, rhs)
+      case Declaration.Let(_, pattern, Some(rhs)) =>
       case m: Declaration.Module =>
         m.scope.getSymbol(m.ident.name) match {
           case Some(symbol) =>
-            for ((name, ScopeEntry(s, _)) <- m.moduleScope.symbols) {
+            for ((name, s) <- m.moduleScope.symbols) {
               symbol.members.update(name, s)
             }
         }
       case _ => ()
-    }
-  }
-
-  private def assignRhsToPattern(pattern: Pattern, expression: Term): Unit = {
-    expression match {
-      case v: Term.Var =>
-        v.ident.scope.getSymbol(v.ident.name) match {
-          case Some(associated) =>
-            ctx.setAssociatedSymbol(v.meta.id, associated)
-            ctx.setAssociatedSymbol(v.ident.meta.id, associated)
-          case None =>
-            ()
-        }
-      case _ => ()
-    }
-    pattern match {
-      case Pattern.Var(_, ident) =>
-        ctx.getAssociatedSymbol(expression.meta.id) match {
-          case Some(associated) =>
-            ident.scope.getSymbol(ident.name) match {
-              case Some(symbol) =>
-                ctx.setAssociatedSymbol(symbol, associated)
-            }
-          case None =>
-            ()
-        }
-      case Pattern.Annotated(_, inner, _) =>
-        assignRhsToPattern(inner, expression)
-      case Pattern.Paren(_, inner) =>
-        assignRhsToPattern(inner, expression)
     }
   }
 
@@ -92,13 +60,8 @@ class Binder(
             )
           case None => ()
         }
-
-        scope.setSymbol(ident.name, ScopeEntry(symbol))
-        ctx.setDefIdentId(symbol, ident.meta.id)
-
+        scope.setSymbol(ident.name, symbol)
         ctx.setDeclOf(symbol, decl)
-        ctx.initializeTypeOfSymbol(symbol)
-        scope.addDeclaration(symbol, decl.meta.id)
     }
   }
 
