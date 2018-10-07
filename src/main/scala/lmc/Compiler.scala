@@ -1,6 +1,6 @@
 package lmc
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 
 import lmc.common._
 
@@ -30,12 +30,17 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
 
   private val _types = mutable.HashMap.empty[Symbol, Type]
 
+  private val builtinDeclaration = Parsed.Declaration.Error(Parsed.ImmutableMeta(
+    -1, null, null, null, Array(), ()
+  ))
+
+  private val primitiveTerm = null
 
   override val Primitive: Primitive = new Primitive {
-    override val BoolSymbol: Symbol = makeSymbol("Bool")
-    override val IntSymbol: Symbol = makeSymbol("Int")
-    override val UnitSymbol: Symbol = makeSymbol("Unit")
-    override val TypeSymbol: Symbol = makeSymbol("Type")
+    override val BoolSymbol: Symbol = makeSymbol("Bool", builtinDeclaration, primitiveTerm)
+    override val IntSymbol: Symbol = makeSymbol("Int", builtinDeclaration, primitiveTerm)
+    override val UnitSymbol: Symbol = makeSymbol("Unit", builtinDeclaration, primitiveTerm)
+    override val TypeSymbol: Symbol = makeSymbol("Type", builtinDeclaration, primitiveTerm)
 
     override val Int: Type = makePrimitive(IntSymbol)
     override val Unit: Type = makePrimitive(UnitSymbol)
@@ -43,9 +48,9 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
     override val Type: Type = makePrimitive(TypeSymbol)
   }
 
-  private val _boolEqSymbol = makeSymbol("boolEq")
-  private val _trueSymbol = makeSymbol("true")
-  private val _falseSymbol = makeSymbol("false")
+  private val _boolEqSymbol = makeSymbol("boolEq", builtinDeclaration, primitiveTerm)
+  private val _trueSymbol = makeSymbol("true", builtinDeclaration, primitiveTerm)
+  private val _falseSymbol = makeSymbol("false", builtinDeclaration, primitiveTerm)
 
   override val PreludeScope: Scope = ScopeBuilder(None, mutable.HashMap(
     "Int" -> Primitive.IntSymbol,
@@ -81,7 +86,7 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
   )
 
 
-  private val checker = new TypeChecker(this)
+  private val checker = new TypeChecker(this, Prelude)
 
   private def makePrimitive(symbol: Symbol): Type = {
     Constructor(symbol)
@@ -178,11 +183,11 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
   }
 
 
-  override def makeSymbol(text: String): Symbol = {
+  override def makeSymbol(text: String, declaration: Parsed.Declaration, term: Parsed.Term): Symbol = {
     val id = _id
     _id += 1
 
-    Symbol(id, text)
+    Symbol(id, text, declaration, term)
   }
 
   def makeGenericType(name: String): Type = {
@@ -245,8 +250,8 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
   override def setDeclOf(symbol: Symbol, decl: Parsed.Declaration): Unit =
     _declarationOf.update(symbol, decl.meta.id)
 
-  override def getType(symbol: Symbol): Type = {
-    _types.getOrElse(symbol, Value.Uninferred)
+  override def getTypeOfSymbol(symbol: Symbol): Type = {
+    checker.getNormalizedType(symbol)
   }
 
   override def setType(symbol: Symbol, typ: Type): Unit = _types.update(symbol, typ)

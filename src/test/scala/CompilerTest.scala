@@ -78,9 +78,7 @@ class CompilerTest {
   }
 
   private def showDiff(expected: String, found: String): Unit = {
-    return
     val envDiff = System.getenv("DIFF")
-    println(envDiff)
     val command = if (envDiff == null) "diff" else envDiff
     runCommand(s"$command $expected $found")
   }
@@ -144,7 +142,7 @@ object ScopeJSON {
       loc = LocJSON.fromLoc(scope.loc),
       symbols = symbols
         .mapValues(s => {
-          compiler.getType(s).toString
+          compiler.getTypeOfSymbol(s).toString
         })
         .mapValues(SymbolEntryJSON)
         .toMap,

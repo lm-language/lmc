@@ -136,32 +136,13 @@ trait Syntax {
             case None => ()
           }
           result.toArray
-        case Declaration.Module(_, ident, _, genericParams, body) =>
-          (ident +: genericParams) ++ body
+        case Declaration.Module(_, ident, _, body) =>
+          ident +: body
         case Declaration.Error(_) =>
           Array()
       }
   }
 
-  case class GenericParam(
-    meta: Meta,
-    ident: Ident,
-    kindAnnotation: Option[KindAnnotation]
-  ) extends Node {
-    override def toString: String =
-      kindAnnotation match {
-        case Some(annotation) =>
-          s"$ident: $annotation"
-        case None => ident.toString
-      }
-    override def children: Array[Node] =
-      this match {
-        case GenericParam(_, i, Some(annotation)) =>
-          Array(i, annotation)
-        case GenericParam(_, i, None) =>
-          Array(i)
-      }
-  }
   object Declaration {
     case class Let(
       override val meta: Meta,
@@ -185,7 +166,6 @@ trait Syntax {
       override val meta: Meta,
       enumScope: _Scope,
       ident: Ident,
-      genericParams: Array[GenericParam],
       cases: Array[Enum.Case]
     ) extends Declaration
 
@@ -193,7 +173,6 @@ trait Syntax {
       meta: Meta,
       ident: Ident,
       moduleScope: Scope,
-      genericParams: Array[GenericParam],
       body: Array[Declaration]
     ) extends Declaration
     case class Error(
@@ -312,8 +291,8 @@ trait Syntax {
         case Prop(_, e, p) => Array(e, p)
         case m: Module =>
           m.declarations.toArray
-        case Forall(_, _, genericParams, body) =>
-            genericParams :+ body
+        case Forall(_, _, body) =>
+          Array(body)
         case Arrow(_, _, Some(label), from, to) =>
           Array(label, from, to)
         case Arrow(_, _, None, from, to) =>
@@ -418,7 +397,6 @@ trait Syntax {
     case class Forall(
       meta: Meta,
       forallScope: _Scope,
-      genericParams: Array[GenericParam],
       inner: Term
     ) extends Term
     case class Arrow(

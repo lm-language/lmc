@@ -5,11 +5,11 @@ import lmc.syntax.Parsed
 import lmc.Value.Type
 
 trait Context {
-  def makeSymbol(text: String): Symbol
+  def makeSymbol(text: String, declaration: syntax.Parsed.Declaration, term: syntax.Parsed.Term): Symbol
   def getParsedNode(id: Int): Option[Parsed.Node]
   val Primitive: Primitive
 
-  def getType(symbol: Symbol): Type
+  def getTypeOfSymbol(symbol: Symbol): Type
 }
 
 object Context {

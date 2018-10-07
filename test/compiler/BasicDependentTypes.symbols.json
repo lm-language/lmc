@@ -1,1 +1,49 @@
-{}
+{
+  "loc":{
+    "start":{
+      "line":1,
+      "column":1
+    },
+    "end":{
+      "line":9,
+      "column":1
+    }
+  },
+  "symbols":{
+    "typeErr2":{
+      "typ":"Bool"
+    },
+    "typeErr1":{
+      "typ":"Int"
+    },
+    "boolVal":{
+      "typ":"Bool"
+    },
+    "intVal":{
+      "typ":"Int"
+    },
+    "IntIfTrue":{
+      "typ":"Bool -> Type"
+    }
+  },
+  "children":[
+    {
+      "loc":{
+        "start":{
+          "line":2,
+          "column":17
+        },
+        "end":{
+          "line":2,
+          "column":72
+        }
+      },
+      "symbols":{
+        "b":{
+          "typ":"Bool"
+        }
+      },
+      "children":[]
+    }
+  ]
+}

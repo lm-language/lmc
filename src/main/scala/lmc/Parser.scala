@@ -262,14 +262,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         advance()
         val ident = parseIdent()
         withNewScope(enumScope => {
-          val genericParams: Array[GenericParam] = currentToken.variant match {
-            case LSQB =>
-              advance()
-              val params = parseGenericParamsList()
-              expect(errors)(RSQB)
-              params.toArray
-            case _ => Array.empty
-          }
           expect(errors)(LBRACE)
           val cases = ListBuffer.empty[Declaration.Enum.Case]
           while (!(Set(EOF, RBRACE) contains currentToken.variant)) {
@@ -281,7 +273,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
             meta,
             enumScope,
             ident,
-            genericParams,
             cases.toArray
           )
         })
@@ -291,14 +282,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         advance()
         val ident = parseIdent()
         withNewScope(moduleScope => {
-          val genericParams = currentToken.variant match {
-            case LSQB =>
-              advance()
-              val params = parseGenericParamsList()
-              expect(errors)(RSQB)
-              params.toArray
-            case _ => Array.empty[GenericParam]
-          }
           expect(errors)(LBRACE)
           val body = ListBuffer.empty[Declaration]
           while (Parser.DECL_PREDICTORS contains currentToken.variant) {
@@ -311,7 +294,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
             meta,
             ident,
             moduleScope,
-            genericParams,
             body.toArray
           )
         })
@@ -413,14 +395,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
       val parentScope = scope()
       withNewScope(fnScope => {
         val startTok = advance()
-        val genericParams = currentToken.variant match {
-          case LSQB =>
-            advance()
-            val params = parseGenericParamsList()
-            expect(errors)(RSQB)
-            params
-          case _ => List()
-        }
         expect(errors)(LPAREN)
         val params = parseCommaSeperatedList(() => parseParam())(Parser.PATTERN_PREDICTORS)
         expect(errors)(RPAREN)
@@ -540,13 +514,12 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     def parseForall() = buildNode((meta, errors) => {
       withNewScope(scope => {
         advance()
-        val genericParams = parseGenericParamsList()
         expect(errors)(RSQB)
         expect(errors)(FATARROW)
         val annotation = parseTerm()
         Term.Forall(
           meta,
-          scope, genericParams.toArray, annotation
+          scope, annotation
         )
       })
     })
@@ -809,23 +782,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     val pattern = parsePattern()
     Term.Param(pattern)
   }
-
-  private def parseGenericParamsList(): Iterable[GenericParam] = {
-    val hd = parseGenericParam()
-    val tl = parseCommaSeperatedListTail(() => parseGenericParam())
-    hd::tl
-  }
-
-  private def parseGenericParam(): GenericParam = buildNode((meta, errors) => {
-    val ident = parseIdent()
-    val kindAnnotation = currentToken.variant match {
-      case COLON =>
-        advance()
-        Some(parseKindAnnotation())
-      case _ => None
-    }
-    GenericParam(meta, ident, kindAnnotation)
-  })
 
   private def parseIdent(): Ident = buildNode((meta, errors) =>{
     val tok = expect(errors)(ID)

@@ -1,10 +1,12 @@
 package lmc.common
 
 import lmc.utils.Debug
+import lmc.syntax
 
 case class Symbol(
   id: Int, text: String,
-  members: collection.mutable.HashMap[String, Symbol] = collection.mutable.HashMap.empty
+  declaration: syntax.Parsed.Declaration,
+  term: syntax.Parsed.Term
 ) {
   override def hashCode: Int = {
     id.hashCode
@@ -16,7 +18,7 @@ case class Symbol(
 
   override def equals(obj: scala.Any): Boolean =
     obj match {
-      case other@Symbol(_, _, _) =>
+      case other: Symbol =>
         other.id == id
       case _ =>
         false

@@ -18,17 +18,6 @@ class Binder(
   }
 
   private def postBind(node: Node): Unit = {
-    node match {
-      case Declaration.Let(_, pattern, Some(rhs)) =>
-      case m: Declaration.Module =>
-        m.scope.getSymbol(m.ident.name) match {
-          case Some(symbol) =>
-            for ((name, s) <- m.moduleScope.symbols) {
-              symbol.members.update(name, s)
-            }
-        }
-      case _ => ()
-    }
   }
 
   private def bindWorker(node: Node): Unit = {
@@ -48,7 +37,7 @@ class Binder(
   private def bindIdentifier(decl: Declaration, ident: Ident): Unit = {
     ident.meta.scope.get match {
       case Some(scope) =>
-        val symbol = ctx.makeSymbol(ident.name)
+        val symbol = ctx.makeSymbol(ident.name, decl, getDeclTerm(decl))
         scope.getSymbol(ident.name) match {
           case Some(_) =>
             error(
@@ -61,7 +50,14 @@ class Binder(
           case None => ()
         }
         scope.setSymbol(ident.name, symbol)
-        ctx.setDeclOf(symbol, decl)
+    }
+  }
+
+  private def getDeclTerm(declaration: Declaration): Term = {
+    declaration match {
+      case Declaration.Let(_, _, Some(rhs)) => rhs
+      case Declaration.Module(meta, _, moduleScope, body) =>
+        Term.Module(meta, moduleScope.asInstanceOf[_Scope], body)
     }
   }
 
