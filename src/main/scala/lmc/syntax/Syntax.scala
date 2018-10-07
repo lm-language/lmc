@@ -105,6 +105,15 @@ trait Syntax {
     }
   }
 
+
+
+  case class Binder(meta: Meta, name: Ident, annotation: Option[Term]) extends Node {
+    override def children: Array[Node] = annotation match {
+      case Some(a) => Array(name, a)
+      case None => Array(name)
+    }
+  }
+
   case class Ident(
     meta: Meta,
     name: Name
@@ -146,7 +155,7 @@ trait Syntax {
   object Declaration {
     case class Let(
       override val meta: Meta,
-      pattern: Pattern,
+      binder: Binder,
       rhs: Option[Term]
     ) extends Declaration
 
@@ -285,9 +294,9 @@ trait Syntax {
         case Call(_, expr, args) =>
           expr +: args
         case Func(_, _, _, params, Some(returnType), body) =>
-          params.map(_.pattern) :+ returnType :+ body
+          params :+ returnType :+ body
         case Func(_, _, _, params, None, body) =>
-          params.map(_.pattern) :+ body
+          params :+ body
         case Prop(_, e, p) => Array(e, p)
         case m: Module =>
           m.declarations.toArray
@@ -354,7 +363,7 @@ trait Syntax {
       meta: Meta,
       fnToken: Token,
       funcScope: _Scope,
-      params: Array[Param],
+      params: Array[Binder],
       returnType: Option[Term],
       body: Term
     ) extends Term

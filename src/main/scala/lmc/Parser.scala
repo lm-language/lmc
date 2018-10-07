@@ -29,6 +29,7 @@ object Parser {
   )
 
   val PATTERN_PREDICTORS: Set[token.Variant] = Set(ID, LPAREN, DOT)
+  val BINDER_PREDICTORS: Set[token.Variant] = Set(ID)
   val PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS
   val PATTERN_PARAM_PREDICTORS: Set[token.Variant] = PATTERN_PREDICTORS union Set(DOTDOT)
 
@@ -199,7 +200,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     node
   }
 
-  def parseDeclaration: Declaration = {
+  private def parseDeclaration: Declaration = {
 
     currentToken.variant match {
       case SEMICOLON =>
@@ -208,7 +209,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
       case LET => buildNode((meta, errors) => {
 
         advance()
-        val pattern = parsePattern()
+        val binder = parseBinder()
         val rhs = currentToken.variant match {
           case EQ =>
             expect(errors)(EQ)
@@ -219,7 +220,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         expect(errors)(SEMICOLON)
         Declaration.Let(
           meta,
-          pattern,
+          binder,
           rhs
         )
       })
@@ -317,6 +318,18 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     }
   }
 
+
+  private def parseBinder(): Binder = buildNode((meta, _) => {
+    val ident = parseIdent()
+    val annotation = currentToken.variant match {
+      case COLON =>
+        advance()
+        Some(parseTerm())
+      case _ => None
+    }
+    Binder(meta, ident, annotation)
+  })
+
   private def parseEnumCase(): Declaration.Enum.Case = buildNode((meta, errors) => {
     val name = parseIdent()
     val params: Array[(Option[Ident], Term)] = currentToken.variant match {
@@ -392,11 +405,10 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     })
 
     def parseFn() = buildNode((meta, errors) => {
-      val parentScope = scope()
       withNewScope(fnScope => {
         val startTok = advance()
         expect(errors)(LPAREN)
-        val params = parseCommaSeperatedList(() => parseParam())(Parser.PATTERN_PREDICTORS)
+        val params = parseCommaSeperatedList(() => parseBinder())(Parser.BINDER_PREDICTORS)
         expect(errors)(RPAREN)
         val annotation = currentToken.variant match {
           case COLON =>

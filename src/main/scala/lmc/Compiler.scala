@@ -116,7 +116,7 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
           errors.append(error)
         }
         val parsed = getParsedSourceFile(path)
-        val binder = new Binder(this, addErrors)
+        val binder = new Renamer(this, addErrors)
         binder.bind(parsed)
         var checkedSourceFile = checker.inferSourceFile(parsed, Prelude)
         if (errors.nonEmpty) {

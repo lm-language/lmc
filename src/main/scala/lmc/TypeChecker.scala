@@ -57,31 +57,31 @@ final class TypeChecker(
 
   private def inferLetDeclaration(let: P.Declaration.Let): T.Declaration = {
     let match {
-      case P.Declaration.Let(meta, pattern: P.Pattern.Var, Some(rhs)) =>
+      case P.Declaration.Let(meta, binder@P.Binder(_, _, None), Some(rhs)) =>
         val inferredRhs = inferTerm(rhs)
-        val inferredPattern = checkPattern(pattern, inferredRhs.meta.typ)
+        val typedBinder = checkBinder(binder, inferredRhs.meta.typ)
         setValueOfSymbol(
-          getPatternSymbol(inferredPattern),
+          typedBinder.name.name,
           toValue(inferredRhs)
         )
 
         T.Declaration.Let(
           meta.typed(Primitive.Unit),
-          inferredPattern,
+          typedBinder,
           Some(inferredRhs)
         )
-      case P.Declaration.Let(meta,  pattern: P.Pattern.Annotated, Some(rhs)) =>
-        val typedPattern = inferPattern(pattern)
-        val typedRhs = checkTerm(rhs, typedPattern.meta.typ)
+      case P.Declaration.Let(meta,  binder@P.Binder(_, _, Some(annotation)), Some(rhs)) =>
+        val typedBinder = inferBinder(binder)
+        val typedRhs = checkTerm(rhs, typedBinder.meta.typ)
 
         setValueOfSymbol(
-          getPatternSymbol(typedPattern),
+          typedBinder.name.name,
           toValue(typedRhs)
         )
 
         T.Declaration.Let(
           meta.typed(Primitive.Unit),
-          typedPattern,
+          typedBinder,
           Some(typedRhs)
         )
     }
@@ -210,17 +210,14 @@ final class TypeChecker(
   }
 
   private def inferFunc(f: P.Term.Func): T.Term = {
-    val typedParams = f.params.map(param => {
-      val p = inferPattern(param.pattern)
-      T.Term.Param(p)
-    })
+    val typedParams = f.params.map(inferBinder)
     val typedReturnType = f.returnType.map(r => checkTerm(r, Primitive.Type))
 
     val typedBody = typedReturnType match {
       case Some(retTyp) => checkTerm(f.body, toValue(retTyp))
       case None => inferTerm(f.body)
     }
-    val arrowTypes = (typedParams.map(_.pattern.meta.typ) :+ typedBody.meta.typ).toSeq
+    val arrowTypes = (typedParams.map(_.meta.typ) :+ typedBody.meta.typ).toSeq
     val typ = Value.arrow(arrowTypes.head,  arrowTypes.tail: _*)
     T.Term.Func(
       f.meta.typed(typ),
@@ -240,28 +237,26 @@ final class TypeChecker(
     }
   }
 
-  private def inferPattern(pattern: P.Pattern): T.Pattern = {
-    pattern match {
-      case P.Pattern.Annotated(meta, innerPattern, typeAnnotation) =>
-        val typedAnnotation = checkTerm(typeAnnotation, Primitive.Type)
-        val typedPattern = checkPattern(innerPattern, toValue(typedAnnotation))
-        T.Pattern.Annotated(
-          meta.typed(typedPattern.meta.typ),
-          typedPattern,
-          typedAnnotation
+  private def inferBinder(binder: P.Binder): T.Binder = {
+    binder match {
+      case P.Binder(meta, innerPattern, Some(annotation)) =>
+        val typedAnnotation = checkTerm(annotation, Primitive.Type)
+        val typedIdent = checkBindingIdent(innerPattern, toValue(typedAnnotation))
+        T.Binder(
+          meta.typed(typedIdent.meta.typ),
+          typedIdent,
+          Some(typedAnnotation)
         )
     }
   }
 
-  private def checkPattern(pattern: P.Pattern, expectedType: Type): T.Pattern = {
-    pattern match {
-      case P.Pattern.Var(meta, ident) =>
-        val typedIdent = checkBindingIdent(ident, expectedType)
-        T.Pattern.Var(
-          meta.typed(expectedType),
-          typedIdent
-        )
-    }
+  private def checkBinder(binder: P.Binder, expectedType: Type): T.Binder = {
+      val typedIdent = checkBindingIdent(binder.name, expectedType)
+      T.Binder(
+        binder.meta.typed(expectedType),
+        typedIdent,
+        binder.annotation.map(inferTerm)
+      )
   }
 
   private def checkBindingIdent(ident: P.Ident, expectedType: Type): T.Ident = {
@@ -285,7 +280,7 @@ final class TypeChecker(
         result
       case f: T.Term.Func =>
         f.params.foldRight(toValue(f.body))((param, value) => Value.Func(arg =>
-          subst(value, getPatternSymbol(param.pattern), arg)))
+          subst(value, param.name.name, arg)))
       case i: T.Term.If =>
         val predicateValue = toValue(i.predicate)
           Value.If(
