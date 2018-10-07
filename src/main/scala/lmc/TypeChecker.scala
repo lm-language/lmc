@@ -164,8 +164,14 @@ final class TypeChecker(
   }
 
   private def reduce(value: Value): Value = {
+    import Value._
     value match {
       case TypeOf(symbol) => getTypeOfSymbol(symbol)
+      case If(Bool(true), t, _) => t
+      case If(Bool(false), _, f) => f
+      case If(p, t, f) if isReducable(p) => Value.If(reduce(p), t, f)
+      case Call(Func(f), arg) => f(arg)
+      case Call(f, arg) if isReducable(f) => Value.Call(reduce(f), arg)
     }
   }
 
@@ -415,7 +421,7 @@ final class TypeChecker(
             Diagnostic(
               loc = term.loc,
               severity = Severity.Error,
-              variant = TypeMismatch(typ, typedTerm.meta.typ)
+              variant = TypeMismatch(normalize(typ), normalize(typedTerm.meta.typ))
             )
           ))
         }
@@ -426,7 +432,29 @@ final class TypeChecker(
     (expected, found) match {
       case (Constructor(s1), Constructor(s2)) => s1.id == s2.id
       case _ =>
-        false
+        if (isReducable(expected)) {
+          typeEq(reduce(expected), found)
+        } else if (isReducable(found)) {
+          typeEq(expected, reduce(found))
+        } else {
+          false
+        }
+    }
+  }
+
+  private def isReducable(typ: Type): Boolean = {
+    typ match {
+      case Value.Var(s) if getValueOfSymbol(s).isDefined => true
+      case i: Value.If if isReducable(i.predicate) => true
+      case Value.If(_: Value.Bool, _, _) => true
+      case _: Value.Constructor => false
+      case TypeOf(s) if _types.contains(s) => true
+      case Value.Call(Value.Func(_), _) => true
+      case Value.Call(f, _) if isReducable(f) => true
+      case Value.Call(_, arg) if isReducable(arg) => true
+      case _: Value.Bool => false
+      case _: Value.Int => false
+
     }
   }
 

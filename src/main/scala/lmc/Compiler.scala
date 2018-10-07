@@ -46,6 +46,9 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
     override val Unit: Type = makePrimitive(UnitSymbol)
     override val Bool: Type = makePrimitive(BoolSymbol)
     override val Type: Type = makePrimitive(TypeSymbol)
+
+    override val True: Type = Value.Constructor(_trueSymbol)
+    override val False: Type = Value.Constructor(_falseSymbol)
   }
 
   private val _boolEqSymbol = makeSymbol("boolEq", builtinDeclaration, primitiveTerm)

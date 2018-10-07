@@ -12,7 +12,7 @@ sealed trait Value {
         s"$from -> $to"
       }
     case Value.Call(f, arg) => s"$f($arg)"
-    case Value.Func(f) => f.toString
+    case Value.Func(_) => s"Func(..)"
     case Value.Bool(b) => b.toString
     case Value.Int(i) => i.toString
     case Value.Var(v) => v.text

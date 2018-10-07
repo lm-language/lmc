@@ -4,5 +4,4 @@ let IntIfTrue = fn (b: Bool): Type => if (boolEq(true, b)) Int else Bool;
 let intVal: IntIfTrue(true) = 1;
 let boolVal: IntIfTrue(false) = true;
 let typeErr1: IntIfTrue(true) = true;
-let typeErr2: IntIfTrue(false) = false;
-
+let typeErr2: IntIfTrue(false) = 1;

@@ -39,5 +39,8 @@ abstract class Primitive {
   val UnitSymbol: Symbol
   val BoolSymbol: Symbol
   val TypeSymbol: Symbol
+
+  val True: Value
+  val False: Value
 }
 
