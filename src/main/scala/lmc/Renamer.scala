@@ -10,7 +10,6 @@ import lmc.diagnostics._
   */
 class Renamer(
   ctx: Context.Binder,
-  error: Diagnostic => Unit
 ) {
   def bind(node: Node): Unit = {
     bindWorker(node)
@@ -56,7 +55,7 @@ class Renamer(
     val symbol = ctx.makeSymbol(name, decl)
     scope.getSymbol(name) match {
       case Some(_) =>
-        error(
+        ctx.addError(
           Diagnostic(
             loc = loc,
             severity = Severity.Error,

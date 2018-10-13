@@ -120,12 +120,8 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
         sf
       case None =>
 
-        val errors = ListBuffer.empty[Diagnostic]
-        val addErrors = (error: Diagnostic) => {
-          errors.append(error)
-        }
         val parsed = getParsedSourceFile(path)
-        val binder = new Renamer(this, addErrors)
+        val binder = new Renamer(this)
         binder.bind(parsed)
         val checkedSourceFile = checker.inferSourceFile(parsed, Prelude)
         cacheCheckedSourceFile(

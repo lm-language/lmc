@@ -4,4 +4,4 @@ let Recursive = module {
 
 let Recursive1 = Recursive1;
 
-type T = T;
+let T = T;

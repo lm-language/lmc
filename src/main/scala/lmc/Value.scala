@@ -52,6 +52,7 @@ object Value {
   case class Arrow(from: Type, to: Type) extends Value
   case class TaggedUnion(tag: Symbol, values: Array[Value]) extends Value
   case class GenericInstance(id: scala.Int) extends Value
+  case class Let(name: Symbol, rhs: Value, in: Value) extends Value
   case class Module(map: Map[Symbol, Value]) extends Value {
 
     val symbolMap: Map[String, Symbol] = map.keys.map(s => s.text -> s).toMap

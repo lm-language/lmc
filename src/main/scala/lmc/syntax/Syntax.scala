@@ -283,6 +283,7 @@ trait Syntax {
           Array(p, t, f)
         case If(_, p, t, None) =>
           Array(p, t)
+        case Block(_, _, children) => children.asInstanceOf[Array[Node]]
         case Error(_) => Array()
       }
 
@@ -421,7 +422,7 @@ trait Syntax {
     }
 
     object Block {
-      sealed trait Member
+      sealed trait Member extends Node
     }
 
     case class Param(

@@ -146,12 +146,28 @@ final class TypeChecker(
           case t: P.Term.Literal => inferLiteral(t)
           case p: P.Term.Prop => inferProp(p)
           case m: P.Term.Module => inferModuleTerm(m)
+          case b: P.Term.Block => inferBlock(b)
         }
         _inferredTerms.update(term, t)
         t
     }
+  }
 
-
+  private def inferBlock(block: P.Term.Block): T.Term.Block = {
+    val typedMembers = block.members.map({
+      case t: P.Term => inferTerm(t)
+      case d: P.Declaration => inferDeclaration(d)
+    })
+    val typ = typedMembers.lastOption match {
+      case Some(t: T.Term) => t.meta.typ
+      case Some(_: T.Declaration) => Primitive.Unit
+      case None => Primitive.Unit
+    }
+    T.Term.Block(
+      block.meta.typed(typ),
+      block.blockScope,
+      typedMembers
+    )
   }
 
   private def inferProp(prop: P.Term.Prop): T.Term = {
@@ -320,7 +336,7 @@ final class TypeChecker(
       T.Binder(
         binder.meta.typed(expectedType),
         typedIdent,
-        binder.annotation.map({ inferTerm(_) })
+        binder.annotation.map({ inferTerm })
       )
   }
 
@@ -362,16 +378,30 @@ final class TypeChecker(
         Value.Int(value)
       case p: T.Term.Prop =>
         Value.Prop(toValue(p.expr), p.prop.name.text)
+      case b: T.Term.Block =>
+        if (b.members.length == 0) {
+          Value.Unit
+        } else {
+          val lastValueOpt: Option[Value] = b.members.lastOption.flatMap({
+            case t: T.Term => Some(toValue(t))
+            case _ => None
+          })
+          val lastValue = lastValueOpt
+            .getOrElse(Value.Unit)
+          b.members.take(b.members.length - 1).foldRight(lastValue)((current, result) => current match {
+            case l: T.Declaration.Let => Value.Let(l.binder.name.name, toValue(l.rhs.get), result)
+            case t: T.Term => Value.Let(ctx.makeErrorSymbol("_"), toValue(t), result)
+          })
+        }
     }
   }
 
-  private var count = 0
-
-  private def normalize(value: Value): Value = {
-    count += 1
+  private def normalize(value: Value, count: Int = 0): Value = {
     if (count > 100) {
-      throw new Error("overflow")
+      utils.todo("Overflow")
     }
+
+    def go(value: Value): Value = normalize(value, count + 1)
     value match {
       case c: Constructor => c
       case b: Value.Bool => b
@@ -379,30 +409,30 @@ final class TypeChecker(
       case Value.Var(s) => (for {
         v <- getValueOfSymbol(s)
         _ = setTypeOfSymbol(s, v)
-        t = normalize(v)
+        t = go(v)
         _ = setTypeOfSymbol(s, t)
       } yield t).getOrElse(value)
       case Value.If(pred, trueBranch, falseBranch) =>
-        normalize(pred) match {
+        go(pred) match {
           case Value.Bool(true) =>
-            normalize(trueBranch)
+            go(trueBranch)
           case Value.Bool(false) =>
-            normalize(falseBranch)
+            go(falseBranch)
           case p =>
             Value.If(p, trueBranch, falseBranch)
         }
       case Value.Call(func, arg) =>
-        val normalizedFunc = normalize(func)
-        val normalizedArg = normalize(arg)
+        val normalizedFunc = go(func)
+        val normalizedArg = go(arg)
         normalizedFunc match {
-          case Value.Func(f) => normalize(f(normalizedArg))
+          case Value.Func(f) => go(f(normalizedArg))
           case _ => Value.Call(normalizedFunc, normalizedArg)
         }
       case Value.TypeOf(symbol) =>
-        val result = normalize(getTypeOfSymbol(symbol))
+        val result = go(getTypeOfSymbol(symbol))
         setTypeOfSymbol(symbol, result)
         result
-      case Value.ModuleType(m) => Value.ModuleType(m.mapValues(normalize))
+      case Value.ModuleType(m) => Value.ModuleType(m.mapValues(go))
       case Value.TypeOfModuleMember(lhs, rhs) =>
         resolvePropertySymbol(lhs, rhs) match {
           case Some(sym) => getNormalizedType(sym)
@@ -410,13 +440,13 @@ final class TypeChecker(
             utils.todo(s"$lhs has no property named $rhs")
         }
       case Value.Module(map) =>
-        Value.Module(map.mapValues(normalize))
-      case Value.Arrow(from, to) => Value.Arrow(normalize(from), normalize(to))
+        Value.Module(map.mapValues(go))
+      case Value.Arrow(from, to) => Value.Arrow(go(from), go(to))
 
       case f: Value.Func =>
         f
       case v if !isReducible(v) => v
-      case v => normalize(reduce(v))
+      case v => go(reduce(v))
     }
   }
 
