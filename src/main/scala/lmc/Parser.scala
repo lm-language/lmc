@@ -18,7 +18,7 @@ object Parser {
   def apply(ctx: Context.Parser, path: Path, tokens: Stream[Token]) =
     new Parser(ctx, path, tokens)
   val RECOVERY_TOKENS = Set(
-    NEWLINE, EOF, RPAREN, RBRACE, SEMICOLON
+    NEWLINE, EOF, SEMICOLON
   )
 
   def isRecoveryToken(variant: token.Variant): Boolean = {
@@ -202,6 +202,28 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
 
   private def parseDeclaration: Declaration = {
 
+
+    def parseEnum(): Declaration.Enum = buildNode((meta, errors) => {
+      advance()
+      val ident = parseIdent()
+      expect(errors)(EQ)
+      val cases = ListBuffer.empty[EnumCase]
+      var isFirstCase = true
+      while (!(Set(EOF, SEMICOLON) contains currentToken.variant)) {
+        if (!isFirstCase) {
+          expect(errors)(VBAR)
+        }
+        cases.append(parseEnumCase())
+        isFirstCase = false
+      }
+      expect(errors)(SEMICOLON)
+      Declaration.Enum(
+        meta,
+        ident,
+        cases.toArray
+      )
+    })
+
     currentToken.variant match {
       case SEMICOLON =>
         advance()
@@ -224,6 +246,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           rhs
         )
       })
+      case ENUM => parseEnum()
       case INCLUDE => buildNode((meta, errors) => {
 
         advance()
@@ -257,27 +280,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           meta,
           ident, kindAnnotation, rhs
         )
-      })
-      case ENUM => buildNode((meta, errors) => {
-
-        advance()
-        val ident = parseIdent()
-        withNewScope(enumScope => {
-          expect(errors)(LBRACE)
-          val cases = ListBuffer.empty[Declaration.Enum.Case]
-          while (!(Set(EOF, RBRACE) contains currentToken.variant)) {
-            cases.append(parseEnumCase())
-          }
-          expect(errors)(RBRACE)
-          expect(errors)(SEMICOLON)
-          Declaration.Enum(
-            meta,
-            enumScope,
-            ident,
-            cases.toArray
-          )
-        })
-
       })
       case MODULE => buildNode((meta, errors) => {
         advance()
@@ -330,32 +332,26 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     Binder(meta, ident, annotation)
   })
 
-  private def parseEnumCase(): Declaration.Enum.Case = buildNode((meta, errors) => {
+  private def parseEnumCase(): EnumCase = buildNode((meta, errors) => {
     val name = parseIdent()
-    val params: Array[(Option[Ident], Term)] = currentToken.variant match {
-      case LPAREN =>
-        advance()
-        val result = parseCommaSeperatedList(() =>
-          peek.variant match {
-            case COLON =>
-              val ident = parseIdent()
-              expect(errors)(COLON)
-              (Some(ident), parseTerm())
-            case _ =>
-              (None, parseTerm())
-          }
-        )(Set(ID))
-        expect(errors)(RPAREN)
-        result.toArray
-      case _ =>
-        Array.empty
-    }
-    expect(errors)(SEMICOLON)
-    Declaration.Enum.Case(
-      meta,
-      name,
-      params
-    )
+    withNewScope(scope => {
+      val params: Array[Binder] = currentToken.variant match {
+        case LPAREN =>
+          advance()
+          val p = parseCommaSeperatedList(parseBinder)(Parser.BINDER_PREDICTORS).toArray
+          expect(errors)(RPAREN)
+          p
+        case _ => Array()
+
+      }
+      EnumCase(
+        meta,
+        scope,
+        name,
+        params
+      )
+    })
+
   })
 
   private def parseKindAnnotation(): KindAnnotation = buildNode((meta, errors) => {
@@ -604,10 +600,10 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           advance()
           val args = parseCommaSeperatedList(() => parseArg())(Parser.ARG_PREDICTORS).toVector
           expect(errors)(RPAREN)
-          Term.Call(
+          parseTermTail(Term.Call(
             meta,
             head, args.toArray
-          )
+          ))
         })
 
       case DOT =>

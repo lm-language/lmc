@@ -1,0 +1,17 @@
+enum Option(A: Type) {
+	Some(value: A);
+	None;
+};
+
+let boolSome = Option(Int).Some(2);
+let None = fn(T: Type) => Option(T).None;
+let x: Option(Bool).T = None(Bool);
+
+enum List(A: Type) {
+	Empty;
+	Cons(head: A, tail: List);
+};
+
+let listEmpty = List(Int).Empty;
+let listInt = List(Int).Cons(1, List(Int).Empty);
+let listInt1: List(Int).T = listInt;

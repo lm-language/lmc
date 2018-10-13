@@ -5,145 +5,154 @@
       "column":1
     },
     "end":{
-      "line":30,
+      "line":24,
       "column":1
     }
   },
   "symbols":{
+    "On":{
+      "typ":"Switch"
+    },
+    "Nat":{
+      "typ":"Type"
+    },
     "x":{
-      "typ":"Option[Bool]"
+      "typ":"Switch"
+    },
+    "ISome":{
+      "typ":"Int -> OptionInt"
     },
     "iNone":{
       "typ":"OptionInt"
     },
-    "listEmpty":{
-      "typ":"([A] => List[Var(A)])"
-    },
     "OptionInt":{
-      "typ":"Module(Map(),Map(ISome -> (fn(value:Int) => OptionInt), INone -> OptionInt))"
+      "typ":"Type"
     },
-    "optInt":{
-      "typ":"Option[Int]"
+    "INone":{
+      "typ":"OptionInt"
     },
-    "listInt":{
-      "typ":"List[Int]"
+    "y":{
+      "typ":"Switch"
+    },
+    "Off":{
+      "typ":"Switch"
+    },
+    "_2":{
+      "typ":"Nat"
     },
     "iSome":{
       "typ":"OptionInt"
     },
-    "Option":{
-      "typ":"Module(Map(),Map(Some -> ([A] => (fn(value:Var(A)) => Option[Var(A)])), None -> ([A] => Option[Var(A)])))"
+    "_1":{
+      "typ":"Nat"
     },
-    "boolSome":{
-      "typ":"Option[Int]"
-    },
-    "None":{
-      "typ":"([A] => Option[Var(A)])"
-    },
-    "List":{
-      "typ":"Module(Map(),Map(Empty -> ([A] => List[Var(A)]), Cons -> ([A] => (fn(Var(A), List[Var(A)]) => List[Var(A)]))))"
+    "_error":{
+      "typ":"Nat"
     },
     "Switch":{
-      "typ":"Module(Map(),Map(On -> Switch, Off -> Switch))"
+      "typ":"Type"
+    },
+    "Z":{
+      "typ":"Nat"
+    },
+    "S":{
+      "typ":"Nat -> Nat"
+    },
+    "_0":{
+      "typ":"Nat"
     }
-  },
-  "types":{
-    "Switch":"*",
-    "Option":"([*] => *)",
-    "OptionInt":"*",
-    "List":"([*] => *)"
   },
   "children":[
     {
       "loc":{
         "start":{
-          "line":2,
-          "column":1
+          "line":4,
+          "column":5
         },
         "end":{
-          "line":5,
-          "column":2
+          "line":3,
+          "column":5
         }
       },
-      "symbols":{
-        "On":{
-          "typ":"Switch"
-        },
-        "Off":{
-          "typ":"Switch"
-        }
-      },
-      "types":{},
+      "symbols":{},
       "children":[]
     },
     {
       "loc":{
         "start":{
-          "line":6,
-          "column":1
+          "line":4,
+          "column":10
+        },
+        "end":{
+          "line":4,
+          "column":9
+        }
+      },
+      "symbols":{},
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":10,
+          "column":2
         },
         "end":{
           "line":9,
-          "column":2
+          "column":7
         }
       },
-      "symbols":{
-        "ISome":{
-          "typ":"(fn(value:Int) => OptionInt)"
-        },
-        "INone":{
-          "typ":"OptionInt"
-        }
-      },
-      "types":{},
+      "symbols":{},
       "children":[]
     },
     {
       "loc":{
         "start":{
-          "line":11,
-          "column":1
+          "line":10,
+          "column":5
         },
         "end":{
-          "line":14,
-          "column":2
+          "line":10,
+          "column":15
         }
       },
       "symbols":{
-        "Some":{
-          "typ":"([A] => (fn(value:Var(A)) => Option[Var(A)]))"
-        },
-        "None":{
-          "typ":"([A] => Option[Var(A)])"
+        "prev":{
+          "typ":"Nat"
         }
-      },
-      "types":{
-        "A":"*"
       },
       "children":[]
     },
     {
       "loc":{
         "start":{
-          "line":22,
-          "column":1
+          "line":19,
+          "column":9
         },
         "end":{
-          "line":25,
-          "column":2
+          "line":19,
+          "column":20
         }
       },
       "symbols":{
-        "Cons":{
-          "typ":"([A] => (fn(Var(A), List[Var(A)]) => List[Var(A)]))"
-        },
-        "Empty":{
-          "typ":"([A] => List[Var(A)])"
+        "value":{
+          "typ":"Int"
         }
       },
-      "types":{
-        "A":"*"
+      "children":[]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":20,
+          "column":9
+        },
+        "end":{
+          "line":20,
+          "column":8
+        }
       },
+      "symbols":{},
       "children":[]
     }
   ]

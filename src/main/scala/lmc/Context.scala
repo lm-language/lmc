@@ -5,7 +5,7 @@ import lmc.syntax.Parsed
 import lmc.Value.Type
 
 trait Context {
-  def makeSymbol(text: String, declaration: syntax.Parsed.Declaration, term: syntax.Parsed.Term): Symbol
+  def makeSymbol(text: String, declaration: syntax.Parsed.Declaration): Symbol
   def getParsedNode(id: Int): Option[Parsed.Node]
   val Primitive: Primitive
 

@@ -1,10 +1,11 @@
 package lmc
 
 import lmc.diagnostics._
-import lmc.Value.{Arrow, Constructor, Type, TypeOf, Uninferred}
+import lmc.Value.{Arrow, Constructor, ModuleType, TaggedUnion, Type, TypeOf, Uninferred}
 import lmc.common.Symbol
 import lmc.common.Scope
 
+import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 
 final class TypeChecker(
@@ -19,6 +20,7 @@ final class TypeChecker(
   private val _values = collection.mutable.HashMap.empty[Symbol, Value]
   private val _types  = collection.mutable.HashMap.empty[Symbol, Value]
   private val _inferredTerms = collection.mutable.WeakHashMap.empty[P.Term, T.Term]
+  private var _nextGeneric: Int = 0
 
   for ((k, v) <- env.values) {
     _values.update(k, v)
@@ -42,9 +44,53 @@ final class TypeChecker(
     declaration match  {
       case l: P.Declaration.Let => inferLetDeclaration(l)
       case m: P.Declaration.Module => inferModuleDeclaration(m)
+      case e: P.Declaration.Enum => inferEnumDecl(e)
       case e: P.Declaration.Error =>
         T.Declaration.Error(e.meta.typed(Value.Uninferred))
     }
+  }
+
+  private def inferEnumDecl(e: P.Declaration.Enum): T.Declaration.Enum = {
+    val symbol = e.scope.getSymbol(e.ident.name).get
+    val declType: Type = Value.Constructor(symbol)
+
+    val recursiveSymbol = e.scope.getSymbol(e.ident.name).get
+    val recursiveSymbolType = Primitive.Type
+    val recursiveSymbolValue = declType
+
+    setTypeOfSymbol(recursiveSymbol, recursiveSymbolType)
+    setValueOfSymbol(recursiveSymbol, recursiveSymbolValue)
+
+    val cases = e.cases.map(inferEnumCase(declType))
+
+    val enumType = Value.Constructor(symbol)
+
+    val typedIdent = checkBindingIdent(e.ident, Primitive.Type)
+    setValueOfSymbol(typedIdent.name, enumType)
+
+    T.Declaration.Enum(
+      e.meta.typed(enumType),
+      typedIdent,
+      cases
+    )
+  }
+
+  private def inferEnumCase(enumType: Type)(c: P.EnumCase): T.EnumCase = {
+    val params = c.params.map(inferBinder)
+    val typ = params.map(_.meta.typ).foldRight(enumType)(Value.Arrow.apply)
+    val ident = checkBindingIdent(c.ident, typ)
+    val returnValue: Value = TaggedUnion(ident.name, params.map(_.name.name).map({ Value.Var }))
+    val value = params.foldRight(returnValue)((binder, ret) => Value.Func(value => {
+      subst(ret, binder.name.name, value)
+    }))
+    setValueOfSymbol(ident.name, value)
+    T.EnumCase(
+      c.meta.typed(typ),
+      c.caseScope,
+      ident,
+      params
+    )
+
   }
 
   private def getModuleType(scope: Scope): Type = {
@@ -56,7 +102,8 @@ final class TypeChecker(
   }
 
   private def inferLetDeclaration(let: P.Declaration.Let): T.Declaration = {
-    let match {
+    println(let.toString)
+    val result = let match {
       case P.Declaration.Let(meta, binder@P.Binder(_, _, None), Some(rhs)) =>
         val inferredRhs = inferTerm(rhs)
         val typedBinder = checkBinder(binder, inferredRhs.meta.typ)
@@ -85,6 +132,8 @@ final class TypeChecker(
           Some(typedRhs)
         )
     }
+    println(s"let ${let.binder.name.name} : ${getTypeOfSymbol(result.binder.name.name)} = ${getValueOfSymbol(result.binder.name.name).get}")
+    result
   }
 
   private def inferTerm(term: P.Term): T.Term = {
@@ -99,8 +148,6 @@ final class TypeChecker(
           case t: P.Term.Literal => inferLiteral(t)
           case p: P.Term.Prop => inferProp(p)
           case m: P.Term.Module => inferModuleTerm(m)
-          case t =>
-            utils.todo("Match error: " + t.getClass.getName)
         }
         _inferredTerms.update(term, t)
         t
@@ -110,11 +157,14 @@ final class TypeChecker(
   }
 
   private def inferProp(prop: P.Term.Prop): T.Term = {
+    println(s"inferProp(${prop.expr}.${prop.prop})")
     val typedLhs = inferTerm(prop.expr)
-    val typ = Value.TypeOfMember(typedLhs.meta.typ, prop.prop.name)
+    println(s"${prop.expr} : ${typedLhs.meta.typ}")
+    val typ = Value.TypeOfModuleMember(toValue(typedLhs), prop.prop.name)
+    println(s": $typ")
     val typedRhs = T.Ident(
       prop.prop.meta.typed(typ),
-      ctx.makeSymbol(prop.prop.name, P.Declaration.Error(prop.meta), prop)
+      ctx.makeSymbol(prop.prop.name, P.Declaration.Error(prop.meta))
     )
     T.Term.Prop(
       prop.meta.typed(typ),
@@ -131,7 +181,9 @@ final class TypeChecker(
   }
 
   private def inferCall(c: P.Term.Call): T.Term.Call = {
+    println(s"inferCall(${c.func}(${utils.joinIterable(c.args.map(_.toString))}))")
     val typedFunc = inferTerm(c.func)
+    println(s"$typedFunc : ${typedFunc.meta.typ}")
     val typedArgs = ListBuffer.empty[T.Term.Call.Arg]
     var currentReturnType: Type = typedFunc.meta.typ
     for (arg <- c.args) {
@@ -156,8 +208,8 @@ final class TypeChecker(
           None, // TODO: Handle named args
           typedTerm
         ) -> to
-      case s if inNormalForm(funcType) =>
-        utils.todo(s"$s is not a function")
+      case s if !isReducible(funcType) =>
+        utils.todo(s"$s is not a function, $arg")
       case _ =>
         checkFunctionArg(arg, reduce(funcType))
     }
@@ -166,12 +218,22 @@ final class TypeChecker(
   private def reduce(value: Value): Value = {
     import Value._
     value match {
+      case Var(s) if getValueOfSymbol(s).isDefined =>
+        getValueOfSymbol(s).get
       case TypeOf(symbol) => getTypeOfSymbol(symbol)
       case If(Bool(true), t, _) => t
       case If(Bool(false), _, f) => f
-      case If(p, t, f) if isReducable(p) => Value.If(reduce(p), t, f)
+      case If(p, t, f) if isReducible(p) => Value.If(reduce(p), t, f)
       case Call(Func(f), arg) => f(arg)
-      case Call(f, arg) if isReducable(f) => Value.Call(reduce(f), arg)
+      case Call(f, arg) if isReducible(f) => Value.Call(reduce(f), arg)
+      case TypeOfModuleMember(m: Module, rhs) if m.symbolMap.contains(rhs) =>
+        TypeOf(m.symbolMap(rhs))
+
+      case TypeOfModuleMember(lhs, rhs) =>
+        TypeOfModuleMember(reduce(lhs), rhs)
+      case Prop(m: Module, rhs) if m.symbolMap.contains(rhs) =>
+        m.map(m.symbolMap(rhs))
+      case Prop(lhs, rhs) if isReducible(lhs) => Prop(reduce(lhs), rhs)
     }
   }
 
@@ -205,7 +267,8 @@ final class TypeChecker(
           value.meta.typed(TypeOf(symbol)),
           symbol
         )
-      case None => utils.todo(s"Unbound var $value")
+      case None =>
+        utils.todo(s"Unbound var $value")
     }
   }
 
@@ -217,8 +280,7 @@ final class TypeChecker(
       case Some(retTyp) => checkTerm(f.body, toValue(retTyp))
       case None => inferTerm(f.body)
     }
-    val arrowTypes = (typedParams.map(_.meta.typ) :+ typedBody.meta.typ).toSeq
-    val typ = Value.arrow(arrowTypes.head,  arrowTypes.tail: _*)
+    val typ = typedParams.map(_.meta.typ).foldRight(typedBody.meta.typ)(Value.Arrow.apply)
     T.Term.Func(
       f.meta.typed(typ),
       f.fnToken,
@@ -255,7 +317,7 @@ final class TypeChecker(
       T.Binder(
         binder.meta.typed(expectedType),
         typedIdent,
-        binder.annotation.map(inferTerm)
+        binder.annotation.map({ inferTerm(_) })
       )
   }
 
@@ -289,21 +351,12 @@ final class TypeChecker(
             i.falseBranch.map(f => toValue(f)).getOrElse(Value.Unit)
           )
       case c: T.Term.Call =>
+
         val func = toValue(c.func)
         val args = c.args.map(arg => toValue(arg.value))
-        val result = if (!args.forall(inNormalForm)) {
-          args.foldLeft(func)(Value.Call.apply)
-        } else {
-          args.foldLeft(func)((f, arg) => f match {
-            case Value.Func(func) =>
-              func(arg)
-            case _ => utils.todo(s"Not a function $f")
-          })
-        }
-        result
+        args.foldLeft(func)(Value.Call.apply)
       case T.Term.Literal(_, T.Term.Literal.LInt(value)) =>
         Value.Int(value)
-
       case p: T.Term.Prop =>
         Value.Prop(toValue(p.expr), p.prop.name.text)
     }
@@ -316,6 +369,7 @@ final class TypeChecker(
     if (count > 100) {
       throw new Error("overflow")
     }
+    println(s"normalize($value)")
     value match {
       case c: Constructor => c
       case b: Value.Bool => b
@@ -347,7 +401,7 @@ final class TypeChecker(
         setTypeOfSymbol(symbol, result)
         result
       case Value.ModuleType(m) => Value.ModuleType(m.mapValues(normalize))
-      case Value.TypeOfMember(lhs, rhs) =>
+      case Value.TypeOfModuleMember(lhs, rhs) =>
         resolvePropertySymbol(lhs, rhs) match {
           case Some(sym) => getNormalizedType(sym)
           case None =>
@@ -359,30 +413,29 @@ final class TypeChecker(
 
       case f: Value.Func =>
         f
+      case v if !isReducible(v) => v
+      case v => normalize(reduce(v))
     }
   }
 
+  @tailrec
   private def resolvePropertySymbol(value: Value, str: String): Option[Symbol] = {
     value match {
       case Value.Module(map) => map.keys.find(_.text == str)
-      case Value.TypeOf(s) => resolvePropertySymbol(getValueOfSymbol(s).get, str)
-      case Value.TypeOfMember(lhs, rhs) =>
-        resolvePropertySymbol(lhs, rhs) match {
-          case Some(s) => resolvePropertySymbol(getValueOfSymbol(s).get, str)
-        }
+//      case Value.TypeOfModuleMember(lhs, rhs) =>
+//        resolvePropertySymbol(lhs, rhs) match {
+//          case Some(s) => resolvePropertySymbol(getValueOfSymbol(s).get, str)
+//        }
+      case v if isReducible(v) => resolvePropertySymbol(reduce(v), str)
     }
   }
 
   private def inNormalForm(value: Value): Boolean = {
     value match {
-      case v: Value.Var =>
-        getValueOfSymbol(v.symbol) match {
-          case Some(other) => inNormalForm(other)
-          case None => false
-        }
       case _: Value.TypeOf => false
       case _: Value.Bool => true
       case _: Value.Int => true
+      case _ => !isReducible(value)
     }
   }
 
@@ -392,6 +445,7 @@ final class TypeChecker(
     }
     value match {
       case Value.Var(s) if s.id == symbol.id => arg
+      case Value.Var(_) => value
       case c: Value.Constructor => c
       case Value.Uninferred => value
       case Value.Call(c, arg) =>
@@ -401,6 +455,10 @@ final class TypeChecker(
       case f: Value.Func => f
       case b: Value.Bool => b
       case i: Value.Int => i
+      case t: Value.TaggedUnion =>
+        Value.TaggedUnion(t.tag, t.values.map(go))
+      case Value.Module(map) =>
+        Value.Module(map.mapValues(go))
     }
 
   }
@@ -424,12 +482,14 @@ final class TypeChecker(
   }
 
   private def typeEq(expected: Type, found: Type): Boolean = {
+    println(s"typeEq($expected, $found)")
     (expected, found) match {
       case (Constructor(s1), Constructor(s2)) => s1.id == s2.id
+//      case (Primitive.Type, _: Value.EnumType) => true
       case _ =>
-        if (isReducable(expected)) {
+        if (isReducible(expected)) {
           typeEq(reduce(expected), found)
-        } else if (isReducable(found)) {
+        } else if (isReducible(found)) {
           typeEq(expected, reduce(found))
         } else {
           false
@@ -437,19 +497,38 @@ final class TypeChecker(
     }
   }
 
-  private def isReducable(typ: Type): Boolean = {
+  private def isReducible(typ: Type): Boolean = {
+    import Value._
     typ match {
-      case Value.Var(s) if getValueOfSymbol(s).isDefined => true
-      case i: Value.If if isReducable(i.predicate) => true
-      case Value.If(_: Value.Bool, _, _) => true
-      case _: Value.Constructor => false
+      case Var(s) if getValueOfSymbol(s).isDefined => true
+      case Var(_) => false
+      case i: Value.If if isReducible(i.predicate) => true
+      case If(_: Bool, _, _) => true
+      case _: Constructor => false
       case TypeOf(s) if _types.contains(s) => true
-      case Value.Call(Value.Func(_), _) => true
-      case Value.Call(f, _) if isReducable(f) => true
-      case Value.Call(_, arg) if isReducable(arg) => true
-      case _: Value.Bool => false
-      case _: Value.Int => false
+      case TypeOf(s) => false
+      case Call(Value.Func(_), _) => true
+      case Call(f, _) if isReducible(f) => true
+      case Call(_, arg) if isReducible(arg) => true
+      case _: Call => false
+      case _: Bool => false
+      case _: Int => false
+      case ModuleType(members) if members.values.exists(isReducible) => true
+      case ModuleType(_) => false
+      case Module(members) if members.values.exists(isReducible) => true
+      case Module(_) => false
+      case TypeOfModuleMember(m: Module, rhs) if m.symbolMap.contains(rhs) => true
+      case TypeOfModuleMember(lhs, _) if isReducible(lhs) => true
+      case a: Arrow if isReducible(a.from) => true
+      case a: Arrow if isReducible(a.to) => true
+      case _: Arrow => false
+      case _: Func => false
+      case _: TaggedUnion => false
 
+      case Prop(m: Module, rhs) if m.symbolMap.contains(rhs) => true
+      case p: Value.Prop if isReducible(p.lhs) => true
+      case v =>
+        utils.todo(s"unmatched: $v of type ${v.getClass.getName}")
     }
   }
 
@@ -512,6 +591,12 @@ final class TypeChecker(
 
   private def setValueOfSymbol(symbol: Symbol, value: Value): Unit = {
     _values.update(symbol, value)
+  }
+
+  private def makeGeneric(): Unit = {
+    val id = _nextGeneric
+    _nextGeneric += 1
+    Value.GenericInstance(id)
   }
 
 }

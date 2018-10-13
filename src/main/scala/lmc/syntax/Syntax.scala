@@ -112,6 +112,11 @@ trait Syntax {
       case Some(a) => Array(name, a)
       case None => Array(name)
     }
+
+    override def toString: String = annotation match {
+      case Some(a) => s"$name: $a"
+      case None => s"$name"
+    }
   }
 
   case class Ident(
@@ -127,6 +132,9 @@ trait Syntax {
     override def toString = this match {
       case Declaration.Let(_, pattern, rhs) =>
         s"let $pattern = $rhs"
+      case Declaration.Enum(_, name, cases) =>
+        s"enum $name { ${cases.foldLeft("")((prev, c) => s"$prev$c; ")}}"
+
     }
     override def children: Array[Node] =
       this match {
@@ -147,6 +155,8 @@ trait Syntax {
           result.toArray
         case Declaration.Module(_, ident, _, body) =>
           ident +: body
+        case Declaration.Enum(_, ident, cases) =>
+          ident +: cases.flatMap(c => (c.ident : Node) +: c.params : Array[Node])
         case Declaration.Error(_) =>
           Array()
       }
@@ -171,13 +181,6 @@ trait Syntax {
       expr: Term
     ) extends Declaration
 
-    case class Enum(
-      override val meta: Meta,
-      enumScope: _Scope,
-      ident: Ident,
-      cases: Array[Enum.Case]
-    ) extends Declaration
-
     case class Module(
       meta: Meta,
       ident: Ident,
@@ -187,23 +190,11 @@ trait Syntax {
     case class Error(
       override val meta: Meta,
     ) extends Declaration
-
-    object Enum {
-      case class Case(
-        override val meta: Meta,
-        ident: Ident,
-        params: Array[(Option[Ident], Term)]
-      ) extends Node {
-        override def children: Array[Node] = {
-          val paramPatterns: Array[Node] = params.flatMap({
-            case (Some(ident), annot) => Array[Node](ident, annot)
-            case (None, annot) => Array[Node](ident)
-          })
-          val i: Node = ident
-          Array(Array(i), paramPatterns).flatten
-        }
-      }
-    }
+    case class Enum(
+      override val meta: Meta,
+      ident: Ident,
+      cases: Array[EnumCase]
+    ) extends Declaration
   }
 
   sealed trait Pattern extends Node {
@@ -285,6 +276,20 @@ trait Syntax {
   }
 
 
+  case class EnumCase(
+    override val meta: Meta,
+    caseScope: _Scope,
+    ident: Ident,
+    params: Array[Binder]
+  ) extends Node {
+    override def children: Array[Node] = {
+      ident +: params
+    }
+
+    override def toString: String =
+      s"$ident(${joinIterable(params)})"
+  }
+
   sealed trait Term extends Node with Term.Block.Member {
     import Term._
     override def children: Array[Node] =
@@ -348,6 +353,7 @@ trait Syntax {
         s"if ($cond) $t"
       case Call(_, f, args) =>
         s"$f(${joinIterable(args)})"
+
     }
   }
   object Term {

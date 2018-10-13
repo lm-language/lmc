@@ -1,5 +1,6 @@
 package lmc
 
+import lmc.common.ScopeBuilder
 import lmc.syntax.Parsed._
 import lmc.diagnostics._
 
@@ -24,6 +25,12 @@ class Renamer(
     node match {
       case m: Declaration.Module =>
         bindIdentifier(m, m.ident)
+      case e: Declaration.Enum =>
+        bindInScope(e.scope, e.ident.name, e, e.ident.loc)
+        findDeclParent(e).foreach(d =>
+          e.cases.foreach(c => {
+            bindIdentifier(d, c.ident)
+          }))
       case p: Pattern.Var =>
         val decl = findDeclParent(p)
         decl.foreach(parent =>
@@ -40,28 +47,25 @@ class Renamer(
   private def bindIdentifier(decl: Declaration, ident: Ident): Unit = {
     ident.meta.scope.get match {
       case Some(scope) =>
-        val symbol = ctx.makeSymbol(ident.name, decl, getDeclTerm(decl))
-        scope.getSymbol(ident.name) match {
-          case Some(_) =>
-            error(
-              Diagnostic(
-                loc = ident.loc,
-                severity = Severity.Error,
-                variant = DuplicateBinding(ident.name)
-              )
-            )
-          case None => ()
-        }
-        scope.setSymbol(ident.name, symbol)
+        bindInScope(ident.scope, ident.name,  decl, ident.loc)
     }
   }
 
-  private def getDeclTerm(declaration: Declaration): Term = {
-    declaration match {
-      case Declaration.Let(_, _, Some(rhs)) => rhs
-      case Declaration.Module(meta, _, moduleScope, body) =>
-        Term.Module(meta, moduleScope.asInstanceOf[_Scope], body)
+
+  private def bindInScope(scope: ScopeBuilder, name: String, decl: Declaration, loc: common.Loc): Unit = {
+    val symbol = ctx.makeSymbol(name, decl)
+    scope.getSymbol(name) match {
+      case Some(_) =>
+        error(
+          Diagnostic(
+            loc = loc,
+            severity = Severity.Error,
+            variant = DuplicateBinding(name)
+          )
+        )
+      case None => ()
     }
+    scope.setSymbol(name, symbol)
   }
 
   private def bindTypeAlias(alias: Declaration.TypeAlias): Unit = {

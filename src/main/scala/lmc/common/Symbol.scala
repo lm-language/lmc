@@ -5,8 +5,7 @@ import lmc.syntax
 
 case class Symbol(
   id: Int, text: String,
-  declaration: syntax.Parsed.Declaration,
-  term: syntax.Parsed.Term
+  declaration: syntax.Parsed.Declaration
 ) {
   override def hashCode: Int = {
     id.hashCode

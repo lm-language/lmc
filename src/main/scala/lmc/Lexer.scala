@@ -47,7 +47,8 @@ object Lexer {
     "+" -> PLUS,
     "*" -> STAR,
     "." -> DOT,
-    ".." -> DOTDOT
+    ".." -> DOTDOT,
+    "|" -> VBAR
   )
   val PUNCTUATION_TOKENS = Map(
     '\n' -> NEWLINE,

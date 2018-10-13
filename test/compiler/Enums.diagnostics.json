@@ -3,16 +3,16 @@
     {
       "loc":{
         "start":{
-          "line":29,
-          "column":27
+          "line":16,
+          "column":19
         },
         "end":{
-          "line":29,
-          "column":33
+          "line":16,
+          "column":19
         }
       },
       "severity":"Error",
-      "message":"TypeMismatch(Option,List)"
+      "message":"TypeMismatch(Nat,Int)"
     }
   ]
 }

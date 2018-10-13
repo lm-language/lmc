@@ -34,13 +34,12 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
     -1, null, null, null, Array(), ()
   ))
 
-  private val primitiveTerm = null
 
   override val Primitive: Primitive = new Primitive {
-    override val BoolSymbol: Symbol = makeSymbol("Bool", builtinDeclaration, primitiveTerm)
-    override val IntSymbol: Symbol = makeSymbol("Int", builtinDeclaration, primitiveTerm)
-    override val UnitSymbol: Symbol = makeSymbol("Unit", builtinDeclaration, primitiveTerm)
-    override val TypeSymbol: Symbol = makeSymbol("Type", builtinDeclaration, primitiveTerm)
+    override val BoolSymbol: Symbol = makeSymbol("Bool", builtinDeclaration)
+    override val IntSymbol: Symbol = makeSymbol("Int", builtinDeclaration)
+    override val UnitSymbol: Symbol = makeSymbol("Unit", builtinDeclaration)
+    override val TypeSymbol: Symbol = makeSymbol("Type", builtinDeclaration)
 
     override val Int: Type = makePrimitive(IntSymbol)
     override val Unit: Type = makePrimitive(UnitSymbol)
@@ -51,9 +50,9 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
     override val False: Type = Value.Constructor(_falseSymbol)
   }
 
-  private val _boolEqSymbol = makeSymbol("boolEq", builtinDeclaration, primitiveTerm)
-  private val _trueSymbol = makeSymbol("true", builtinDeclaration, primitiveTerm)
-  private val _falseSymbol = makeSymbol("false", builtinDeclaration, primitiveTerm)
+  private val _boolEqSymbol = makeSymbol("boolEq", builtinDeclaration)
+  private val _trueSymbol = makeSymbol("true", builtinDeclaration)
+  private val _falseSymbol = makeSymbol("false", builtinDeclaration)
 
   override val PreludeScope: Scope = ScopeBuilder(None, mutable.HashMap(
     "Int" -> Primitive.IntSymbol,
@@ -186,11 +185,11 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
   }
 
 
-  override def makeSymbol(text: String, declaration: Parsed.Declaration, term: Parsed.Term): Symbol = {
+  override def makeSymbol(text: String, declaration: Parsed.Declaration): Symbol = {
     val id = _id
     _id += 1
 
-    Symbol(id, text, declaration, term)
+    Symbol(id, text, declaration)
   }
 
   def makeGenericType(name: String): Type = {

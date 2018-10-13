@@ -1,29 +1,23 @@
 
-enum Switch {
-	On;
-	Off;
-};
-enum OptionInt {
-	ISome(value: Int);
-	INone;
-};
+enum Switch
+	= On
+    | Off;
+let x = On;
+let y = Off;
 
-enum Option[A] {
-	Some(value: A);
-	None;
-};
+enum Nat
+    = Z
+    | S(prev: Nat);
 
-let iSome = OptionInt.ISome(3);
-let iNone = OptionInt.INone;
-let boolSome = Option.Some(2);
-let None = Option.None;
-let x: Option[Bool] = None;
+let _0 = Z;
+let _1 = S(_0);
+let _2: Nat = S(_1);
 
-enum List[A] {
-	Empty;
-	Cons(A, List[A]);
-};
+let _error: Nat = 4;
 
-let listEmpty = List.Empty;
-let listInt = List.Cons(1, List.Empty);
-let optInt: Option[Int] = listInt;
+enum OptionInt
+    = ISome(value: Int)
+    | INone;
+
+let iSome = ISome(3);
+let iNone = INone;
