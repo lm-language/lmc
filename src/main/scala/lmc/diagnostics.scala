@@ -9,9 +9,7 @@ object diagnostics {
   case class DeclarationExpected() extends Variant
   case object TermExpected extends Variant
   case class PatternExpected() extends Variant
-  case class TypeExpected() extends Variant
   case object ModifierOnInclude extends Variant
-  case object KindExpected extends Variant
   case class UnexpectedChar(c: String) extends Variant
   case class InvalidOperator(c: String) extends Variant
   case class TokenExpected(c: String) extends Variant
@@ -37,21 +35,9 @@ object diagnostics {
   case object NotAModule extends Variant
   case class NoSuchTypeProperty(name: String) extends Variant
   case class NoSuchValueProperty(name: String) extends Variant
-  case class DuplicateModifier(modifier: String) extends Variant
-  case object MissingBodyInNonAbstract extends Variant
-  case object UnexpectedBodyInAbstract extends Variant
-  case object ComplexPatternInAbstract extends Variant
-  case object MissingTypeAnnotationInAbstract extends Variant
-  case class TriedToIncludeNonModule(typ: Type) extends Variant
-  case class TriedToExtendNonAbstract(typ: Type) extends Variant
-  case class ConflictingDecls(name: String) extends Variant
-  case class InvalidTypeOverride(expectedKind: lmc.types.Kind, kind: lmc.types.Kind) extends Variant
-  case class InvalidValueOverride(expectedType: Type, kind: Type) extends Variant
   case object NoSuchVariant extends Variant
   case object DuplicateRestParam extends Variant
   case object MissingPatternParams extends Variant
-  case class RecursiveTypeAlias(name: String) extends Variant
-  case object ConstraintLoopOverflow extends Variant
   case class NotAssignableTo(found: Type, expected: Type) extends Variant
   case class MissingParamLabel(expected: String) extends Variant
   case class MissingParam(expectedLabel: Option[String], expectedType: Type) extends Variant

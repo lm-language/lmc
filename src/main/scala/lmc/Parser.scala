@@ -192,7 +192,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     val node = f(meta, errors)
     val endTok = currentToken.previous.flatMap(_.get).getOrElse(currentToken)
     _parents = _parents.tail
-    meta.setDiagnostics(errors)
+    errors.foreach(ctx.addError)
     meta.setLoc(
       Loc.between(_start, endTok)
     )
@@ -262,10 +262,10 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
 
         advance()
         val ident = parseIdent()
-        val kindAnnotation = currentToken.variant match {
+        val annotation = currentToken.variant match {
           case COLON =>
             advance()
-            Some(parseKindAnnotation())
+            Some(parseTerm())
           case _ => None
         }
         val rhs = currentToken.variant match {
@@ -275,10 +275,10 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
             Some(typ)
           case _ => None
         }
-        val semicolon = expect(errors)(SEMICOLON)
+        expect(errors)(SEMICOLON)
         Declaration.TypeAlias(
           meta,
-          ident, kindAnnotation, rhs
+          ident, annotation, rhs
         )
       })
       case MODULE => buildNode((meta, errors) => {
@@ -352,42 +352,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
       )
     })
 
-  })
-
-  private def parseKindAnnotation(): KindAnnotation = buildNode((meta, errors) => {
-    currentToken.variant match {
-      case STAR =>
-        val tok = advance()
-        KindAnnotation.Star(
-          meta
-        )
-      case LSQB =>
-        val startTok = advance()
-        val hd = parseKindAnnotation()
-        val tl = parseCommaSeperatedListTail(() => parseKindAnnotation())
-        expect(errors)(RSQB)
-        expect(errors)(FATARROW)
-        val to = parseKindAnnotation()
-        val params = (hd::tl).toArray
-        KindAnnotation.Func(
-          meta,
-          params, to
-        )
-      case _ =>
-        val loc = currentToken.loc
-        val skippedDiagnostics = recover()
-        val diagnostics = List(Diagnostic(
-          KindExpected,
-          Severity.Error,
-          loc
-        ))
-        errors.appendAll(diagnostics)
-        errors.appendAll(skippedDiagnostics)
-
-        KindAnnotation.Error(
-          meta
-        )
-    }
   })
 
   private def parseTerm(): Term = {
@@ -570,7 +534,8 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
         val errors = ListBuffer.empty[Diagnostic]
         val expr = parseTerm()
         expect(errors)(RPAREN)
-        expr.withMeta(expr.meta.withDiagnostics(errors))
+        errors.foreach(ctx.addError)
+        expr
       case _ =>
         buildNode((meta, errors) => {
           val loc = currentToken.loc

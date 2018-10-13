@@ -18,14 +18,11 @@ trait Syntax {
     def loc: Loc
     def scope: WeakReference[_Scope]
     def parentId: Option[Int]
-    def diagnostics: Array[Diagnostic]
     def typ: _Type
-    def withDiagnostic(diagnostic: Diagnostic): Meta
-    def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta
     def typed(typ: lmc.Value.Type): Typed.Meta =
       Typed.ImmutableMeta(
         id, loc, scope, parentId,
-        diagnostics, typ
+        typ
       )
   }
 
@@ -35,18 +32,9 @@ trait Syntax {
     loc: Loc,
     scope: WeakReference[_Scope],
     parentId: Option[Int],
-    diagnostics: Array[Diagnostic] = Array(),
     typ: _Type
   ) extends Meta {
     def named: Named.Meta = this.asInstanceOf[Named.Meta]
-
-    override def withDiagnostic(diagnostic: Diagnostic): Meta = {
-      this.copy(diagnostics = this.diagnostics ++ List(diagnostic))
-    }
-
-    override def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta = {
-      this.copy(diagnostics = this.diagnostics ++ diagnostics)
-    }
 
     override def toString: String = ""
   }
@@ -63,25 +51,6 @@ trait Syntax {
     override def loc = _loc
     override def scope = _scope
     override def parentId: Option[Int] = _parentId
-    override def diagnostics: Array[Diagnostic] = _diagnostics
-
-    override def withDiagnostic(diagnostic: Diagnostic): Meta =
-      ImmutableMeta(
-        _id, _loc, _scope, _parentId,
-        _diagnostics :+ diagnostic,
-        typ
-      )
-
-    override def withDiagnostics(diagnostics: Iterable[Diagnostic]): Meta =
-      ImmutableMeta(
-        _id, _loc, _scope, _parentId,
-        _diagnostics ++ diagnostics,
-        typ
-      )
-
-    def setDiagnostics(_diagnostics: ListBuffer[Diagnostic]): Unit = {
-      this._diagnostics = _diagnostics.toArray
-    }
 
     def setLoc(_loc: Loc): Unit = {
       this._loc = _loc
@@ -92,9 +61,6 @@ trait Syntax {
     def meta: Meta
 
     override def loc = meta.loc
-    def errors: Iterable[Diagnostic] = {
-      this.meta.diagnostics ++ this.children.flatMap(_.errors)
-    }
 
     def children: Array[Node]
     def scope: _Scope = {
@@ -172,7 +138,7 @@ trait Syntax {
     case class TypeAlias(
       override val meta: Meta,
       ident: Ident,
-      kindAnnotation: Option[KindAnnotation],
+      annotation: Option[Term],
       rhs: Option[Term]
     ) extends Declaration
 
@@ -464,26 +430,6 @@ trait Syntax {
       override def toString: String = pattern.toString
     }
   }
-
-  sealed trait KindAnnotation extends Node {
-    import KindAnnotation._
-    override def children: Array[Node] = this match {
-      case Star(_) => Array.empty
-      case Func(_, from, to) =>
-        from :+ to
-      case Error(_) => Array.empty
-    }
-  }
-  object KindAnnotation {
-    case class Star(override val meta: Meta) extends KindAnnotation
-    case class Func(
-      override val meta: Meta,
-      from: Array[KindAnnotation],
-      to: KindAnnotation
-    ) extends KindAnnotation
-    case class Error(override val meta: Meta) extends KindAnnotation
-  }
-
 
   case class SourceFile(
     override val meta: Meta,

@@ -5,7 +5,7 @@
       "column":1
     },
     "end":{
-      "line":8,
+      "line":6,
       "column":1
     }
   },
@@ -20,15 +20,9 @@
       "typ":"Int"
     },
     "b":{
-      "typ":"Var(SDF)"
-    },
-    "c":{
-      "typ":"Bool"
+      "typ":"SDF"
     },
     "z":{
-      "typ":"Bool"
-    },
-    "d":{
       "typ":"Bool"
     }
   },

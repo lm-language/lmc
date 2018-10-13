@@ -1,5 +1,0 @@
-
-let a: I = 23;
-
-type I = Int;
-

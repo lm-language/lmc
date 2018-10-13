@@ -12,7 +12,7 @@
         }
       },
       "severity":"Error",
-      "message":"NotAssignableTo(Bool,Int)"
+      "message":"TypeMismatch(Int,Bool)"
     },
     {
       "loc":{
@@ -40,21 +40,7 @@
         }
       },
       "severity":"Error",
-      "message":"NotAssignableTo(Bool,Var(SDF))"
-    },
-    {
-      "loc":{
-        "start":{
-          "line":7,
-          "column":9
-        },
-        "end":{
-          "line":7,
-          "column":12
-        }
-      },
-      "severity":"Error",
-      "message":"NotAssignableTo(Bool,Int)"
+      "message":"TypeMismatch(SDF,Bool)"
     }
   ]
 }

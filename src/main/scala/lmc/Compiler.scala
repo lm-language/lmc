@@ -31,8 +31,14 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
   private val _types = mutable.HashMap.empty[Symbol, Type]
 
   private val builtinDeclaration = Parsed.Declaration.Error(Parsed.ImmutableMeta(
-    -1, null, null, null, Array(), ()
+    -1, null, null, null, ()
   ))
+
+  private val _errorDeclaration = Parsed.Declaration.Error(Parsed.ImmutableMeta(
+    -1, null, null, null, ()
+  ))
+
+  private val _sourceFileDiagnostics = mutable.HashMap.empty[Path, ListBuffer[Diagnostic]]
 
 
   override val Primitive: Primitive = new Primitive {
@@ -53,6 +59,7 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
   private val _boolEqSymbol = makeSymbol("boolEq", builtinDeclaration)
   private val _trueSymbol = makeSymbol("true", builtinDeclaration)
   private val _falseSymbol = makeSymbol("false", builtinDeclaration)
+  private val _unitSymbol = makeSymbol("unit", builtinDeclaration)
 
   override val PreludeScope: Scope = ScopeBuilder(None, mutable.HashMap(
     "Int" -> Primitive.IntSymbol,
@@ -61,7 +68,8 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
     "Type" -> Primitive.TypeSymbol,
     "boolEq" -> _boolEqSymbol,
     "true" -> _trueSymbol,
-    "false" -> _falseSymbol
+    "false" -> _falseSymbol,
+    "unit" -> _unitSymbol
   ))
 
   private val Prelude: Env = Env(
@@ -72,7 +80,8 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
       Primitive.TypeSymbol -> Primitive.Type,
       _boolEqSymbol -> Value.arrow(Primitive.Bool, Primitive.Bool, Primitive.Bool),
       _trueSymbol -> Primitive.Bool,
-      _falseSymbol -> Primitive.Bool
+      _falseSymbol -> Primitive.Bool,
+      _unitSymbol -> Primitive.Unit
     ),
     values = Map(
       Primitive.BoolSymbol -> Primitive.Bool,
@@ -83,7 +92,8 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
         Value.Bool(v1 == v2)
       })),
       _trueSymbol -> Value.Bool(true),
-      _falseSymbol -> Value.Bool(false)
+      _falseSymbol -> Value.Bool(false),
+      _unitSymbol -> Value.Unit
     )
   )
 
@@ -117,12 +127,7 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
         val parsed = getParsedSourceFile(path)
         val binder = new Renamer(this, addErrors)
         binder.bind(parsed)
-        var checkedSourceFile = checker.inferSourceFile(parsed, Prelude)
-        if (errors.nonEmpty) {
-          checkedSourceFile = checkedSourceFile.copy(
-            meta = checkedSourceFile.meta.withDiagnostics(errors)
-          )
-        }
+        val checkedSourceFile = checker.inferSourceFile(parsed, Prelude)
         cacheCheckedSourceFile(
           path,
           checkedSourceFile
@@ -138,10 +143,9 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
   def getSourceFileDiagnostics(
     path: Path
   ): Iterable[Diagnostic] = {
-    val parsedSourceFile = getParsedSourceFile(path)
-    val parsedErrors = parsedSourceFile.errors
-    val checkedSourceFile = getCheckedSourceFile(path)
-    parsedErrors ++ checkedSourceFile.errors
+    getParsedSourceFile(path)
+    getCheckedSourceFile(path)
+    _sourceFileDiagnostics.getOrElseUpdate(path, ListBuffer.empty)
   }
 
   def getParsedSourceFile(path: Path): Parsed.SourceFile = {
@@ -192,10 +196,22 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
     Symbol(id, text, declaration)
   }
 
+  override def makeErrorSymbol(text: String): Symbol = {
+    makeSymbol(text, _errorDeclaration)
+  }
+
   def makeGenericType(name: String): Type = {
     val id = _nextGenericId
     _nextGenericId += 1
     ???
+  }
+
+  override def addError(diagnostic: Diagnostic): Unit = {
+    _sourceFileDiagnostics.get(diagnostic.loc.path) match {
+      case Some(errors) => errors.append(diagnostic)
+      case None =>
+        _sourceFileDiagnostics.update(diagnostic.loc.path, ListBuffer(diagnostic))
+    }
   }
 
   def getHoverInfo(path: Path, pos: Pos): Option[String] = for {

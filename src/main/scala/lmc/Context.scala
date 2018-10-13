@@ -1,15 +1,21 @@
 package lmc
 
+
 import lmc.common.{Scope, Symbol}
 import lmc.syntax.Parsed
 import lmc.Value.Type
+import lmc.diagnostics.Diagnostic
+
 
 trait Context {
   def makeSymbol(text: String, declaration: syntax.Parsed.Declaration): Symbol
+  def makeErrorSymbol(text: String): Symbol
   def getParsedNode(id: Int): Option[Parsed.Node]
   val Primitive: Primitive
 
   def getTypeOfSymbol(symbol: Symbol): Type
+
+  def addError(diagnostic: Diagnostic): Unit
 }
 
 object Context {

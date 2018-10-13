@@ -95,7 +95,7 @@
       "loc":{
         "start":{
           "line":10,
-          "column":2
+          "column":5
         },
         "end":{
           "line":9,
@@ -109,11 +109,11 @@
       "loc":{
         "start":{
           "line":10,
-          "column":5
+          "column":8
         },
         "end":{
           "line":10,
-          "column":15
+          "column":18
         }
       },
       "symbols":{
@@ -127,11 +127,11 @@
       "loc":{
         "start":{
           "line":19,
-          "column":9
+          "column":12
         },
         "end":{
           "line":19,
-          "column":20
+          "column":23
         }
       },
       "symbols":{
@@ -145,11 +145,11 @@
       "loc":{
         "start":{
           "line":20,
-          "column":9
+          "column":12
         },
         "end":{
           "line":20,
-          "column":8
+          "column":11
         }
       },
       "symbols":{},

@@ -1,2 +1,0 @@
-extern let a: Int;
-let b = a;

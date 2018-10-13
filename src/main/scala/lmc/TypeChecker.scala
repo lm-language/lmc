@@ -1,9 +1,9 @@
 package lmc
 
+import jdk.jshell.Diag
 import lmc.diagnostics._
 import lmc.Value.{Arrow, Constructor, ModuleType, TaggedUnion, Type, TypeOf, Uninferred}
-import lmc.common.Symbol
-import lmc.common.Scope
+import lmc.common.{HasLoc, Scope, Symbol}
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
@@ -102,7 +102,6 @@ final class TypeChecker(
   }
 
   private def inferLetDeclaration(let: P.Declaration.Let): T.Declaration = {
-    println(let.toString)
     val result = let match {
       case P.Declaration.Let(meta, binder@P.Binder(_, _, None), Some(rhs)) =>
         val inferredRhs = inferTerm(rhs)
@@ -132,7 +131,6 @@ final class TypeChecker(
           Some(typedRhs)
         )
     }
-    println(s"let ${let.binder.name.name} : ${getTypeOfSymbol(result.binder.name.name)} = ${getValueOfSymbol(result.binder.name.name).get}")
     result
   }
 
@@ -157,11 +155,8 @@ final class TypeChecker(
   }
 
   private def inferProp(prop: P.Term.Prop): T.Term = {
-    println(s"inferProp(${prop.expr}.${prop.prop})")
     val typedLhs = inferTerm(prop.expr)
-    println(s"${prop.expr} : ${typedLhs.meta.typ}")
     val typ = Value.TypeOfModuleMember(toValue(typedLhs), prop.prop.name)
-    println(s": $typ")
     val typedRhs = T.Ident(
       prop.prop.meta.typed(typ),
       ctx.makeSymbol(prop.prop.name, P.Declaration.Error(prop.meta))
@@ -181,9 +176,7 @@ final class TypeChecker(
   }
 
   private def inferCall(c: P.Term.Call): T.Term.Call = {
-    println(s"inferCall(${c.func}(${utils.joinIterable(c.args.map(_.toString))}))")
     val typedFunc = inferTerm(c.func)
-    println(s"$typedFunc : ${typedFunc.meta.typ}")
     val typedArgs = ListBuffer.empty[T.Term.Call.Arg]
     var currentReturnType: Type = typedFunc.meta.typ
     for (arg <- c.args) {
@@ -268,9 +261,19 @@ final class TypeChecker(
           symbol
         )
       case None =>
-        utils.todo(s"Unbound var $value")
+        val symbol = ctx.makeErrorSymbol(value.name)
+        ctx.addError(Diagnostic(
+          loc = value.loc,
+          severity = Severity.Error,
+          variant = diagnostics.UnBoundVar(value.name)
+        ))
+        T.Ident(
+          value.meta.typed(Value.Uninferred),
+          symbol
+        )
     }
   }
+
 
   private def inferFunc(f: P.Term.Func): T.Term = {
     val typedParams = f.params.map(inferBinder)
@@ -369,7 +372,6 @@ final class TypeChecker(
     if (count > 100) {
       throw new Error("overflow")
     }
-    println(s"normalize($value)")
     value match {
       case c: Constructor => c
       case b: Value.Bool => b
@@ -467,25 +469,23 @@ final class TypeChecker(
     term match {
       case _ =>
         val typedTerm = inferTerm(term)
-        if (typeEq(typ, typedTerm.meta.typ)) {
-          typedTerm
-        } else {
-          typedTerm.withMeta(typedTerm.meta.withDiagnostic(
-            Diagnostic(
-              loc = term.loc,
-              severity = Severity.Error,
-              variant = TypeMismatch(normalize(typ), normalize(typedTerm.meta.typ))
-            )
+        if (!typeEq(typ, typedTerm.meta.typ)) {
+          ctx.addError(Diagnostic(
+            loc = term.loc,
+            severity = Severity.Error,
+            variant = TypeMismatch(normalize(typ), normalize(typedTerm.meta.typ))
           ))
         }
+        typedTerm
     }
   }
 
   private def typeEq(expected: Type, found: Type): Boolean = {
-    println(s"typeEq($expected, $found)")
     (expected, found) match {
       case (Constructor(s1), Constructor(s2)) => s1.id == s2.id
 //      case (Primitive.Type, _: Value.EnumType) => true
+      case (Uninferred, _) => true
+      case (_, Uninferred) => true
       case _ =>
         if (isReducible(expected)) {
           typeEq(reduce(expected), found)
@@ -502,6 +502,7 @@ final class TypeChecker(
     typ match {
       case Var(s) if getValueOfSymbol(s).isDefined => true
       case Var(_) => false
+      case Uninferred => false
       case i: Value.If if isReducible(i.predicate) => true
       case If(_: Bool, _, _) => true
       case _: Constructor => false
