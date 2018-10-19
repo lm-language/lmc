@@ -1,14 +1,16 @@
-//enum Option(A: Type)
-//	= Some(value: A)
-//    | None;
+enum Option(A: Type)
+	= Some(value: A)
+    | None;
 
-// let boolSome = Some(Int, 2);
-// let x: Option(Bool) = None(Bool);
+let boolSome = Some(Int, 2);
+let x: Option(Bool) = None(Bool);
 
 enum List(A: Type)
-    = Empty;
-    | Cons(head: A, tail: List);
+    = Empty
+    | Cons(head: A, tail: List(A));
 
 let listEmpty = Empty(Int);
-// let listInt = Cons(Int)(1, Empty(Int));
-// let listInt1: List(Int) = listInt;
+let listInt = Cons(Int)(1, Empty(Int));
+let listInt1: List(Int) = listInt;
+
+let typeErr: List(Bool) = Empty(Int);

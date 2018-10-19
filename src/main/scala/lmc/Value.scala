@@ -12,6 +12,10 @@ sealed trait Value {
       } else {
         s"$from -> $to"
       }
+    case Value.Call(c: Value.Call, arg) =>
+      s"$c($arg)"
+    case Value.Call(Value.Constructor(v), arg) =>
+      s"$v($arg)"
     case Value.Call(Value.Var(v), arg) =>
       s"$v($arg)"
     case Value.Call(Value.ParamRef(s), arg) =>

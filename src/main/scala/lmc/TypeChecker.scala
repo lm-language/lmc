@@ -1,9 +1,8 @@
 package lmc
 
-import jdk.jshell.Diag
 import lmc.diagnostics._
-import lmc.Value.{Arrow, Constructor, ModuleType, TaggedUnion, Type, TypeOf, Uninferred}
-import lmc.common.{HasLoc, Scope, Symbol}
+import lmc.Value.{Arrow, Constructor, ParamRef, TaggedUnion, Type, TypeOf, Uninferred}
+import lmc.common.{Scope, Symbol}
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
@@ -54,13 +53,17 @@ final class TypeChecker(
     val symbol = e.scope.getSymbol(e.ident.name).get
     val params = e.params.map(inferBinder)
     val declType: Type = params
-      .map(i => Value.Var(i.name.name))
+      .map(i => Value.ParamRef(i.name.name))
       .foldLeft(Value.Constructor(symbol) : Value)(Value.Call.apply)
 
     val recursiveSymbol = e.scope.getSymbol(e.ident.name).get
     val recursiveSymbolType = params.foldRight(Primitive.Type)((binder, to) =>
-      Value.NamedArrow(binder.name.name, binder.meta.typ, to))
-    val recursiveSymbolValue = declType
+      Value.NamedArrow(
+        binder.name.name,
+        binder.meta.typ,
+        substVar(to, binder.name.name, ParamRef(binder.name.name)))
+    )
+    val recursiveSymbolValue = Value.Var(symbol)
 
     setTypeOfSymbol(recursiveSymbol, recursiveSymbolType)
     setValueOfSymbol(recursiveSymbol, recursiveSymbolValue)
@@ -84,7 +87,7 @@ final class TypeChecker(
   private def inferEnumCase(enumType: Type, params: Array[T.Binder])(c: P.EnumCase): T.EnumCase = {
     val caseParams = c.params.map(inferBinder)
     val typ = (params ++ caseParams).foldRight(enumType)((binder, rhs) =>
-      Value.NamedArrow(binder.name.name, binder.meta.typ, rhs)
+      Value.NamedArrow(binder.name.name, binder.meta.typ, substVar(rhs, binder.name.name, ParamRef(binder.name.name)))
     )
     val ident = checkBindingIdent(c.ident, typ)
     val returnValue: Value = TaggedUnion(ident.name, caseParams.map(_.name.name).map({ Value.Var }))
@@ -231,7 +234,7 @@ final class TypeChecker(
           arg.meta.typed(typedTerm.meta.typ),
           None,
           typedTerm
-        ) -> to
+        ) -> substParam(to, name, toValue(typedTerm))
       case _ if !isReducible(funcType) =>
         ctx.addError(Diagnostic(
           severity = Severity.Error,
@@ -269,6 +272,9 @@ final class TypeChecker(
         m.map(m.symbolMap(rhs))
       case Prop(lhs, rhs) if isReducible(lhs) => Prop(reduce(lhs), rhs)
       case Arrow(from, to) if isReducible(to) => Arrow(from, reduce(to))
+      case Arrow(from, to) if isReducible(from) => Arrow(reduce(from), to)
+      case NamedArrow(name, from, to) if isReducible(from) => NamedArrow(name, reduce(from), to)
+      case NamedArrow(name, from, to) if isReducible(to) => NamedArrow(name, from, reduce(to))
       case ModuleType(map) => ModuleType(map.mapValues(r => if (isReducible(r)) reduce(r) else r))
     }
   }
@@ -472,6 +478,10 @@ final class TypeChecker(
         Value.TaggedUnion(t.tag, t.values.map(go))
       case Value.Module(map) =>
         Value.Module(map.mapValues(go))
+      case NamedArrow(name, from, to) =>
+        NamedArrow(name, go(from), go(to))
+      case Arrow(from, to) =>
+        Arrow(go(from), go(to))
     }
 
   }
@@ -497,6 +507,8 @@ final class TypeChecker(
 //      case (Primitive.Type, _: Value.EnumType) => true
       case (Uninferred, _) => true
       case (_, Uninferred) => true
+      case (Value.Call(f, arg), Value.Call(f1, arg1)) =>
+        typeEq(f, f1) && typeEq(arg, arg1)
       case _ =>
         if (isReducible(expected)) {
           typeEq(reduce(expected), found)
@@ -511,6 +523,7 @@ final class TypeChecker(
   private def isReducible(typ: Type): Boolean = {
     import Value._
     typ match {
+      case ParamRef(_) => false
       case Var(s) if getValueOfSymbol(s).isDefined => true
       case Var(_) => false
       case Uninferred => false
