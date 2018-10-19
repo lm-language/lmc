@@ -20,7 +20,7 @@
       "typ":"Switch"
     },
     "ISome":{
-      "typ":"Int -> OptionInt"
+      "typ":"(value: Int) -> OptionInt"
     },
     "iNone":{
       "typ":"OptionInt"
@@ -56,7 +56,7 @@
       "typ":"Nat"
     },
     "S":{
-      "typ":"Nat -> Nat"
+      "typ":"(prev: Nat) -> Nat"
     },
     "_0":{
       "typ":"Nat"
@@ -66,94 +66,160 @@
     {
       "loc":{
         "start":{
-          "line":4,
-          "column":5
+          "line":3,
+          "column":2
         },
         "end":{
-          "line":3,
-          "column":5
-        }
-      },
-      "symbols":{},
-      "children":[]
-    },
-    {
-      "loc":{
-        "start":{
           "line":4,
           "column":10
-        },
-        "end":{
-          "line":4,
-          "column":9
-        }
-      },
-      "symbols":{},
-      "children":[]
-    },
-    {
-      "loc":{
-        "start":{
-          "line":10,
-          "column":5
-        },
-        "end":{
-          "line":9,
-          "column":7
-        }
-      },
-      "symbols":{},
-      "children":[]
-    },
-    {
-      "loc":{
-        "start":{
-          "line":10,
-          "column":8
-        },
-        "end":{
-          "line":10,
-          "column":18
         }
       },
       "symbols":{
-        "prev":{
+        "On":{
+          "typ":"Switch"
+        },
+        "Off":{
+          "typ":"Switch"
+        }
+      },
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":4,
+              "column":5
+            },
+            "end":{
+              "line":3,
+              "column":5
+            }
+          },
+          "symbols":{},
+          "children":[]
+        },
+        {
+          "loc":{
+            "start":{
+              "line":4,
+              "column":10
+            },
+            "end":{
+              "line":4,
+              "column":9
+            }
+          },
+          "symbols":{},
+          "children":[]
+        }
+      ]
+    },
+    {
+      "loc":{
+        "start":{
+          "line":9,
+          "column":5
+        },
+        "end":{
+          "line":10,
+          "column":19
+        }
+      },
+      "symbols":{
+        "S":{
+          "typ":"(prev: Nat) -> Nat"
+        },
+        "Z":{
           "typ":"Nat"
         }
       },
-      "children":[]
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":10,
+              "column":5
+            },
+            "end":{
+              "line":9,
+              "column":7
+            }
+          },
+          "symbols":{},
+          "children":[]
+        },
+        {
+          "loc":{
+            "start":{
+              "line":10,
+              "column":8
+            },
+            "end":{
+              "line":10,
+              "column":18
+            }
+          },
+          "symbols":{
+            "prev":{
+              "typ":"Nat"
+            }
+          },
+          "children":[]
+        }
+      ]
     },
     {
       "loc":{
         "start":{
           "line":19,
-          "column":12
+          "column":5
         },
         "end":{
-          "line":19,
-          "column":23
+          "line":20,
+          "column":12
         }
       },
       "symbols":{
-        "value":{
-          "typ":"Int"
-        }
-      },
-      "children":[]
-    },
-    {
-      "loc":{
-        "start":{
-          "line":20,
-          "column":12
+        "ISome":{
+          "typ":"(value: Int) -> OptionInt"
         },
-        "end":{
-          "line":20,
-          "column":11
+        "INone":{
+          "typ":"OptionInt"
         }
       },
-      "symbols":{},
-      "children":[]
+      "children":[
+        {
+          "loc":{
+            "start":{
+              "line":19,
+              "column":12
+            },
+            "end":{
+              "line":19,
+              "column":23
+            }
+          },
+          "symbols":{
+            "value":{
+              "typ":"Int"
+            }
+          },
+          "children":[]
+        },
+        {
+          "loc":{
+            "start":{
+              "line":20,
+              "column":12
+            },
+            "end":{
+              "line":20,
+              "column":11
+            }
+          },
+          "symbols":{},
+          "children":[]
+        }
+      ]
     }
   ]
 }

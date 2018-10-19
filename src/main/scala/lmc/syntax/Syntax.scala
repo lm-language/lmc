@@ -98,9 +98,11 @@ trait Syntax {
     override def toString = this match {
       case Declaration.Let(_, pattern, rhs) =>
         s"let $pattern = $rhs"
-      case Declaration.Enum(_, name, cases) =>
+      case Declaration.Enum(_, _, name, params, cases) if params.isEmpty =>
         s"enum $name { ${cases.foldLeft("")((prev, c) => s"$prev$c; ")}}"
+      case Declaration.Enum(_, _, name, params, cases) =>
 
+        s"enum $name(${joinIterable(params)}) { ${cases.foldLeft("")((prev, c) => s"$prev$c; ")}}"
     }
     override def children: Array[Node] =
       this match {
@@ -121,8 +123,8 @@ trait Syntax {
           result.toArray
         case Declaration.Module(_, ident, _, body) =>
           ident +: body
-        case Declaration.Enum(_, ident, cases) =>
-          ident +: cases.flatMap(c => (c.ident : Node) +: c.params : Array[Node])
+        case Declaration.Enum(_, ident, _, params, cases) =>
+          (ident +: params) ++ cases.flatMap(c => (c.ident : Node) +: c.params : Array[Node])
         case Declaration.Error(_) =>
           Array()
       }
@@ -159,6 +161,8 @@ trait Syntax {
     case class Enum(
       override val meta: Meta,
       ident: Ident,
+      enumScope: _Scope,
+      params: Array[Binder],
       cases: Array[EnumCase]
     ) extends Declaration
   }

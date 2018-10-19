@@ -52,36 +52,44 @@ final class TypeChecker(
 
   private def inferEnumDecl(e: P.Declaration.Enum): T.Declaration.Enum = {
     val symbol = e.scope.getSymbol(e.ident.name).get
-    val declType: Type = Value.Constructor(symbol)
+    val params = e.params.map(inferBinder)
+    val declType: Type = params
+      .map(i => Value.Var(i.name.name))
+      .foldLeft(Value.Constructor(symbol) : Value)(Value.Call.apply)
 
     val recursiveSymbol = e.scope.getSymbol(e.ident.name).get
-    val recursiveSymbolType = Primitive.Type
+    val recursiveSymbolType = params.foldRight(Primitive.Type)((binder, to) =>
+      Value.NamedArrow(binder.name.name, binder.meta.typ, to))
     val recursiveSymbolValue = declType
 
     setTypeOfSymbol(recursiveSymbol, recursiveSymbolType)
     setValueOfSymbol(recursiveSymbol, recursiveSymbolValue)
 
-    val cases = e.cases.map(inferEnumCase(declType))
+    val cases = e.cases.map(inferEnumCase(declType, params))
 
     val enumType = Value.Constructor(symbol)
 
-    val typedIdent = checkBindingIdent(e.ident, Primitive.Type)
+    val typedIdent = checkBindingIdent(e.ident, recursiveSymbolType)
     setValueOfSymbol(typedIdent.name, enumType)
 
     T.Declaration.Enum(
       e.meta.typed(enumType),
       typedIdent,
+      e.scope,
+      params,
       cases
     )
   }
 
-  private def inferEnumCase(enumType: Type)(c: P.EnumCase): T.EnumCase = {
-    val params = c.params.map(inferBinder)
-    val typ = params.map(_.meta.typ).foldRight(enumType)(Value.Arrow.apply)
+  private def inferEnumCase(enumType: Type, params: Array[T.Binder])(c: P.EnumCase): T.EnumCase = {
+    val caseParams = c.params.map(inferBinder)
+    val typ = (params ++ caseParams).foldRight(enumType)((binder, rhs) =>
+      Value.NamedArrow(binder.name.name, binder.meta.typ, rhs)
+    )
     val ident = checkBindingIdent(c.ident, typ)
-    val returnValue: Value = TaggedUnion(ident.name, params.map(_.name.name).map({ Value.Var }))
-    val value = params.foldRight(returnValue)((binder, ret) => Value.Func(value => {
-      subst(ret, binder.name.name, value)
+    val returnValue: Value = TaggedUnion(ident.name, caseParams.map(_.name.name).map({ Value.Var }))
+    val value = (params ++ caseParams).foldRight(returnValue)((binder, ret) => Value.ExternFunc(value => {
+      substParam(ret, binder.name.name, value)
     }))
     setValueOfSymbol(ident.name, value)
     T.EnumCase(
@@ -217,8 +225,24 @@ final class TypeChecker(
           None, // TODO: Handle named args
           typedTerm
         ) -> to
-      case s if !isReducible(funcType) =>
-        utils.todo(s"$s is not a function, $arg")
+      case Value.NamedArrow(name, from, to) =>
+        val typedTerm = checkTerm(arg.value, from)
+        T.Term.Call.Arg(
+          arg.meta.typed(typedTerm.meta.typ),
+          None,
+          typedTerm
+        ) -> to
+      case _ if !isReducible(funcType) =>
+        ctx.addError(Diagnostic(
+          severity = Severity.Error,
+          variant = NotAFunction(funcType),
+          loc = arg.loc
+        ))
+        T.Term.Call.Arg(
+          arg.meta.typed(Uninferred),
+          None,
+          inferTerm(arg.value)
+        ) -> Uninferred
       case _ =>
         checkFunctionArg(arg, reduce(funcType))
     }
@@ -233,16 +257,19 @@ final class TypeChecker(
       case If(Bool(true), t, _) => t
       case If(Bool(false), _, f) => f
       case If(p, t, f) if isReducible(p) => Value.If(reduce(p), t, f)
-      case Call(Func(f), arg) => f(arg)
+      case Call(ExternFunc(f), arg) => f(arg)
+      case Call(Lambda(param, body), arg) =>
+        substParam(body, param, arg)
       case Call(f, arg) if isReducible(f) => Value.Call(reduce(f), arg)
       case TypeOfModuleMember(m: Module, rhs) if m.symbolMap.contains(rhs) =>
         TypeOf(m.symbolMap(rhs))
-
       case TypeOfModuleMember(lhs, rhs) =>
         TypeOfModuleMember(reduce(lhs), rhs)
       case Prop(m: Module, rhs) if m.symbolMap.contains(rhs) =>
         m.map(m.symbolMap(rhs))
       case Prop(lhs, rhs) if isReducible(lhs) => Prop(reduce(lhs), rhs)
+      case Arrow(from, to) if isReducible(to) => Arrow(from, reduce(to))
+      case ModuleType(map) => ModuleType(map.mapValues(r => if (isReducible(r)) reduce(r) else r))
     }
   }
 
@@ -360,8 +387,13 @@ final class TypeChecker(
         val result = getValueOfSymbol(ident.name).getOrElse(Value.Var(ident.name))
         result
       case f: T.Term.Func =>
-        f.params.foldRight(toValue(f.body))((param, value) => Value.Func(arg =>
-          subst(value, param.name.name, arg)))
+        f.params.foldRight(toValue(f.body))((param, value) =>
+          Value.Lambda(
+            param.name.name,
+            substVar(value, param.name.name, Value.ParamRef(param.name.name))))
+//      case f: T.Term.Func =>
+//        f.params.foldRight(toValue(f.body))((param, value) => Value.ExternFunc(arg =>
+//          subst(value, param.name.name, arg)))
       case i: T.Term.If =>
         val predicateValue = toValue(i.predicate)
           Value.If(
@@ -396,95 +428,44 @@ final class TypeChecker(
     }
   }
 
+  @tailrec
   private def normalize(value: Value, count: Int = 0): Value = {
     if (count > 100) {
-      utils.todo("Overflow")
+      utils.todo(s"Overflow $value")
     }
 
-    def go(value: Value): Value = normalize(value, count + 1)
-    value match {
-      case c: Constructor => c
-      case b: Value.Bool => b
-      case i: Value.Int => i
-      case Value.Var(s) => (for {
-        v <- getValueOfSymbol(s)
-        _ = setTypeOfSymbol(s, v)
-        t = go(v)
-        _ = setTypeOfSymbol(s, t)
-      } yield t).getOrElse(value)
-      case Value.If(pred, trueBranch, falseBranch) =>
-        go(pred) match {
-          case Value.Bool(true) =>
-            go(trueBranch)
-          case Value.Bool(false) =>
-            go(falseBranch)
-          case p =>
-            Value.If(p, trueBranch, falseBranch)
-        }
-      case Value.Call(func, arg) =>
-        val normalizedFunc = go(func)
-        val normalizedArg = go(arg)
-        normalizedFunc match {
-          case Value.Func(f) => go(f(normalizedArg))
-          case _ => Value.Call(normalizedFunc, normalizedArg)
-        }
-      case Value.TypeOf(symbol) =>
-        val result = go(getTypeOfSymbol(symbol))
-        setTypeOfSymbol(symbol, result)
-        result
-      case Value.ModuleType(m) => Value.ModuleType(m.mapValues(go))
-      case Value.TypeOfModuleMember(lhs, rhs) =>
-        resolvePropertySymbol(lhs, rhs) match {
-          case Some(sym) => getNormalizedType(sym)
-          case None =>
-            utils.todo(s"$lhs has no property named $rhs")
-        }
-      case Value.Module(map) =>
-        Value.Module(map.mapValues(go))
-      case Value.Arrow(from, to) => Value.Arrow(go(from), go(to))
-
-      case f: Value.Func =>
-        f
-      case v if !isReducible(v) => v
-      case v => go(reduce(v))
+    if (isReducible(value)) {
+      normalize(reduce(value), count + 1)
+    } else {
+      value
     }
   }
 
-  @tailrec
-  private def resolvePropertySymbol(value: Value, str: String): Option[Symbol] = {
-    value match {
-      case Value.Module(map) => map.keys.find(_.text == str)
-//      case Value.TypeOfModuleMember(lhs, rhs) =>
-//        resolvePropertySymbol(lhs, rhs) match {
-//          case Some(s) => resolvePropertySymbol(getValueOfSymbol(s).get, str)
-//        }
-      case v if isReducible(v) => resolvePropertySymbol(reduce(v), str)
-    }
-  }
+  private def substParam(value: Value, symbol: Symbol, arg: Value): Value =
+    _subst(value, symbol, arg, param = true)
 
-  private def inNormalForm(value: Value): Boolean = {
-    value match {
-      case _: Value.TypeOf => false
-      case _: Value.Bool => true
-      case _: Value.Int => true
-      case _ => !isReducible(value)
-    }
-  }
+  private def substVar(value: Value, symbol: Symbol, arg: Value): Value =
+    _subst(value, symbol, arg, param = false)
 
-  private def subst(value: Value, symbol: Symbol, arg: Value): Value = {
+  private def _subst(value: Value, symbol: Symbol, arg: Value, param: Boolean): Value = {
     def go(value: Value): Value = {
-      subst(value, symbol, arg)
+      _subst(value, symbol, arg, param)
     }
+    import lmc.Value._
     value match {
-      case Value.Var(s) if s.id == symbol.id => arg
+      case Value.Var(s) if !param && s.id == symbol.id => arg
       case Value.Var(_) => value
+      case ParamRef(s) if param && s.id == symbol.id =>
+        go(arg)
+      case ParamRef(_) => value
+      case _: Var => value
       case c: Value.Constructor => c
       case Value.Uninferred => value
       case Value.Call(c, arg) =>
         Value.Call(go(c), go(arg))
       case Value.If(pred, t, f) =>
         Value.If(go(pred), go(t), go(f))
-      case f: Value.Func => f
+      case f: Value.ExternFunc => f
       case b: Value.Bool => b
       case i: Value.Int => i
       case t: Value.TaggedUnion =>
@@ -538,7 +519,8 @@ final class TypeChecker(
       case _: Constructor => false
       case TypeOf(s) if _types.contains(s) => true
       case TypeOf(s) => false
-      case Call(Value.Func(_), _) => true
+      case Call(Value.ExternFunc(_), _) => true
+      case Call(_: Value.Lambda, _) => true
       case Call(f, _) if isReducible(f) => true
       case Call(_, arg) if isReducible(arg) => true
       case _: Call => false
@@ -553,11 +535,15 @@ final class TypeChecker(
       case a: Arrow if isReducible(a.from) => true
       case a: Arrow if isReducible(a.to) => true
       case _: Arrow => false
-      case _: Func => false
+      case _: ExternFunc => false
       case _: TaggedUnion => false
 
       case Prop(m: Module, rhs) if m.symbolMap.contains(rhs) => true
       case p: Value.Prop if isReducible(p.lhs) => true
+      case NamedArrow(_, from, _) if isReducible(from) => true
+      case NamedArrow(_, _, to) if isReducible(to) => true
+      case NamedArrow(_, _, _) => false
+      case Lambda(_, _) => false
       case v =>
         utils.todo(s"unmatched: $v of type ${v.getClass.getName}")
     }

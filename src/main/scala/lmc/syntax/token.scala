@@ -20,6 +20,7 @@ object token {
 
       // Operators
       EQ, EQEQ, PLUS, FATARROW, ARROW, STAR, DOT, DOTDOT,
+      BACKSLASH, SLASH,
 
       UNEXPECTED_CHAR,
       INVALID_OPERATOR,

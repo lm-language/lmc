@@ -5,22 +5,22 @@
       "column":1
     },
     "end":{
-      "line":20,
-      "column":2
+      "line":21,
+      "column":1
     }
   },
   "symbols":{
     "A_alias":{
-      "typ":"Module(Map(a1 -> Int, a2 -> Int))"
+      "typ":"module type { a1: Int; a2: Int; }"
     },
     "A":{
-      "typ":"Module(Map(a1 -> Int, a2 -> Int))"
+      "typ":"module type { a1: Int; a2: Int; }"
     },
     "X":{
-      "typ":"Module(Map(x1 -> Int, Z -> Module(Map(z1 -> Int))))"
+      "typ":"module type { x1: Int; Z: module type { z1: Int; }; }"
     },
     "B":{
-      "typ":"Module(Map(b3 -> Int, b2 -> Int, b1 -> Int))"
+      "typ":"module type { b3: Int; b2: Int; b1: Int; }"
     }
   },
   "children":[
@@ -85,7 +85,7 @@
           "typ":"Int"
         },
         "Z":{
-          "typ":"Module(Map(z1 -> Int))"
+          "typ":"module type { z1: Int; }"
         }
       },
       "children":[

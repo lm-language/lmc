@@ -164,7 +164,6 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
          declarations = declarations :+ this.parseDeclaration
        }
        val endToken = expect(errors)(EOF)
-       val loc = Loc.between(startToken, endToken)
        SourceFile(
          meta,
          scope,
@@ -206,22 +205,38 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     def parseEnum(): Declaration.Enum = buildNode((meta, errors) => {
       advance()
       val ident = parseIdent()
-      expect(errors)(EQ)
-      val cases = ListBuffer.empty[EnumCase]
-      var isFirstCase = true
-      while (!(Set(EOF, SEMICOLON) contains currentToken.variant)) {
-        if (!isFirstCase) {
-          expect(errors)(VBAR)
+      withNewScope(scope => {
+        val params = currentToken.variant match {
+          case LPAREN =>
+            advance()
+            val buffer = ListBuffer.empty[Binder]
+            while (currentToken.variant != RPAREN && currentToken.variant != EOF) {
+              buffer.append(parseBinder())
+            }
+            expect(errors)(RPAREN)
+            buffer.toArray
+          case _ => Array.empty[Binder]
         }
-        cases.append(parseEnumCase())
-        isFirstCase = false
-      }
-      expect(errors)(SEMICOLON)
-      Declaration.Enum(
-        meta,
-        ident,
-        cases.toArray
-      )
+        expect(errors)(EQ)
+        val cases = ListBuffer.empty[EnumCase]
+        var isFirstCase = true
+        while (!(Set(EOF, SEMICOLON) contains currentToken.variant)) {
+          if (!isFirstCase) {
+            expect(errors)(VBAR)
+          }
+          cases.append(parseEnumCase())
+          isFirstCase = false
+        }
+        expect(errors)(SEMICOLON)
+        Declaration.Enum(
+          meta,
+          ident,
+          scope,
+          params,
+          cases.toArray
+        )
+      })
+
     })
 
     currentToken.variant match {
@@ -398,8 +413,8 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
     })
 
     def parseModule() = buildNode((meta, errors) => {
-      val tok = advance()
-      withNewScope((moduleScope) => {
+      advance()
+      withNewScope(moduleScope => {
         expect(errors)(LBRACE)
         val declarations = {
           val buffer = ListBuffer.empty[Declaration]
@@ -408,7 +423,7 @@ final class Parser(ctx: Context.Parser, val path: Path, val tokens: Stream[Token
           }
           buffer.toArray
         }
-        val rbrace = expect(errors)(RBRACE)
+        expect(errors)(RBRACE)
         Term.Module(
           meta,
           moduleScope,

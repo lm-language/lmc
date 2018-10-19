@@ -48,7 +48,7 @@ object Lexer {
     "*" -> STAR,
     "." -> DOT,
     ".." -> DOTDOT,
-    "|" -> VBAR
+    "|" -> VBAR,
   )
   val PUNCTUATION_TOKENS = Map(
     '\n' -> NEWLINE,
@@ -62,6 +62,8 @@ object Lexer {
     '[' -> LSQB,
     ']' -> RSQB,
     '~' -> TILDE,
+    '/' -> SLASH,
+    '\\' -> BACKSLASH
   )
 
   val PUNCTUATION_CHARS: Set[Char] =
@@ -98,6 +100,16 @@ final class Lexer(
       advance
     }
     currentChar match {
+      case '/' =>
+        advance
+        if  (currentChar == '/') {
+          while (currentChar != '\n' && currentChar != EOF_CHAR) {
+            advance
+          }
+          next
+        } else {
+          utils.todo(s"Unexpected char $currentChar")
+        }
       case c if Lexer.isIdentifierStarter(c) =>
         identOrKeyword
       case c if c == EOF_CHAR =>

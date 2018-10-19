@@ -88,7 +88,7 @@ class Compiler(paths: Iterable[Path], debug: String => Unit = _ => {})
       Primitive.IntSymbol -> Primitive.Int,
       Primitive.TypeSymbol -> Primitive.Type,
       Primitive.UnitSymbol -> Primitive.Unit,
-      _boolEqSymbol -> Value.Func(v1 => Value.Func(v2 => {
+      _boolEqSymbol -> Value.ExternFunc(v1 => Value.ExternFunc(v2 => {
         Value.Bool(v1 == v2)
       })),
       _trueSymbol -> Value.Bool(true),
